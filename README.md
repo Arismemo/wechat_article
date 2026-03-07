@@ -96,6 +96,10 @@
 - 如果服务器工作区的 `.git` 已损坏，先执行：`scripts/repair_server_git_checkout.sh`
 - Docker 镜像现在会先安装 `requirements.runtime.txt` 和 Playwright，再复制 `app/` 代码
   - 普通业务代码变更不会重新触发依赖层和浏览器下载层
+- 如果服务器首次冷构建 Playwright 仍然过慢，可改走：`scripts/deploy_prebuilt_from_local.sh`
+  - 本地构建 `linux/amd64` 镜像
+  - 通过 `docker save | ssh ... docker load` 灌到服务器
+  - 服务器仍然坚持 `git pull` 更新工作树和 migration
 - `scripts/deploy_from_git.sh` 支持：
   - `SERVICES="api phase4_worker"` 只部署部分服务
   - `SKIP_BUILD=1` 跳过镜像构建，仅做 `git pull + migration + compose up`

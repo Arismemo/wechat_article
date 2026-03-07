@@ -33,10 +33,11 @@
 - 新增 `scripts/deploy_from_git.sh` 作为服务器侧 Git 部署入口
 - 新增 `scripts/repair_server_git_checkout.sh`，用于修复服务器损坏的 `.git` 元数据并保留 `.env` / `data/`
 - Dockerfile 已拆分依赖层与代码层，`requirements.runtime.txt` 与 Playwright 浏览器层可在代码变更后继续复用缓存
+- 新增 `scripts/deploy_prebuilt_from_local.sh`，用于服务器冷构建过慢时的本地预构建兜底
 
 待完成：
 
-- 将服务器正式部署路径从“临时 `sync_to_server.sh` + 容器注入代码”完整切到“纯 Git 拉取 + 正常镜像构建”
+- 将服务器正式部署路径完全切到“纯 Git 拉取 + 远端构建缓存命中”；冷启动期间允许使用预构建镜像兜底
 
 ## 追加记录
 
@@ -61,6 +62,10 @@
   - 再执行 `python -m playwright install --with-deps --no-shell chromium`
   - 最后才复制 `app/`、`migrations/`、`scripts/`
   - 这样普通代码改动不会导致 Playwright 浏览器层失效
+- `scripts/deploy_prebuilt_from_local.sh`
+  - 本地构建 `linux/amd64` 镜像并打多个服务标签
+  - 通过 `docker save | ssh ... docker load` 推到服务器
+  - 服务端仍先 `git pull`，再做 migration 和 `docker compose up -d --no-build`
 
 ## 影响
 
