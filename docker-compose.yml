@@ -1,0 +1,82 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: wechat_artical_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-wechat_artical}
+      POSTGRES_USER: ${POSTGRES_USER:-wechat_artical}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-wechat_artical}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-wechat_artical} -d ${POSTGRES_DB:-wechat_artical}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: wechat_artical_redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wechat_artical_api
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-wechat_artical}:${POSTGRES_PASSWORD:-wechat_artical}@postgres:5432/${POSTGRES_DB:-wechat_artical}
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      - ./data:${LOCAL_STORAGE_ROOT:-/app/data}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz').read()"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  phase2_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wechat_artical_phase2_worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-wechat_artical}:${POSTGRES_PASSWORD:-wechat_artical}@postgres:5432/${POSTGRES_DB:-wechat_artical}
+      REDIS_URL: redis://redis:6379/0
+    command: ["python", "scripts/run_phase2_worker.py"]
+    volumes:
+      - ./data:${LOCAL_STORAGE_ROOT:-/app/data}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:
