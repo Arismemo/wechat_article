@@ -34,6 +34,15 @@ class GenerationRepository:
         )
         return self.session.scalar(statement)
 
+    def list_by_task_id(self, task_id: str, limit: int = 10) -> list[Generation]:
+        statement = (
+            select(Generation)
+            .where(Generation.task_id == task_id)
+            .order_by(Generation.version_no.desc(), Generation.created_at.desc())
+            .limit(limit)
+        )
+        return list(self.session.scalars(statement))
+
     def get_next_version_no(self, task_id: str) -> int:
         statement = select(func.coalesce(func.max(Generation.version_no), 0)).where(Generation.task_id == task_id)
         return int(self.session.scalar(statement) or 0) + 1

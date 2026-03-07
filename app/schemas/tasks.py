@@ -123,3 +123,54 @@ class TaskDraftResponse(APIModel):
     status: str
     generation: Optional[GenerationResponse] = None
     review: Optional[ReviewReportResponse] = None
+
+
+class SourceArticleDetailResponse(APIModel):
+    source_article_id: str
+    url: str
+    title: Optional[str] = None
+    author: Optional[str] = None
+    published_at: Optional[datetime] = None
+    cover_image_url: Optional[str] = None
+    summary: Optional[str] = None
+    cleaned_text_excerpt: Optional[str] = None
+    snapshot_path: Optional[str] = None
+    fetch_status: Optional[str] = None
+    word_count: Optional[int] = None
+    created_at: datetime
+
+
+class AuditLogResponse(APIModel):
+    audit_log_id: str
+    action: str
+    operator: str
+    payload: Optional[dict] = None
+    created_at: datetime
+
+
+class GenerationWorkspaceResponse(GenerationResponse):
+    created_at: datetime
+    prompt_version: Optional[str] = None
+    review: Optional[ReviewReportResponse] = None
+
+
+class TaskWorkspaceResponse(APIModel):
+    task_id: str
+    task_code: str
+    source_url: str
+    source_type: Optional[str] = None
+    status: str
+    progress: int
+    title: Optional[str] = None
+    wechat_media_id: Optional[str] = None
+    brief_id: Optional[str] = None
+    generation_id: Optional[str] = None
+    related_article_count: int = 0
+    error: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    source_article: Optional[SourceArticleDetailResponse] = None
+    analysis: Optional[ArticleAnalysisResponse] = None
+    brief: Optional[ContentBriefResponse] = None
+    generations: list[GenerationWorkspaceResponse]
+    audits: list[AuditLogResponse]

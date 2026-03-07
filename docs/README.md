@@ -38,6 +38,12 @@
   - 阶段 3 研究层、同题搜索、差异矩阵和 Brief 管道说明
 - `docs/phase-3/deployment-log.md`
   - 阶段 3 服务器部署与 smoke test 记录
+- `docs/phase-4/generation-and-review.md`
+  - 阶段 4 生成、审稿、重生成与手动/自动推草稿说明
+- `docs/phase-4/deployment-log.md`
+  - 阶段 4 服务器部署与收口记录
+- `docs/phase-5/admin-console.md`
+  - 阶段 5 后台工作台、人工审核与手动操作说明
 - `docs/research-wechat-fetch-and-browser-options-2026-03-07.md`
   - 微信公众号读取方案、Claude Code skill 和浏览器自动化方案调研
 - `docs/adr/0001-git-based-deploy.md`
@@ -45,11 +51,6 @@
 
 ## 后续建议文档
 
-- `docs/phase-4/generation-and-review.md`
-  - 阶段 4 生成、审稿与重生成说明
-- `docs/phase-4/deployment-log.md`
-  - 阶段 4 服务器部署与 smoke test 记录
-- `docs/phase-5/admin-console.md`
 - `docs/phase-6/feedback-loop.md`
 - `docs/adr/`
   - 用于记录关键技术决策

@@ -63,7 +63,9 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("/api/v1/tasks/{task_id}", routes)
         self.assertIn("/api/v1/tasks/{task_id}/brief", routes)
         self.assertIn("/api/v1/tasks/{task_id}/draft", routes)
+        self.assertIn("/api/v1/tasks/{task_id}/workspace", routes)
         self.assertIn("/admin/phase2", routes)
+        self.assertIn("/admin/phase5", routes)
 
     def test_admin_phase2_page_renders(self) -> None:
         app_module = reload(import_module("app.main"))
@@ -76,6 +78,17 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("提交链接并入队", response.text)
         self.assertIn("提交链接并执行阶段2", response.text)
         self.assertIn("刷新最近任务", response.text)
+
+    def test_admin_phase5_page_renders(self) -> None:
+        app_module = reload(import_module("app.main"))
+        client = TestClient(app_module.create_app())
+
+        response = client.get("/admin/phase5")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Phase 5 工作台", response.text)
+        self.assertIn("任务看板、人工审核与手动干预", response.text)
+        self.assertIn("推送微信草稿", response.text)
 
 
 if __name__ == "__main__":
