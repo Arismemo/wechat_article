@@ -772,6 +772,70 @@ def phase5_console() -> str:
               display: grid;
               gap: 12px;
             }
+            .compare-toolbar {
+              display: grid;
+              grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+              gap: 10px;
+              margin-bottom: 14px;
+            }
+            .compare-toolbar select {
+              width: 100%;
+              padding: 12px 14px;
+              border-radius: 14px;
+              border: 1px solid var(--line);
+              background: #fffdf9;
+              color: var(--text);
+              font: inherit;
+            }
+            .diff-summary {
+              display: flex;
+              flex-wrap: wrap;
+              gap: 8px;
+              margin-bottom: 10px;
+            }
+            .diff-grid {
+              display: grid;
+              grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+              gap: 10px;
+              margin-bottom: 10px;
+            }
+            .diff-card {
+              background: #fffdf8;
+              border: 1px solid var(--line);
+              border-radius: 16px;
+              padding: 12px;
+            }
+            .diff-card strong {
+              display: block;
+              margin-bottom: 6px;
+              font-size: 12px;
+              color: var(--muted);
+              font-weight: 500;
+            }
+            .diff-card .before {
+              color: #7c3427;
+            }
+            .diff-card .after {
+              color: #1f6942;
+            }
+            .diff-pre {
+              margin-top: 0;
+            }
+            .diff-line {
+              display: block;
+              padding: 1px 0;
+            }
+            .diff-line.add {
+              color: #d8f7df;
+              background: rgba(45, 123, 79, 0.28);
+            }
+            .diff-line.remove {
+              color: #ffe3dc;
+              background: rgba(157, 58, 46, 0.28);
+            }
+            .diff-line.same {
+              color: #f7f1df;
+            }
             .generation-header {
               display: flex;
               flex-wrap: wrap;
@@ -1093,6 +1157,127 @@ def phase5_console() -> str:
               return "pill";
             };
             const statusLabel = (status) => STATUS_LABELS[status] || status || "未知状态";
+            const diffFieldCard = (label, before, after) => `
+              <div class="diff-card">
+                <strong>${escapeHtml(label)}</strong>
+                <div class="meta before"><strong>旧版本</strong><span>${escapeHtml(before || "暂无")}</span></div>
+                <div class="meta after" style="margin-top: 8px;"><strong>新版本</strong><span>${escapeHtml(after || "暂无")}</span></div>
+              </div>
+            `;
+            const buildLcsMatrix = (left, right) => {
+              const rows = Array.from({ length: left.length + 1 }, () => Array(right.length + 1).fill(0));
+              for (let i = left.length - 1; i >= 0; i -= 1) {
+                for (let j = right.length - 1; j >= 0; j -= 1) {
+                  rows[i][j] = left[i] === right[j] ? rows[i + 1][j + 1] + 1 : Math.max(rows[i + 1][j], rows[i][j + 1]);
+                }
+              }
+              return rows;
+            };
+            const buildLineDiff = (beforeText, afterText) => {
+              const left = String(beforeText || "").split("\\n");
+              const right = String(afterText || "").split("\\n");
+              const matrix = buildLcsMatrix(left, right);
+              const diff = [];
+              let i = 0;
+              let j = 0;
+              while (i < left.length && j < right.length) {
+                if (left[i] === right[j]) {
+                  diff.push({ type: "same", text: left[i] });
+                  i += 1;
+                  j += 1;
+                } else if (matrix[i + 1][j] >= matrix[i][j + 1]) {
+                  diff.push({ type: "remove", text: left[i] });
+                  i += 1;
+                } else {
+                  diff.push({ type: "add", text: right[j] });
+                  j += 1;
+                }
+              }
+              while (i < left.length) {
+                diff.push({ type: "remove", text: left[i] });
+                i += 1;
+              }
+              while (j < right.length) {
+                diff.push({ type: "add", text: right[j] });
+                j += 1;
+              }
+              return diff;
+            };
+            const renderGenerationDiff = (generations) => {
+              if (!Array.isArray(generations) || generations.length < 2) {
+                return `
+                  <div class="detail-card">
+                    <h3>版本差异视图</h3>
+                    <div class="hint">至少需要两版 generation，才能比较标题、摘要和正文差异。</div>
+                  </div>
+                `;
+              }
+              const left = generations[1];
+              const right = generations[0];
+              const diffRows = buildLineDiff(left.markdown_content, right.markdown_content);
+              const addCount = diffRows.filter((item) => item.type === "add").length;
+              const removeCount = diffRows.filter((item) => item.type === "remove").length;
+              return `
+                <div class="detail-card">
+                  <h3>版本差异视图</h3>
+                  <div class="hint">默认比较最新版本和上一版本。切换版本后，会同步更新标题、摘要和正文的行级差异。</div>
+                  <div class="compare-toolbar">
+                    <div>
+                      <label for="compare-left">旧版本</label>
+                      <select id="compare-left">${generations.map((item, index) => `
+                        <option value="${escapeHtml(item.generation_id)}" ${index === 1 ? "selected" : ""}>
+                          v${escapeHtml(item.version_no)} · ${escapeHtml(item.review?.final_decision || item.status)}
+                        </option>
+                      `).join("")}</select>
+                    </div>
+                    <div>
+                      <label for="compare-right">新版本</label>
+                      <select id="compare-right">${generations.map((item, index) => `
+                        <option value="${escapeHtml(item.generation_id)}" ${index === 0 ? "selected" : ""}>
+                          v${escapeHtml(item.version_no)} · ${escapeHtml(item.review?.final_decision || item.status)}
+                        </option>
+                      `).join("")}</select>
+                    </div>
+                  </div>
+                  <div id="diff-view"></div>
+                </div>
+              `;
+            };
+            const updateDiffView = (generations) => {
+              const diffViewEl = document.getElementById("diff-view");
+              const leftSelect = document.getElementById("compare-left");
+              const rightSelect = document.getElementById("compare-right");
+              if (!diffViewEl || !leftSelect || !rightSelect) {
+                return;
+              }
+              const left = generations.find((item) => item.generation_id === leftSelect.value);
+              const right = generations.find((item) => item.generation_id === rightSelect.value);
+              if (!left || !right) {
+                diffViewEl.innerHTML = '<div class="hint">请选择有效版本。</div>';
+                return;
+              }
+              if (left.generation_id === right.generation_id) {
+                diffViewEl.innerHTML = '<div class="hint">请选择两个不同的版本进行比较。</div>';
+                return;
+              }
+              const diffRows = buildLineDiff(left.markdown_content, right.markdown_content);
+              const addCount = diffRows.filter((item) => item.type === "add").length;
+              const removeCount = diffRows.filter((item) => item.type === "remove").length;
+              diffViewEl.innerHTML = `
+                <div class="diff-summary">
+                  <span class="pill">旧版本 v${escapeHtml(left.version_no)} -> 新版本 v${escapeHtml(right.version_no)}</span>
+                  <span class="pill ok">新增行 ${escapeHtml(addCount)}</span>
+                  <span class="pill danger">删除行 ${escapeHtml(removeCount)}</span>
+                </div>
+                <div class="diff-grid">
+                  ${diffFieldCard("标题对比", left.title, right.title)}
+                  ${diffFieldCard("摘要对比", left.digest, right.digest)}
+                </div>
+                <pre class="diff-pre">${diffRows.map((item) => `
+<span class="diff-line ${escapeHtml(item.type)}">${escapeHtml(item.type === "add" ? "+ " : item.type === "remove" ? "- " : "  ")}${escapeHtml(item.text || "")}</span>`).join("")}
+</pre>
+              `;
+            };
 
             const renderWorkspace = (workspace) => {
               const latest = workspace.generations[0];
@@ -1200,6 +1385,8 @@ def phase5_console() -> str:
                   </div>
                 </div>
 
+                ${renderGenerationDiff(workspace.generations)}
+
                 <div class="detail-card">
                   <h3>审计轨迹</h3>
                   <div class="audit-list">
@@ -1213,6 +1400,15 @@ def phase5_console() -> str:
                   </div>
                 </div>
               `;
+
+              const compareLeft = document.getElementById("compare-left");
+              const compareRight = document.getElementById("compare-right");
+              if (compareLeft && compareRight) {
+                const rerenderDiff = () => updateDiffView(workspace.generations);
+                compareLeft.addEventListener("change", rerenderDiff);
+                compareRight.addEventListener("change", rerenderDiff);
+                updateDiffView(workspace.generations);
+              }
 
               if (latestReview && latestReview.final_decision) {
                 setStatus(`已加载 · 最新结论 ${latestReview.final_decision}`);

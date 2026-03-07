@@ -89,6 +89,7 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("Phase 5 工作台", response.text)
         self.assertIn("任务看板、人工审核与手动干预", response.text)
         self.assertIn("推送微信草稿", response.text)
+        self.assertIn("版本差异视图", response.text)
 
 
 if __name__ == "__main__":

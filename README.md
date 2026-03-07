@@ -60,7 +60,7 @@
   - `GET /api/v1/tasks?active_only=true&status=...`
   - 最近任务看板、源文/Brief/生成稿聚合详情
   - 按状态分组的任务看板与待处理筛选
-  - 版本对比、风险展示、审计轨迹
+  - generation 版本差异视图、风险展示、审计轨迹
   - 一键回补 Phase 3、一键重跑 Phase 4、一键推草稿
 
 ## 开发约束
