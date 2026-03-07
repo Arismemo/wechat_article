@@ -1,7 +1,7 @@
 # 阶段 5 后台工作台与人工审核
 
 更新时间：2026-03-07
-状态：第三轮已落地，本轮补充推草稿人工许可控制
+状态：第三轮已落地，并完成服务器 smoke test
 
 ## 1. 目标
 
@@ -162,6 +162,17 @@
 - `GET /api/v1/tasks?active_only=true`
 - `POST /internal/v1/tasks/{task_id}/approve-latest-generation`
 - `POST /internal/v1/tasks/{task_id}/reject-latest-generation`
+- `POST /internal/v1/tasks/{task_id}/block-wechat-draft-push`
+- `POST /internal/v1/tasks/{task_id}/allow-wechat-draft-push`
+- 被 `blocked` 的任务调用 `POST /internal/v1/tasks/{task_id}/push-wechat-draft` 返回 `409`
+
+本轮推稿许可烟测样例：
+
+- `task_id`: `8a8d25d7-8cc7-4758-bda6-56c975d0add6`
+- 先调用 `block-wechat-draft-push` 成功写入 `mode=blocked`
+- `workspace.wechat_push_policy` 随后返回 `blocked / can_push=false`
+- 再调 `push-wechat-draft` 返回 `409`，错误为 `Wechat draft push is blocked by manual policy.`
+- 最后调用 `allow-wechat-draft-push`，`workspace.wechat_push_policy` 返回 `allowed / can_push=true`
 
 当前测试结果：
 
