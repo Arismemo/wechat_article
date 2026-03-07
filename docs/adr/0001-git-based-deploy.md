@@ -28,14 +28,34 @@
 已完成：
 
 - `.gitignore` 已覆盖 `._*`
+- 已配置 GitHub `origin`
 - 新增 `scripts/sync_to_server.sh` 作为临时过渡同步方案，并显式禁用 macOS 扩展属性打包
+- 新增 `scripts/deploy_from_git.sh` 作为服务器侧 Git 部署入口
+- 新增 `scripts/repair_server_git_checkout.sh`，用于修复服务器损坏的 `.git` 元数据并保留 `.env` / `data/`
 
 待完成：
 
-- 本地执行 `git init`
-- 创建远程 GitHub 仓库并配置 `origin`
-- 服务器项目目录切换为 Git 工作区
-- 增加基于 Git 的部署脚本
+- 优化 Dockerfile 层缓存，避免每次代码变更都重新安装 Playwright 浏览器
+- 将服务器正式部署路径从 `sync_to_server.sh` 完整切到 `git pull + deploy_from_git.sh`
+
+## 追加记录
+
+2026-03-07 晚间，服务器目录 `/home/liukun/j/code/wechat_artical/.git` 出现损坏：
+
+- `git rev-parse HEAD` 报错 `bad object HEAD`
+- `refs/heads/main`、`refs/remotes/origin/main` 指向失效对象
+
+为避免再次依赖手工排查，仓库新增：
+
+- `scripts/repair_server_git_checkout.sh`
+  - 备份远端旧 `.git`
+  - 原地重建 `main` 分支 Git 工作树
+  - 重新绑定 `origin`
+  - `git fetch --depth=1 origin main`
+  - `git reset --hard origin/main`
+- `scripts/deploy_from_git.sh`
+  - 增加坏 Git 工作树前置检查
+  - 支持 `SERVICES=...` 与 `SKIP_BUILD=1` 两个部署参数
 
 ## 影响
 

@@ -89,3 +89,11 @@
 - `phase2_worker`
 - `phase3_worker`
 - `phase4_worker`
+
+## 部署方式
+
+- 服务器推荐入口：`scripts/deploy_from_git.sh`
+- 如果服务器工作区的 `.git` 已损坏，先执行：`scripts/repair_server_git_checkout.sh`
+- `scripts/deploy_from_git.sh` 支持：
+  - `SERVICES="api phase4_worker"` 只部署部分服务
+  - `SKIP_BUILD=1` 跳过镜像构建，仅做 `git pull + migration + compose up`
