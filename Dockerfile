@@ -12,7 +12,7 @@ COPY scripts /app/scripts
 COPY alembic.ini /app/alembic.ini
 
 RUN pip install --no-cache-dir .
-RUN python -m playwright install --with-deps chromium
+RUN python -m playwright install --with-deps --no-shell chromium
 
 EXPOSE 8000
 

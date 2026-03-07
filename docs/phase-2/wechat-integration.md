@@ -227,7 +227,7 @@ data/
 - 当前测试稿会带入原文封面和部分正文配图；推送前会自动把 `<img>` 改写成微信 `uploadimg` 返回的 URL。
 - 封面图优先使用原文 `og:image` 或首图；失败时退回内置占位图。
 - Redis 失效不会阻塞 token 获取，只会退化为不缓存。
-- 浏览器依赖已直接打进 `api` 镜像，避免依赖宿主机环境。
+- 浏览器依赖已直接打进阶段 2 镜像，`api` 与 `phase2_worker` 都不依赖宿主机浏览器环境。
 - 异步 worker 当前采用 Redis list + pending set + processing list 的轻量实现，重启 worker 时会自动把 processing 队列回灌到主队列。
 
 ## 9. 验收标准
@@ -246,6 +246,7 @@ data/
 - 已在 `source_articles`、`generations`、`wechat_drafts` 三处留痕
 - 已提供可直接使用的后台手动触发页
 - 已补齐最近任务列表、异步队列入口、worker 脚本、图片上传与 HTML 重写
+- 已在服务器完成同步和异步两条 smoke test，`phase2_worker` 已验证可用
 - 已新增 `scripts/wechat_exporter_poc.py` 用于评估 exporter 接入价值
 
 ## 10. 后续补充
@@ -253,6 +254,5 @@ data/
 当前最自然的后续补充项：
 
 1. 把 Playwright 兜底命中率、失败原因、队列深度打成监控指标
-2. 在服务器环境实际部署 `phase2_worker` 并补一轮异步 smoke test
-3. 针对 `wechat-article-exporter` 公共接口做一次真实 PoC 验证，确认延迟和稳定性
-4. 如要做历史文章/评论/阅读量，单独规划 `wxdown-service` 和 credentials 流程
+2. 针对 `wechat-article-exporter` 公共接口做一次真实 PoC 验证，确认延迟和稳定性
+3. 如要做历史文章/评论/阅读量，单独规划 `wxdown-service` 和 credentials 流程

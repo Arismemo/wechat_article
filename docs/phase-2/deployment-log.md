@@ -1,7 +1,7 @@
 # 阶段 2 部署与验证记录
 
 更新时间：2026-03-07
-状态：In Progress
+状态：Completed
 
 ## 1. 目标
 
@@ -15,8 +15,9 @@
   - `playwright`
 - 新增 migration：
   - `20260307_0002_add_source_article_metadata.py`
-- 服务器已重建 `api` 镜像并完成容器替换
+- 服务器已完成 `api` / `phase2_worker` 镜像切换
 - `postgres`、`redis`、`api` 当前均为 `healthy`
+- `phase2_worker` 已启动并通过异步 smoke test
 
 ## 3. 服务器侧配置变更
 
@@ -77,17 +78,44 @@
 - `GET /healthz`：成功
 - `POST /api/v1/ingest/link`：成功
 - `POST /internal/v1/tasks/{task_id}/run-phase2`：成功
+- `POST /internal/v1/phase2/ingest-and-enqueue`：成功
+- `GET /api/v1/tasks?limit=2`：成功
 - `GET /api/v1/tasks/{task_id}`：成功返回：
   - `status=draft_saved`
   - `progress=100`
   - `title=【Linux】虚拟内存的基础知识`
   - `wechat_media_id` 已可见
 
+### 5.5 本轮补充项服务器验收
+
+同步链路验证结果：
+
+- `task_id`：`5d9cc392-bb31-4f7c-a9ec-7258d1862621`
+- 路径：`POST /api/v1/ingest/link` -> `POST /internal/v1/tasks/{task_id}/run-phase2` -> `GET /api/v1/tasks/{task_id}`
+- 返回状态：`draft_saved`
+- `wechat_media_id`：`PyYQ74YwFFGh2wyA3BOdvxkz0qCmlZPjXk21PfNiOJAjMGkAWrSDI80Tet44hp-U`
+
+异步链路验证结果：
+
+- `task_id`：`96694882-8c18-44a2-8c7b-8efc06a0f30d`
+- 路径：`POST /internal/v1/phase2/ingest-and-enqueue` -> `phase2_worker` -> `GET /api/v1/tasks/{task_id}`
+- 入队返回：`enqueued=true`
+- 最终状态：`draft_saved`
+- `wechat_media_id`：`PyYQ74YwFFGh2wyA3BOdv9qynbQA5cvPgqO5cZH6pvLyOHhp2ta_lzV2bHObWbQg`
+
+图片重写与数据库留痕：
+
+- 两条任务的 `source_articles.fetch_status=success`
+- 两条任务的 `source_articles.word_count=5482`
+- 两条任务的 `wechat_drafts.push_status=success`
+- `wechat_drafts.push_response.inline_images` 已记录图片重写日志；本次命中的原文图片均为微信域名，状态为 `already_wechat`
+
 ## 6. 容器状态
 
 当前容器状态：
 
 - `api`：`healthy`
+- `phase2_worker`：`running`
 - `postgres`：`healthy`
 - `redis`：`healthy`
 
@@ -127,9 +155,27 @@
 - 迁移成功
 - 阶段 2 联调成功
 
-## 8. 本轮补充项待记录
+### 7.2 服务器直接构建 Playwright 浏览器过慢
 
-以下补充项已在本地代码落地，但尚未完成服务器验证：
+问题：
+
+- 服务器直接执行 `docker compose build api phase2_worker` 时，`python -m playwright install --with-deps chromium` 下载过慢，不适合本轮收口
+
+处理：
+
+- 本地改为构建 `linux/amd64` 镜像
+- Dockerfile 改成 `python -m playwright install --with-deps --no-shell chromium`
+- 通过 `docker save | ssh ... docker load` 将镜像直接灌入服务器
+- 在服务器打标签后用 `docker compose up -d --no-build` 切换 `api` 与 `phase2_worker`
+
+结果：
+
+- 避开服务器端慢下载
+- `api` 与 `phase2_worker` 均成功切换到新镜像
+
+## 8. 本轮补充项验收结果
+
+以下补充项已全部完成服务器验证：
 
 - Playwright 已升级为官方 `chromium` new headless 优先、`chrome` 可选回退
 - 后台手动触发页已补最近任务列表、同步执行和异步入队按钮
@@ -139,20 +185,23 @@
 
 ## 9. 结论
 
-- 阶段 2 的最小闭环已经完成
+- 阶段 2 已完成并完成服务器验收
 - 当前系统已经具备：
   - 原文抓取
   - 正文清洗与本地快照
   - 固定模板测试稿渲染
   - 微信永久封面素材上传
+  - 正文图片重写
   - 微信草稿箱写入
+  - 最近任务列表与后台手动触发页
+  - Redis 队列与异步 worker
   - 任务和数据库留痕
 
 ## 10. 下一步
 
 建议下次部署时优先补这几项验证：
 
-1. 在服务器启动 `phase2_worker` 并验证异步入队链路
-2. 用真实图文再跑一次，确认正文图片上传与 HTML 重写有效
+1. 为 Playwright 兜底补充命中率、失败原因和浏览器下载失败告警
+2. 为 `phase2_worker` 增加队列深度、处理中任务数和失败重试指标
 3. 在服务器环境验证 `wechat-article-exporter` PoC 是否稳定可用
-4. 为 Playwright 兜底补充命中率与失败日志
+4. 如要继续阶段 3，进入“同题搜索 + 差异矩阵 + content_brief”

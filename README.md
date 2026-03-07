@@ -8,7 +8,7 @@
 - `app/` 中维护 FastAPI 后端、数据模型和服务逻辑
 - `migrations/` 中维护数据库迁移
 - `docker-compose.yml` 中维护 API、数据库、Redis 和阶段 2 worker 的容器化运行方式
-- 阶段 2 最小闭环及补充项已完成：`原文抓取 -> 固定模板稿 -> 图片重写 -> 微信草稿箱`
+- 阶段 2 最小闭环及补充项已完成并通过服务器验收：`原文抓取 -> 固定模板稿 -> 图片重写 -> 微信草稿箱`
 
 ## 当前已完成范围
 
@@ -28,6 +28,7 @@
   - 正文图片上传与 HTML 重写
   - 轻量异步 worker：`scripts/run_phase2_worker.py`
   - `wechat-article-exporter` 对接 PoC：`scripts/wechat_exporter_poc.py`
+  - 服务器已验证同步 `run-phase2` 与异步 `ingest-and-enqueue` 两条链路
 
 ## 开发约束
 
