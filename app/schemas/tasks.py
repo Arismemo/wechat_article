@@ -13,6 +13,7 @@ class TaskResponse(APIModel):
     title: Optional[str] = None
     wechat_media_id: Optional[str] = None
     brief_id: Optional[str] = None
+    generation_id: Optional[str] = None
     related_article_count: int = 0
     error: Optional[str] = None
 
@@ -27,6 +28,7 @@ class TaskSummaryResponse(APIModel):
     title: Optional[str] = None
     wechat_media_id: Optional[str] = None
     brief_id: Optional[str] = None
+    generation_id: Optional[str] = None
     related_article_count: int = 0
     error: Optional[str] = None
     created_at: datetime
@@ -84,3 +86,40 @@ class TaskBriefResponse(APIModel):
     analysis: Optional[ArticleAnalysisResponse] = None
     brief: Optional[ContentBriefResponse] = None
     related_articles: list[RelatedArticleResponse]
+
+
+class GenerationResponse(APIModel):
+    generation_id: str
+    version_no: int
+    model_name: str
+    title: Optional[str] = None
+    subtitle: Optional[str] = None
+    digest: Optional[str] = None
+    markdown_content: Optional[str] = None
+    html_content: Optional[str] = None
+    score_overall: Optional[float] = None
+    score_title: Optional[float] = None
+    score_readability: Optional[float] = None
+    score_novelty: Optional[float] = None
+    score_risk: Optional[float] = None
+    status: str
+
+
+class ReviewReportResponse(APIModel):
+    review_report_id: str
+    similarity_score: Optional[float] = None
+    factual_risk_score: Optional[float] = None
+    policy_risk_score: Optional[float] = None
+    readability_score: Optional[float] = None
+    title_score: Optional[float] = None
+    novelty_score: Optional[float] = None
+    issues: Optional[dict] = None
+    suggestions: Optional[dict] = None
+    final_decision: Optional[str] = None
+
+
+class TaskDraftResponse(APIModel):
+    task_id: str
+    status: str
+    generation: Optional[GenerationResponse] = None
+    review: Optional[ReviewReportResponse] = None

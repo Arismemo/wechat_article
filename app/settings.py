@@ -79,6 +79,16 @@ class Settings(BaseSettings):
     phase3_pending_set_key: str = Field(default="phase3:pending", alias="PHASE3_PENDING_SET_KEY")
     phase3_worker_poll_timeout_seconds: int = Field(default=5, alias="PHASE3_WORKER_POLL_TIMEOUT_SECONDS")
     phase3_worker_idle_sleep_seconds: int = Field(default=1, alias="PHASE3_WORKER_IDLE_SLEEP_SECONDS")
+    phase4_queue_key: str = Field(default="phase4:queue", alias="PHASE4_QUEUE_KEY")
+    phase4_processing_key: str = Field(default="phase4:processing", alias="PHASE4_PROCESSING_KEY")
+    phase4_pending_set_key: str = Field(default="phase4:pending", alias="PHASE4_PENDING_SET_KEY")
+    phase4_worker_poll_timeout_seconds: int = Field(default=5, alias="PHASE4_WORKER_POLL_TIMEOUT_SECONDS")
+    phase4_worker_idle_sleep_seconds: int = Field(default=1, alias="PHASE4_WORKER_IDLE_SLEEP_SECONDS")
+    phase4_review_pass_score: float = Field(default=75, alias="PHASE4_REVIEW_PASS_SCORE")
+    phase4_similarity_max: float = Field(default=0.45, alias="PHASE4_SIMILARITY_MAX")
+    phase4_policy_risk_max: float = Field(default=0.35, alias="PHASE4_POLICY_RISK_MAX")
+    phase4_factual_risk_max: float = Field(default=0.40, alias="PHASE4_FACTUAL_RISK_MAX")
+    phase4_max_auto_revisions: int = Field(default=1, alias="PHASE4_MAX_AUTO_REVISIONS")
 
     local_storage_root: Path = Field(default=Path("./data"), alias="LOCAL_STORAGE_ROOT")
 

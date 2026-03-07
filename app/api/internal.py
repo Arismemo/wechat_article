@@ -7,6 +7,8 @@ from app.services.phase2_pipeline_service import Phase2PipelineService
 from app.services.phase2_queue_service import Phase2QueueService
 from app.services.phase3_pipeline_service import Phase3PipelineService
 from app.services.phase3_queue_service import Phase3QueueService
+from app.services.phase4_pipeline_service import Phase4PipelineService
+from app.services.phase4_queue_service import Phase4QueueService
 from app.services.task_service import TaskService
 from app.schemas.ingest import IngestLinkRequest
 from app.schemas.internal import (
@@ -14,6 +16,8 @@ from app.schemas.internal import (
     Phase2RunResponse,
     Phase3EnqueueResponse,
     Phase3RunResponse,
+    Phase4EnqueueResponse,
+    Phase4RunResponse,
 )
 
 router = APIRouter()
@@ -146,6 +150,74 @@ def ingest_and_enqueue_phase3(payload: IngestLinkRequest, session: Session = Dep
     task = task_service.mark_queued_for_phase3(task, reason="ingest-and-enqueue")
     result = Phase3QueueService().enqueue(task.id)
     return Phase3EnqueueResponse(
+        task_id=task.id,
+        status=task.status,
+        enqueued=result.enqueued,
+        queue_depth=result.queue_depth,
+    )
+
+
+@router.post("/tasks/{task_id}/run-phase4", response_model=Phase4RunResponse, dependencies=[Depends(verify_bearer_token)])
+def run_phase4(task_id: str, session: Session = Depends(get_db_session)) -> Phase4RunResponse:
+    try:
+        result = Phase4PipelineService(session).run(task_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+
+    return Phase4RunResponse(
+        task_id=result.task_id,
+        status=result.status,
+        generation_id=result.generation_id,
+        review_report_id=result.review_report_id,
+        decision=result.decision,
+        auto_revised=result.auto_revised,
+    )
+
+
+@router.post("/tasks/{task_id}/enqueue-phase4", response_model=Phase4EnqueueResponse, dependencies=[Depends(verify_bearer_token)])
+def enqueue_phase4(task_id: str, session: Session = Depends(get_db_session)) -> Phase4EnqueueResponse:
+    task_service = TaskService(session)
+    try:
+        task = task_service.require_task(task_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    task = task_service.mark_queued_for_phase4(task, reason="manual-enqueue")
+    result = Phase4QueueService().enqueue(task.id)
+    return Phase4EnqueueResponse(
+        task_id=task.id,
+        status=task.status,
+        enqueued=result.enqueued,
+        queue_depth=result.queue_depth,
+    )
+
+
+@router.post("/phase4/ingest-and-run", response_model=Phase4RunResponse, dependencies=[Depends(verify_bearer_token)])
+def ingest_and_run_phase4(payload: IngestLinkRequest, session: Session = Depends(get_db_session)) -> Phase4RunResponse:
+    task, _ = TaskService(session).ingest_link(payload)
+    try:
+        result = Phase4PipelineService(session).run(task.id)
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+
+    return Phase4RunResponse(
+        task_id=result.task_id,
+        status=result.status,
+        generation_id=result.generation_id,
+        review_report_id=result.review_report_id,
+        decision=result.decision,
+        auto_revised=result.auto_revised,
+    )
+
+
+@router.post("/phase4/ingest-and-enqueue", response_model=Phase4EnqueueResponse, dependencies=[Depends(verify_bearer_token)])
+def ingest_and_enqueue_phase4(payload: IngestLinkRequest, session: Session = Depends(get_db_session)) -> Phase4EnqueueResponse:
+    task_service = TaskService(session)
+    task, _ = task_service.ingest_link(payload)
+    task = task_service.mark_queued_for_phase4(task, reason="ingest-and-enqueue")
+    result = Phase4QueueService().enqueue(task.id)
+    return Phase4EnqueueResponse(
         task_id=task.id,
         status=task.status,
         enqueued=result.enqueued,

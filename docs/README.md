@@ -46,6 +46,7 @@
 ## 后续建议文档
 
 - `docs/phase-4/generation-and-review.md`
+  - 阶段 4 生成、审稿与重生成说明
 - `docs/phase-5/admin-console.md`
 - `docs/phase-6/feedback-loop.md`
 - `docs/adr/`

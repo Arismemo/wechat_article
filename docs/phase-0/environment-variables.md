@@ -124,6 +124,16 @@
 | `PHASE3_PENDING_SET_KEY` | 否 | 阶段 3 去重集合 Redis key |
 | `PHASE3_WORKER_POLL_TIMEOUT_SECONDS` | 否 | 阶段 3 worker 阻塞拉取超时 |
 | `PHASE3_WORKER_IDLE_SLEEP_SECONDS` | 否 | 阶段 3 worker 空闲 sleep 时间 |
+| `PHASE4_QUEUE_KEY` | 否 | 阶段 4 worker 主队列 Redis key |
+| `PHASE4_PROCESSING_KEY` | 否 | 阶段 4 worker processing 队列 Redis key |
+| `PHASE4_PENDING_SET_KEY` | 否 | 阶段 4 去重集合 Redis key |
+| `PHASE4_WORKER_POLL_TIMEOUT_SECONDS` | 否 | 阶段 4 worker 阻塞拉取超时 |
+| `PHASE4_WORKER_IDLE_SLEEP_SECONDS` | 否 | 阶段 4 worker 空闲 sleep 时间 |
+| `PHASE4_REVIEW_PASS_SCORE` | 否 | 阶段 4 审稿通过的最低综合分 |
+| `PHASE4_SIMILARITY_MAX` | 否 | 阶段 4 相似度风险上限 |
+| `PHASE4_POLICY_RISK_MAX` | 否 | 阶段 4 合规风险上限 |
+| `PHASE4_FACTUAL_RISK_MAX` | 否 | 阶段 4 事实风险上限 |
+| `PHASE4_MAX_AUTO_REVISIONS` | 否 | 阶段 4 自动修订最大次数，当前默认 1 |
 
 当前确认值：
 

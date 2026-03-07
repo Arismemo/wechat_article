@@ -12,6 +12,9 @@ class GenerationRepository:
     def __init__(self, session: Session) -> None:
         self.session = session
 
+    def get_by_id(self, generation_id: str) -> Optional[Generation]:
+        return self.session.get(Generation, generation_id)
+
     def get_latest_by_task_id(self, task_id: str) -> Optional[Generation]:
         statement = (
             select(Generation)

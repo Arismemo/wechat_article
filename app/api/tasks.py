@@ -7,15 +7,20 @@ from app.core.security import verify_bearer_token
 from app.db.session import get_db_session
 from app.repositories.article_analysis_repository import ArticleAnalysisRepository
 from app.repositories.content_brief_repository import ContentBriefRepository
+from app.repositories.generation_repository import GenerationRepository
 from app.repositories.related_article_repository import RelatedArticleRepository
+from app.repositories.review_report_repository import ReviewReportRepository
 from app.repositories.source_article_repository import SourceArticleRepository
 from app.repositories.task_repository import TaskRepository
 from app.repositories.wechat_draft_repository import WechatDraftRepository
 from app.schemas.tasks import (
     ArticleAnalysisResponse,
     ContentBriefResponse,
+    GenerationResponse,
     RelatedArticleResponse,
+    ReviewReportResponse,
     TaskBriefResponse,
+    TaskDraftResponse,
     TaskResponse,
     TaskSummaryResponse,
 )
@@ -38,6 +43,7 @@ def list_tasks(limit: int = Query(default=10, ge=1, le=50), session: Session = D
             title=item.title,
             wechat_media_id=item.wechat_media_id,
             brief_id=item.brief_id,
+            generation_id=item.generation_id,
             related_article_count=item.related_article_count,
             error=item.error,
             created_at=item.created_at,
@@ -55,6 +61,7 @@ def get_task(task_id: str, session: Session = Depends(get_db_session)) -> TaskRe
 
     source_article = SourceArticleRepository(session).get_latest_by_task_id(task_id)
     content_brief = ContentBriefRepository(session).get_latest_by_task_id(task_id)
+    generation = GenerationRepository(session).get_latest_by_task_id(task_id)
     related_count = RelatedArticleRepository(session).count_by_task_id(task_id, selected_only=True)
     wechat_draft = WechatDraftRepository(session).get_latest_by_task_id(task_id)
     task_status = TaskStatus(task.status)
@@ -66,6 +73,7 @@ def get_task(task_id: str, session: Session = Depends(get_db_session)) -> TaskRe
         title=source_article.title if source_article else None,
         wechat_media_id=wechat_draft.media_id if wechat_draft else None,
         brief_id=content_brief.id if content_brief else None,
+        generation_id=generation.id if generation else None,
         related_article_count=related_count,
         error=error,
     )
@@ -136,4 +144,54 @@ def get_task_brief(task_id: str, session: Session = Depends(get_db_session)) -> 
             )
             for item in related_articles
         ],
+    )
+
+
+@router.get("/tasks/{task_id}/draft", response_model=TaskDraftResponse, dependencies=[Depends(verify_bearer_token)])
+def get_task_draft(task_id: str, session: Session = Depends(get_db_session)) -> TaskDraftResponse:
+    task = TaskRepository(session).get_by_id(task_id)
+    if task is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found.")
+
+    generation = GenerationRepository(session).get_latest_by_task_id(task_id)
+    review = ReviewReportRepository(session).get_latest_by_generation_id(generation.id) if generation else None
+    return TaskDraftResponse(
+        task_id=task.id,
+        status=task.status,
+        generation=(
+            GenerationResponse(
+                generation_id=generation.id,
+                version_no=generation.version_no,
+                model_name=generation.model_name,
+                title=generation.title,
+                subtitle=generation.subtitle,
+                digest=generation.digest,
+                markdown_content=generation.markdown_content,
+                html_content=generation.html_content,
+                score_overall=float(generation.score_overall) if generation.score_overall is not None else None,
+                score_title=float(generation.score_title) if generation.score_title is not None else None,
+                score_readability=float(generation.score_readability) if generation.score_readability is not None else None,
+                score_novelty=float(generation.score_novelty) if generation.score_novelty is not None else None,
+                score_risk=float(generation.score_risk) if generation.score_risk is not None else None,
+                status=generation.status,
+            )
+            if generation
+            else None
+        ),
+        review=(
+            ReviewReportResponse(
+                review_report_id=review.id,
+                similarity_score=float(review.similarity_score) if review.similarity_score is not None else None,
+                factual_risk_score=float(review.factual_risk_score) if review.factual_risk_score is not None else None,
+                policy_risk_score=float(review.policy_risk_score) if review.policy_risk_score is not None else None,
+                readability_score=float(review.readability_score) if review.readability_score is not None else None,
+                title_score=float(review.title_score) if review.title_score is not None else None,
+                novelty_score=float(review.novelty_score) if review.novelty_score is not None else None,
+                issues=review.issues,
+                suggestions=review.suggestions,
+                final_decision=review.final_decision,
+            )
+            if review
+            else None
+        ),
     )

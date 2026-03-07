@@ -34,3 +34,19 @@ class Phase3EnqueueResponse(APIModel):
     status: str
     enqueued: bool
     queue_depth: int
+
+
+class Phase4RunResponse(APIModel):
+    task_id: str
+    status: str
+    generation_id: Optional[str] = None
+    review_report_id: Optional[str] = None
+    decision: Optional[str] = None
+    auto_revised: bool = False
+
+
+class Phase4EnqueueResponse(APIModel):
+    task_id: str
+    status: str
+    enqueued: bool
+    queue_depth: int
