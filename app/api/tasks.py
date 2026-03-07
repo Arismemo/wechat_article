@@ -5,11 +5,20 @@ from app.core.enums import TaskStatus
 from app.core.progress import get_progress
 from app.core.security import verify_bearer_token
 from app.db.session import get_db_session
+from app.repositories.article_analysis_repository import ArticleAnalysisRepository
+from app.repositories.content_brief_repository import ContentBriefRepository
+from app.repositories.related_article_repository import RelatedArticleRepository
 from app.repositories.source_article_repository import SourceArticleRepository
 from app.repositories.task_repository import TaskRepository
-from app.schemas.tasks import TaskSummaryResponse
 from app.repositories.wechat_draft_repository import WechatDraftRepository
-from app.schemas.tasks import TaskResponse
+from app.schemas.tasks import (
+    ArticleAnalysisResponse,
+    ContentBriefResponse,
+    RelatedArticleResponse,
+    TaskBriefResponse,
+    TaskResponse,
+    TaskSummaryResponse,
+)
 from app.services.task_service import TaskService
 
 router = APIRouter()
@@ -28,6 +37,8 @@ def list_tasks(limit: int = Query(default=10, ge=1, le=50), session: Session = D
             progress=item.progress,
             title=item.title,
             wechat_media_id=item.wechat_media_id,
+            brief_id=item.brief_id,
+            related_article_count=item.related_article_count,
             error=item.error,
             created_at=item.created_at,
             updated_at=item.updated_at,
@@ -43,6 +54,8 @@ def get_task(task_id: str, session: Session = Depends(get_db_session)) -> TaskRe
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found.")
 
     source_article = SourceArticleRepository(session).get_latest_by_task_id(task_id)
+    content_brief = ContentBriefRepository(session).get_latest_by_task_id(task_id)
+    related_count = RelatedArticleRepository(session).count_by_task_id(task_id, selected_only=True)
     wechat_draft = WechatDraftRepository(session).get_latest_by_task_id(task_id)
     task_status = TaskStatus(task.status)
     error = task.error_message or task.error_code
@@ -52,5 +65,75 @@ def get_task(task_id: str, session: Session = Depends(get_db_session)) -> TaskRe
         progress=get_progress(task_status),
         title=source_article.title if source_article else None,
         wechat_media_id=wechat_draft.media_id if wechat_draft else None,
+        brief_id=content_brief.id if content_brief else None,
+        related_article_count=related_count,
         error=error,
+    )
+
+
+@router.get("/tasks/{task_id}/brief", response_model=TaskBriefResponse, dependencies=[Depends(verify_bearer_token)])
+def get_task_brief(task_id: str, session: Session = Depends(get_db_session)) -> TaskBriefResponse:
+    task = TaskRepository(session).get_by_id(task_id)
+    if task is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found.")
+
+    analysis = ArticleAnalysisRepository(session).get_latest_by_task_id(task_id)
+    brief = ContentBriefRepository(session).get_latest_by_task_id(task_id)
+    related_articles = RelatedArticleRepository(session).list_selected_by_task_id(task_id)
+    return TaskBriefResponse(
+        task_id=task.id,
+        status=task.status,
+        analysis=(
+            ArticleAnalysisResponse(
+                analysis_id=analysis.id,
+                theme=analysis.theme,
+                audience=analysis.audience,
+                angle=analysis.angle,
+                tone=analysis.tone,
+                key_points=analysis.key_points,
+                facts=analysis.facts,
+                hooks=analysis.hooks,
+                risks=analysis.risks,
+                gaps=analysis.gaps,
+                structure=analysis.structure,
+            )
+            if analysis
+            else None
+        ),
+        brief=(
+            ContentBriefResponse(
+                brief_id=brief.id,
+                brief_version=brief.brief_version,
+                positioning=brief.positioning,
+                new_angle=brief.new_angle,
+                target_reader=brief.target_reader,
+                must_cover=brief.must_cover,
+                must_avoid=brief.must_avoid,
+                difference_matrix=brief.difference_matrix,
+                outline=brief.outline,
+                title_directions=brief.title_directions,
+            )
+            if brief
+            else None
+        ),
+        related_articles=[
+            RelatedArticleResponse(
+                article_id=item.id,
+                query_text=item.query_text,
+                rank_no=item.rank_no,
+                url=item.url,
+                title=item.title,
+                source_site=item.source_site,
+                summary=item.summary,
+                published_at=item.published_at,
+                popularity_score=float(item.popularity_score) if item.popularity_score is not None else None,
+                relevance_score=float(item.relevance_score) if item.relevance_score is not None else None,
+                diversity_score=float(item.diversity_score) if item.diversity_score is not None else None,
+                factual_density_score=float(item.factual_density_score) if item.factual_density_score is not None else None,
+                snapshot_path=item.snapshot_path,
+                fetch_status=item.fetch_status,
+                selected=item.selected,
+            )
+            for item in related_articles
+        ],
     )

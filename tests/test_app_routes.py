@@ -50,8 +50,13 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("/internal/v1/tasks/{task_id}/enqueue-phase2", routes)
         self.assertIn("/internal/v1/phase2/ingest-and-run", routes)
         self.assertIn("/internal/v1/phase2/ingest-and-enqueue", routes)
+        self.assertIn("/internal/v1/tasks/{task_id}/run-phase3", routes)
+        self.assertIn("/internal/v1/tasks/{task_id}/enqueue-phase3", routes)
+        self.assertIn("/internal/v1/phase3/ingest-and-run", routes)
+        self.assertIn("/internal/v1/phase3/ingest-and-enqueue", routes)
         self.assertIn("/api/v1/ingest/link", routes)
         self.assertIn("/api/v1/tasks/{task_id}", routes)
+        self.assertIn("/api/v1/tasks/{task_id}/brief", routes)
         self.assertIn("/admin/phase2", routes)
 
     def test_admin_phase2_page_renders(self) -> None:

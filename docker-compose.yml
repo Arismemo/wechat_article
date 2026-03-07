@@ -77,6 +77,26 @@ services:
       redis:
         condition: service_healthy
 
+  phase3_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wechat_artical_phase3_worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-wechat_artical}:${POSTGRES_PASSWORD:-wechat_artical}@postgres:5432/${POSTGRES_DB:-wechat_artical}
+      REDIS_URL: redis://redis:6379/0
+    command: ["python", "scripts/run_phase3_worker.py"]
+    volumes:
+      - ./data:${LOCAL_STORAGE_ROOT:-/app/data}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
 volumes:
   postgres_data:
   redis_data:

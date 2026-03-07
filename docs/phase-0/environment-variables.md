@@ -87,12 +87,14 @@
 | `SEARCH_API_KEY` | 视方案而定 | 搜索服务密钥 |
 | `SEARCH_API_BASE` | 否 | 搜索服务 API 地址 |
 | `SEARCH_TIMEOUT_SECONDS` | 否 | 搜索请求超时 |
+| `SEARCH_ENGINE` | 否 | 智谱搜索引擎类型，默认 `search_std` |
 
 当前确认值：
 
 - `SEARCH_PROVIDER=ZHIPU_MCP`
 - 建议主搜索端点：`https://open.bigmodel.cn/api/mcp/web_search_prime/mcp`
 - 建议网页读取端点：`https://open.bigmodel.cn/api/mcp/web_reader/mcp`
+- Phase 3 后端默认调用官方 `web_search` 接口；如果 `SEARCH_API_BASE` 仍配置为 MCP 地址，服务端会自动回退到 `https://open.bigmodel.cn/api/paas/v4/web_search`
 - `SEARCH_API_KEY`：已收到，文档中不明文记录
 
 ## 8. 微信公众号集成
@@ -115,6 +117,13 @@
 | `PHASE2_PENDING_SET_KEY` | 否 | 阶段 2 去重集合 Redis key |
 | `PHASE2_WORKER_POLL_TIMEOUT_SECONDS` | 否 | worker 阻塞拉取队列的超时时间 |
 | `PHASE2_WORKER_IDLE_SLEEP_SECONDS` | 否 | worker 空闲轮询补充 sleep 时间 |
+| `PHASE3_SEARCH_PER_QUERY` | 否 | 阶段 3 每组 query 拉取多少条搜索结果 |
+| `PHASE3_RELATED_TOP_K` | 否 | 阶段 3 最终保留多少篇同题素材 |
+| `PHASE3_QUEUE_KEY` | 否 | 阶段 3 worker 主队列 Redis key |
+| `PHASE3_PROCESSING_KEY` | 否 | 阶段 3 worker processing 队列 Redis key |
+| `PHASE3_PENDING_SET_KEY` | 否 | 阶段 3 去重集合 Redis key |
+| `PHASE3_WORKER_POLL_TIMEOUT_SECONDS` | 否 | 阶段 3 worker 阻塞拉取超时 |
+| `PHASE3_WORKER_IDLE_SLEEP_SECONDS` | 否 | 阶段 3 worker 空闲 sleep 时间 |
 
 当前确认值：
 

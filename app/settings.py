@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     search_api_base: Optional[str] = Field(default=None, alias="SEARCH_API_BASE")
     search_api_key: Optional[str] = Field(default=None, alias="SEARCH_API_KEY")
     search_timeout_seconds: int = Field(default=30, alias="SEARCH_TIMEOUT_SECONDS")
+    search_engine: str = Field(default="search_std", alias="SEARCH_ENGINE")
 
     fetch_http_timeout_seconds: int = Field(default=25, alias="FETCH_HTTP_TIMEOUT_SECONDS")
     fetch_browser_timeout_seconds: int = Field(default=45, alias="FETCH_BROWSER_TIMEOUT_SECONDS")
@@ -70,6 +71,14 @@ class Settings(BaseSettings):
     phase2_pending_set_key: str = Field(default="phase2:pending", alias="PHASE2_PENDING_SET_KEY")
     phase2_worker_poll_timeout_seconds: int = Field(default=5, alias="PHASE2_WORKER_POLL_TIMEOUT_SECONDS")
     phase2_worker_idle_sleep_seconds: int = Field(default=1, alias="PHASE2_WORKER_IDLE_SLEEP_SECONDS")
+
+    phase3_search_per_query: int = Field(default=5, alias="PHASE3_SEARCH_PER_QUERY")
+    phase3_related_top_k: int = Field(default=5, alias="PHASE3_RELATED_TOP_K")
+    phase3_queue_key: str = Field(default="phase3:queue", alias="PHASE3_QUEUE_KEY")
+    phase3_processing_key: str = Field(default="phase3:processing", alias="PHASE3_PROCESSING_KEY")
+    phase3_pending_set_key: str = Field(default="phase3:pending", alias="PHASE3_PENDING_SET_KEY")
+    phase3_worker_poll_timeout_seconds: int = Field(default=5, alias="PHASE3_WORKER_POLL_TIMEOUT_SECONDS")
+    phase3_worker_idle_sleep_seconds: int = Field(default=1, alias="PHASE3_WORKER_IDLE_SLEEP_SECONDS")
 
     local_storage_root: Path = Field(default=Path("./data"), alias="LOCAL_STORAGE_ROOT")
 

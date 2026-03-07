@@ -7,8 +7,9 @@
 - `docs/` 中维护产品方案、阶段计划和阶段交付物
 - `app/` 中维护 FastAPI 后端、数据模型和服务逻辑
 - `migrations/` 中维护数据库迁移
-- `docker-compose.yml` 中维护 API、数据库、Redis 和阶段 2 worker 的容器化运行方式
+- `docker-compose.yml` 中维护 API、数据库、Redis 以及阶段 2 / 阶段 3 worker 的容器化运行方式
 - 阶段 2 最小闭环及补充项已完成并通过服务器验收：`原文抓取 -> 固定模板稿 -> 图片重写 -> 微信草稿箱`
+- 阶段 3 初版研究层已启动：`原文分析 -> 同题搜索 -> 差异矩阵 -> content_brief`
 
 ## 当前已完成范围
 
@@ -29,6 +30,15 @@
   - 轻量异步 worker：`scripts/run_phase2_worker.py`
   - `wechat-article-exporter` 对接 PoC：`scripts/wechat_exporter_poc.py`
   - 服务器已验证同步 `run-phase2` 与异步 `ingest-and-enqueue` 两条链路
+- 实现阶段 3 初版能力：
+  - `POST /internal/v1/tasks/{task_id}/run-phase3`
+  - `POST /internal/v1/tasks/{task_id}/enqueue-phase3`
+  - `POST /internal/v1/phase3/ingest-and-run`
+  - `POST /internal/v1/phase3/ingest-and-enqueue`
+  - `GET /api/v1/tasks/{task_id}/brief`
+  - 研究层 worker：`scripts/run_phase3_worker.py`
+  - 智谱 `web_search` 搜索接入
+  - `article_analysis`、`related_articles`、`content_brief` 落库
 
 ## 开发约束
 
@@ -45,3 +55,4 @@
 - `redis`
 - `api`
 - `phase2_worker`
+- `phase3_worker`

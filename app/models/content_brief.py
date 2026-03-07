@@ -19,5 +19,6 @@ class ContentBrief(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     target_reader: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     must_cover: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     must_avoid: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    difference_matrix: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     outline: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     title_directions: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)

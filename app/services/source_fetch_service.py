@@ -45,7 +45,14 @@ class SourceFetchService:
         self.storage = StorageService()
         self.wechat_exporter = WechatArticleExporterService()
 
-    def fetch(self, task_id: str, url: str, source_type: str) -> FetchedArticle:
+    def fetch(
+        self,
+        task_id: str,
+        url: str,
+        source_type: str,
+        *,
+        snapshot_relative_path: str = "source/source.html",
+    ) -> FetchedArticle:
         errors: list[str] = []
         fetch_methods: list[tuple[str, Callable[[str, str], tuple[str, str]]]] = [("http", self._fetch_via_http)]
         if source_type == "wechat" and self.wechat_exporter.enabled:
@@ -58,7 +65,7 @@ class SourceFetchService:
                 parsed = self._parse_fetched_article(source_type, final_url, html, method_name)
                 if not parsed.cleaned_text:
                     raise SourceFetchError(f"{method_name} fetched article has empty cleaned_text.")
-                snapshot_path = self.storage.write_text(task_id, "source/source.html", html)
+                snapshot_path = self.storage.write_text(task_id, snapshot_relative_path, html)
                 parsed.snapshot_path = snapshot_path
                 return parsed
             except Exception as exc:

@@ -12,6 +12,8 @@ from app.core.progress import get_progress
 from app.models.audit_log import AuditLog
 from app.models.task import Task
 from app.repositories.audit_log_repository import AuditLogRepository
+from app.repositories.content_brief_repository import ContentBriefRepository
+from app.repositories.related_article_repository import RelatedArticleRepository
 from app.repositories.source_article_repository import SourceArticleRepository
 from app.repositories.task_repository import TaskRepository
 from app.repositories.wechat_draft_repository import WechatDraftRepository
@@ -29,6 +31,8 @@ class TaskSummary:
     progress: int
     title: Optional[str]
     wechat_media_id: Optional[str]
+    brief_id: Optional[str]
+    related_article_count: int
     error: Optional[str]
     created_at: datetime
     updated_at: datetime
@@ -40,6 +44,8 @@ class TaskService:
         self.tasks = TaskRepository(session)
         self.audit_logs = AuditLogRepository(session)
         self.source_articles = SourceArticleRepository(session)
+        self.content_briefs = ContentBriefRepository(session)
+        self.related_articles = RelatedArticleRepository(session)
         self.wechat_drafts = WechatDraftRepository(session)
 
     def ingest_link(self, payload: IngestLinkRequest) -> tuple[Task, bool]:
@@ -91,11 +97,21 @@ class TaskService:
         self.session.commit()
         return task
 
+    def mark_queued_for_phase3(self, task: Task, reason: str) -> Task:
+        task.status = TaskStatus.QUEUED.value
+        task.error_code = None
+        task.error_message = None
+        self._log_action(task.id, "phase3.enqueued", {"reason": reason})
+        self.session.commit()
+        return task
+
     def list_recent(self, limit: int = 10) -> list[TaskSummary]:
         items: list[TaskSummary] = []
         for task in self.tasks.list_recent(limit):
             source_article = self.source_articles.get_latest_by_task_id(task.id)
+            content_brief = self.content_briefs.get_latest_by_task_id(task.id)
             wechat_draft = self.wechat_drafts.get_latest_by_task_id(task.id)
+            related_count = self.related_articles.count_by_task_id(task.id, selected_only=True)
             error = task.error_message or task.error_code
             items.append(
                 TaskSummary(
@@ -107,6 +123,8 @@ class TaskService:
                     progress=self._progress_for_status(task.status),
                     title=source_article.title if source_article else None,
                     wechat_media_id=wechat_draft.media_id if wechat_draft else None,
+                    brief_id=content_brief.id if content_brief else None,
+                    related_article_count=related_count,
                     error=error,
                     created_at=task.created_at,
                     updated_at=task.updated_at,

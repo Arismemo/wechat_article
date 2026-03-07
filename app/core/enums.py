@@ -10,13 +10,16 @@ class TaskStatus(str, Enum):
     SEARCHING_RELATED = "searching_related"
     FETCHING_RELATED = "fetching_related"
     BUILDING_BRIEF = "building_brief"
+    BRIEF_READY = "brief_ready"
     GENERATING = "generating"
     REVIEWING = "reviewing"
     REVIEW_PASSED = "review_passed"
     PUSHING_WECHAT_DRAFT = "pushing_wechat_draft"
     DRAFT_SAVED = "draft_saved"
     FETCH_FAILED = "fetch_failed"
+    ANALYZE_FAILED = "analyze_failed"
     SEARCH_FAILED = "search_failed"
+    BRIEF_FAILED = "brief_failed"
     GENERATE_FAILED = "generate_failed"
     REVIEW_FAILED = "review_failed"
     PUSH_FAILED = "push_failed"
@@ -27,7 +30,9 @@ class TaskStatus(str, Enum):
 
 FINAL_FAILURE_STATUSES = {
     TaskStatus.FETCH_FAILED,
+    TaskStatus.ANALYZE_FAILED,
     TaskStatus.SEARCH_FAILED,
+    TaskStatus.BRIEF_FAILED,
     TaskStatus.GENERATE_FAILED,
     TaskStatus.REVIEW_FAILED,
     TaskStatus.PUSH_FAILED,
@@ -42,6 +47,7 @@ ACTIVE_TASK_STATUSES = {
     TaskStatus.SEARCHING_RELATED,
     TaskStatus.FETCHING_RELATED,
     TaskStatus.BUILDING_BRIEF,
+    TaskStatus.BRIEF_READY,
     TaskStatus.GENERATING,
     TaskStatus.REVIEWING,
     TaskStatus.REVIEW_PASSED,

@@ -19,3 +19,18 @@ class Phase2EnqueueResponse(APIModel):
     status: str
     enqueued: bool
     queue_depth: int
+
+
+class Phase3RunResponse(APIModel):
+    task_id: str
+    status: str
+    analysis_id: Optional[str] = None
+    brief_id: Optional[str] = None
+    related_count: int = 0
+
+
+class Phase3EnqueueResponse(APIModel):
+    task_id: str
+    status: str
+    enqueued: bool
+    queue_depth: int
