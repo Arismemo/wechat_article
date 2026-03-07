@@ -19,6 +19,7 @@ from app.repositories.source_article_repository import SourceArticleRepository
 from app.repositories.task_repository import TaskRepository
 from app.repositories.wechat_draft_repository import WechatDraftRepository
 from app.services.source_fetch_service import SourceFetchService
+from app.services.wechat_push_policy_service import WechatPushBlockedError, WechatPushPolicyService
 from app.services.wechat_service import WechatDraftArticle, WechatService
 from app.settings import get_settings
 
@@ -41,6 +42,7 @@ class WechatDraftPublishService:
         self.generations = GenerationRepository(session)
         self.audit_logs = AuditLogRepository(session)
         self.wechat_drafts = WechatDraftRepository(session)
+        self.push_policy = WechatPushPolicyService(session)
         self.fetcher = SourceFetchService()
         self.wechat = WechatService()
 
@@ -72,6 +74,8 @@ class WechatDraftPublishService:
                 wechat_media_id=existing.media_id,
                 reused_existing=True,
             )
+
+        self._ensure_push_allowed(task.id, generation.id)
 
         self._set_task_status(task, TaskStatus.PUSHING_WECHAT_DRAFT)
         self._log_action(task.id, "wechat.push.started", {"generation_id": generation.id})
@@ -211,6 +215,25 @@ class WechatDraftPublishService:
         if source_author:
             return source_author[:16]
         return "奇点价值"
+
+    def _ensure_push_allowed(self, task_id: str, generation_id: str) -> None:
+        try:
+            self.push_policy.ensure_push_allowed(task_id)
+        except WechatPushBlockedError:
+            policy = self.push_policy.get_policy(task_id)
+            self._log_action(
+                task_id,
+                "phase5.wechat_push.blocked_attempt",
+                {
+                    "generation_id": generation_id,
+                    "mode": policy.mode,
+                    "note": policy.note,
+                    "operator": policy.operator,
+                    "source_action": policy.source_action,
+                },
+            )
+            self.session.commit()
+            raise
 
     def _suffix_from_url(self, url: str, mime_type: Optional[str]) -> str:
         path = urlparse(url).path.lower()

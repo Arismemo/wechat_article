@@ -17,6 +17,19 @@ class ManualReviewActionResponse(APIModel):
     decision: str
 
 
+class WechatPushPolicyActionRequest(APIModel):
+    operator: Optional[str] = None
+    note: Optional[str] = None
+
+
+class WechatPushPolicyActionResponse(APIModel):
+    task_id: str
+    mode: str
+    can_push: bool
+    note: Optional[str] = None
+    operator: str
+
+
 class Phase2RunResponse(APIModel):
     task_id: str
     status: str

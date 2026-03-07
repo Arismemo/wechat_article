@@ -30,8 +30,10 @@ from app.schemas.tasks import (
     TaskSummaryResponse,
     TaskWorkspaceResponse,
     SourceArticleDetailResponse,
+    WechatPushPolicyResponse,
 )
 from app.services.task_service import TaskService
+from app.services.wechat_push_policy_service import WechatPushPolicyService
 
 router = APIRouter()
 
@@ -82,6 +84,7 @@ def get_task(task_id: str, session: Session = Depends(get_db_session)) -> TaskRe
     related_count = RelatedArticleRepository(session).count_by_task_id(task_id, selected_only=True)
     wechat_draft = WechatDraftRepository(session).get_latest_by_task_id(task_id)
     task_status = TaskStatus(task.status)
+    push_policy = WechatPushPolicyService(session).get_policy(task_id)
     error = task.error_message or task.error_code
     return TaskResponse(
         task_id=task.id,
@@ -236,6 +239,7 @@ def get_task_workspace(task_id: str, session: Session = Depends(get_db_session))
     audits = audit_repo.list_by_task_id(task_id, limit=25)
     related_count = related_repo.count_by_task_id(task_id, selected_only=True)
     wechat_draft = wechat_draft_repo.get_latest_by_task_id(task_id)
+    push_policy = WechatPushPolicyService(session).get_policy(task_id)
     error = task.error_message or task.error_code
     task_status = TaskStatus(task.status)
 
@@ -294,6 +298,14 @@ def get_task_workspace(task_id: str, session: Session = Depends(get_db_session))
         error=error,
         created_at=task.created_at,
         updated_at=task.updated_at,
+        wechat_push_policy=WechatPushPolicyResponse(
+            mode=push_policy.mode,
+            can_push=push_policy.can_push,
+            note=push_policy.note,
+            operator=push_policy.operator,
+            source_action=push_policy.source_action,
+            updated_at=push_policy.updated_at,
+        ),
         source_article=(
             SourceArticleDetailResponse(
                 source_article_id=source_article.id,

@@ -173,6 +173,14 @@ class TaskWorkspaceApiTests(unittest.TestCase):
         )
         session.add(AuditLog(task_id=task.id, action="phase4.review.passed", operator="system", payload={"version": 2}))
         session.add(AuditLog(task_id=task.id, action="wechat.push.completed", operator="system", payload={"media_id": "mid-1"}))
+        session.add(
+            AuditLog(
+                task_id=task.id,
+                action="phase5.wechat_push.blocked",
+                operator="editor",
+                payload={"note": "先别推草稿"},
+            )
+        )
         session.commit()
         session.close()
 
@@ -191,8 +199,15 @@ class TaskWorkspaceApiTests(unittest.TestCase):
         self.assertEqual(body["generations"][0]["version_no"], 2)
         self.assertEqual(body["generations"][0]["prompt_version"], "phase4-v1")
         self.assertEqual(body["generations"][0]["review"]["final_decision"], "pass")
-        self.assertEqual(len(body["audits"]), 2)
-        self.assertEqual({item["action"] for item in body["audits"]}, {"phase4.review.passed", "wechat.push.completed"})
+        self.assertEqual(body["wechat_push_policy"]["mode"], "blocked")
+        self.assertFalse(body["wechat_push_policy"]["can_push"])
+        self.assertEqual(body["wechat_push_policy"]["note"], "先别推草稿")
+        self.assertEqual(body["wechat_push_policy"]["operator"], "editor")
+        self.assertEqual(len(body["audits"]), 3)
+        self.assertEqual(
+            {item["action"] for item in body["audits"]},
+            {"phase4.review.passed", "wechat.push.completed", "phase5.wechat_push.blocked"},
+        )
 
 
 if __name__ == "__main__":

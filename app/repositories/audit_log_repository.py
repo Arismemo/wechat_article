@@ -1,3 +1,5 @@
+from typing import Optional
+
 from sqlalchemy.orm import Session
 
 from app.models.audit_log import AuditLog
@@ -19,4 +21,14 @@ class AuditLogRepository:
             .order_by(AuditLog.created_at.desc())
             .limit(limit)
             .all()
+        )
+
+    def get_latest_by_task_id_and_actions(self, task_id: str, actions: list[str]) -> Optional[AuditLog]:
+        if not actions:
+            return None
+        return (
+            self.session.query(AuditLog)
+            .filter(AuditLog.task_id == task_id, AuditLog.action.in_(actions))
+            .order_by(AuditLog.created_at.desc())
+            .first()
         )

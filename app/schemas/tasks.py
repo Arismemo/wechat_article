@@ -148,6 +148,15 @@ class AuditLogResponse(APIModel):
     created_at: datetime
 
 
+class WechatPushPolicyResponse(APIModel):
+    mode: str
+    can_push: bool
+    note: Optional[str] = None
+    operator: Optional[str] = None
+    source_action: Optional[str] = None
+    updated_at: Optional[datetime] = None
+
+
 class GenerationWorkspaceResponse(GenerationResponse):
     created_at: datetime
     prompt_version: Optional[str] = None
@@ -169,6 +178,7 @@ class TaskWorkspaceResponse(APIModel):
     error: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    wechat_push_policy: WechatPushPolicyResponse
     source_article: Optional[SourceArticleDetailResponse] = None
     analysis: Optional[ArticleAnalysisResponse] = None
     brief: Optional[ContentBriefResponse] = None

@@ -13,6 +13,7 @@ from app.services.phase3_queue_service import Phase3QueueService
 from app.services.phase4_pipeline_service import Phase4PipelineService
 from app.services.phase4_queue_service import Phase4QueueService
 from app.services.task_service import TaskService
+from app.services.wechat_push_policy_service import WechatPushBlockedError, WechatPushPolicyService
 from app.services.wechat_draft_publish_service import WechatDraftPublishService
 from app.schemas.ingest import IngestLinkRequest
 from app.schemas.internal import (
@@ -24,6 +25,8 @@ from app.schemas.internal import (
     Phase3RunResponse,
     Phase4EnqueueResponse,
     Phase4RunResponse,
+    WechatPushPolicyActionRequest,
+    WechatPushPolicyActionResponse,
     WechatPushResponse,
 )
 
@@ -294,10 +297,72 @@ def reject_latest_generation(
     )
 
 
+@router.post(
+    "/tasks/{task_id}/allow-wechat-draft-push",
+    response_model=WechatPushPolicyActionResponse,
+    dependencies=[Depends(verify_bearer_token)],
+)
+def allow_wechat_draft_push(
+    task_id: str,
+    payload: Optional[WechatPushPolicyActionRequest] = None,
+    session: Session = Depends(get_db_session),
+) -> WechatPushPolicyActionResponse:
+    try:
+        result = WechatPushPolicyService(session).allow_push(
+            task_id,
+            operator=payload.operator if payload else None,
+            note=payload.note if payload else None,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+
+    return WechatPushPolicyActionResponse(
+        task_id=result.task_id,
+        mode=result.mode,
+        can_push=result.can_push,
+        note=result.note,
+        operator=result.operator,
+    )
+
+
+@router.post(
+    "/tasks/{task_id}/block-wechat-draft-push",
+    response_model=WechatPushPolicyActionResponse,
+    dependencies=[Depends(verify_bearer_token)],
+)
+def block_wechat_draft_push(
+    task_id: str,
+    payload: Optional[WechatPushPolicyActionRequest] = None,
+    session: Session = Depends(get_db_session),
+) -> WechatPushPolicyActionResponse:
+    try:
+        result = WechatPushPolicyService(session).block_push(
+            task_id,
+            operator=payload.operator if payload else None,
+            note=payload.note if payload else None,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+
+    return WechatPushPolicyActionResponse(
+        task_id=result.task_id,
+        mode=result.mode,
+        can_push=result.can_push,
+        note=result.note,
+        operator=result.operator,
+    )
+
+
 @router.post("/tasks/{task_id}/push-wechat-draft", response_model=WechatPushResponse, dependencies=[Depends(verify_bearer_token)])
 def push_wechat_draft(task_id: str, session: Session = Depends(get_db_session)) -> WechatPushResponse:
     try:
         result = WechatDraftPublishService(session).push_latest_accepted_generation(task_id)
+    except WechatPushBlockedError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except Exception as exc:

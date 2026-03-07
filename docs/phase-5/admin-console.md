@@ -1,7 +1,7 @@
 # 阶段 5 后台工作台与人工审核
 
 更新时间：2026-03-07
-状态：第二轮已落地，并完成服务器 smoke test
+状态：第三轮已落地，本轮补充推草稿人工许可控制
 
 ## 1. 目标
 
@@ -15,6 +15,7 @@
 - 生成稿版本与审稿结果对比
 - generation 间版本差异视图
 - 人工确认通过 / 驳回重写
+- 人工“允许推草稿 / 禁止推草稿”
 - 审计轨迹展示
 - 一键回补 Phase 3、一键重跑 Phase 4、一键推微信草稿
 
@@ -39,6 +40,7 @@
 - 最近一次 `content_brief`
 - 最近 8 个 generation 及各自最新 review
 - 最近 25 条 audit log
+- 当前微信草稿推送许可状态
 
 其中 generation 详情会额外展示：
 
@@ -66,6 +68,8 @@
 - `入队 Phase4`
 - `人工确认通过`
 - `人工驳回重写`
+- `允许推草稿`
+- `禁止推草稿`
 - `推送微信草稿`
 
 这些动作底层复用现有接口：
@@ -77,6 +81,8 @@
 - `POST /internal/v1/tasks/{task_id}/enqueue-phase4`
 - `POST /internal/v1/tasks/{task_id}/approve-latest-generation`
 - `POST /internal/v1/tasks/{task_id}/reject-latest-generation`
+- `POST /internal/v1/tasks/{task_id}/allow-wechat-draft-push`
+- `POST /internal/v1/tasks/{task_id}/block-wechat-draft-push`
 - `POST /internal/v1/tasks/{task_id}/push-wechat-draft`
 
 人工审核动作的约束：
@@ -85,6 +91,9 @@
 - 如果该 generation 已经有成功的微信草稿记录，任务状态会保持 / 回补为 `draft_saved`
 - `reject-latest-generation` 会把 latest generation 标为 `rejected`，并把任务打回 `needs_regenerate`
 - 如果该 generation 已成功推送到微信草稿箱，接口会返回 `409 conflict`，避免状态和外部草稿不一致
+- `block-wechat-draft-push` 会把任务的微信推稿许可切为 `blocked`
+- `allow-wechat-draft-push` 会把任务的微信推稿许可切为 `allowed`
+- 被 `blocked` 的任务即使直接命中推稿接口，也会在服务端返回 `409 conflict`，同时写入 `phase5.wechat_push.blocked_attempt` 审计日志
 
 后台访问保护：
 
@@ -106,6 +115,12 @@
 - 展示摘要前后变化
 - 展示正文 Markdown 的行级 unified diff
 
+任务工作台当前也会展示推草稿许可：
+
+- `default`：默认允许，尚未人工干预
+- `allowed`：已人工放行
+- `blocked`：已人工禁止推草稿
+
 ## 5. 人工审核 SOP
 
 页面内已写入简化 SOP，核心规则是：
@@ -114,7 +129,8 @@
 - 研究输入不够时先回补 Phase 3
 - 写稿质量不够时直接重跑 Phase 4
 - 人工审核备注会随 approve / reject 一起写入 audit log
-- 只有 latest accepted generation 才允许推草稿
+- 如果任务还不准备进入微信草稿箱，先点“禁止推草稿”
+- 只有 `latest accepted generation` 且推稿许可为 `default/allowed` 时才允许推草稿
 - 推送后要核对 audit log，避免重复操作
 
 ## 6. 当前边界
@@ -149,14 +165,14 @@
 
 当前测试结果：
 
-- `pytest -q` -> `34 passed`
+- `pytest -q` -> `37 passed`
 - `python3 -m compileall app tests` -> 通过
 
 ## 8. 下一步建议
 
 如果继续推进 Phase 5，优先级建议如下：
 
-1. 为后台接入最小登录保护，而不是只靠 Bearer Token
-2. 增加“我的待处理任务 / 今日新增失败任务”这类面向运营的快捷视图
-3. 把当前前端生成的 diff 结果沉淀成可复用组件或后端摘要
-4. 增加人工“禁止推草稿 / 允许推草稿”之类更细粒度的运营开关
+1. 增加“我的待处理任务 / 今日新增失败任务”这类面向运营的快捷视图
+2. 把当前前端生成的 diff 结果沉淀成可复用组件或后端摘要
+3. 给人工动作和推草稿动作补失败重试 / 冲突提示优化
+4. 如果要继续走生产化，再补角色权限而不是只靠 Basic Auth

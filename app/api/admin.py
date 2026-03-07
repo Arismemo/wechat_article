@@ -955,10 +955,12 @@ def phase5_console() -> str:
                     <button id="queue-phase4" class="secondary">入队 Phase4</button>
                     <button id="approve-generation" class="secondary">人工确认通过</button>
                     <button id="reject-generation" class="danger">人工驳回重写</button>
+                    <button id="allow-push" class="secondary">允许推草稿</button>
+                    <button id="block-push" class="danger">禁止推草稿</button>
                     <button id="push-draft" class="warn">推送微信草稿</button>
                     <button id="clear" class="danger">清空输出</button>
                   </div>
-                  <p class="hint">推荐 SOP：先加载工作台看最新状态和风险，再决定是回补 Phase3、重生成，还是人工放行 / 驳回。`推送微信草稿` 只会推最新 accepted generation；人工审核备注会写入 audit log。</p>
+                  <p class="hint">推荐 SOP：先加载工作台看最新状态和风险，再决定是回补 Phase3、重生成、人工放行 / 驳回，还是直接切换“允许推草稿 / 禁止推草稿”。`推送微信草稿` 只会推最新 accepted generation；人工审核备注会写入 audit log。</p>
                 </section>
 
                 <section class="panel">
@@ -968,8 +970,9 @@ def phase5_console() -> str:
                     <div>2. 再看源文摘要、Brief 新角度、最近两版生成稿，判断问题是研究输入不足，还是写稿结构和表达有偏差。</div>
                     <div>3. 如果研究层明显缺信息，先入队 Phase3；如果 Brief 已够，但稿子不行，直接重跑 Phase4。</div>
                     <div>4. 如果人工判断稿件可用，就执行“人工确认通过”；如果需要重写，就执行“人工驳回重写”。已推草稿的版本不允许再驳回。</div>
-                    <div>5. 只有在 latest generation 为 accepted 且风险可接受时，才推微信草稿箱。</div>
-                    <div>6. 最后核对审计轨迹，确认这次手动操作已经落日志，避免重复触发。</div>
+                    <div>5. 如果内容还不想进入草稿箱，就先点“禁止推草稿”；确认放行后，再点“允许推草稿”。</div>
+                    <div>6. 只有在 latest generation 为 accepted、风险可接受且推草稿许可为 allowed/default 时，才推微信草稿箱。</div>
+                    <div>7. 最后核对审计轨迹，确认这次手动操作已经落日志，避免重复触发。</div>
                   </div>
                 </section>
 
@@ -1169,6 +1172,12 @@ def phase5_console() -> str:
               return "pill";
             };
             const statusLabel = (status) => STATUS_LABELS[status] || status || "未知状态";
+            const pushPolicyLabel = (policy) => {
+              if (!policy) return "默认允许";
+              if (policy.mode === "blocked") return "已禁止推草稿";
+              if (policy.mode === "allowed") return "已人工允许";
+              return "默认允许";
+            };
             const diffFieldCard = (label, before, after) => `
               <div class="diff-card">
                 <strong>${escapeHtml(label)}</strong>
@@ -1294,6 +1303,7 @@ def phase5_console() -> str:
             const renderWorkspace = (workspace) => {
               const latest = workspace.generations[0];
               const latestReview = latest?.review;
+              const pushPolicy = workspace.wechat_push_policy;
               workspaceEl.innerHTML = `
                 <div class="summary-grid">
                   <div class="summary-item">
@@ -1313,6 +1323,10 @@ def phase5_console() -> str:
                     <span>${escapeHtml(workspace.wechat_media_id || "暂无")}</span>
                   </div>
                   <div class="summary-item">
+                    <strong>推草稿许可</strong>
+                    <span>${escapeHtml(pushPolicyLabel(pushPolicy))}</span>
+                  </div>
+                  <div class="summary-item">
                     <strong>已选同题素材</strong>
                     <span>${escapeHtml(workspace.related_article_count)}</span>
                   </div>
@@ -1329,6 +1343,8 @@ def phase5_console() -> str:
                     <div><strong>task_code</strong> ${escapeHtml(workspace.task_code)}</div>
                     <div><strong>source_url</strong> ${escapeHtml(workspace.source_url)}</div>
                     <div><strong>错误</strong> ${escapeHtml(workspace.error || "无")}</div>
+                    <div><strong>推草稿许可</strong> ${escapeHtml(pushPolicyLabel(pushPolicy))}</div>
+                    <div><strong>许可备注</strong> ${escapeHtml(pushPolicy?.note || "无")}</div>
                   </div>
                   <div class="link-row">
                     <a href="${escapeHtml(workspace.source_url)}" target="_blank" rel="noreferrer">打开原文</a>
@@ -1488,6 +1504,8 @@ def phase5_console() -> str:
                               <button data-action="phase4" data-task-id="${escapeHtml(task.task_id)}" class="secondary">执行 P4</button>
                               <button data-action="approve" data-task-id="${escapeHtml(task.task_id)}" class="secondary">人工通过</button>
                               <button data-action="reject" data-task-id="${escapeHtml(task.task_id)}" class="danger">驳回重写</button>
+                              <button data-action="allow-push" data-task-id="${escapeHtml(task.task_id)}" class="secondary">允许推稿</button>
+                              <button data-action="block-push" data-task-id="${escapeHtml(task.task_id)}" class="danger">禁止推稿</button>
                               <button data-action="push" data-task-id="${escapeHtml(task.task_id)}" class="warn">推草稿</button>
                             </div>
                           </div>
@@ -1640,6 +1658,36 @@ def phase5_console() -> str:
               }
             });
 
+            document.getElementById("allow-push").addEventListener("click", async () => {
+              try {
+                const taskId = taskEl.value.trim();
+                if (!taskId) throw new Error("请先输入 task_id");
+                setStatus("允许推草稿");
+                const result = await request("POST", `/internal/v1/tasks/${taskId}/allow-wechat-draft-push`, buildManualReviewPayload());
+                renderOutput(result);
+                await refreshRecent();
+                await fetchWorkspace(taskId);
+              } catch (error) {
+                setStatus("失败");
+                renderOutput(error.message || String(error));
+              }
+            });
+
+            document.getElementById("block-push").addEventListener("click", async () => {
+              try {
+                const taskId = taskEl.value.trim();
+                if (!taskId) throw new Error("请先输入 task_id");
+                setStatus("禁止推草稿");
+                const result = await request("POST", `/internal/v1/tasks/${taskId}/block-wechat-draft-push`, buildManualReviewPayload());
+                renderOutput(result);
+                await refreshRecent();
+                await fetchWorkspace(taskId);
+              } catch (error) {
+                setStatus("失败");
+                renderOutput(error.message || String(error));
+              }
+            });
+
             document.getElementById("push-draft").addEventListener("click", async () => {
               try {
                 const taskId = taskEl.value.trim();
@@ -1725,6 +1773,22 @@ def phase5_console() -> str:
                 if (action === "reject") {
                   setStatus("人工驳回重写");
                   const result = await request("POST", `/internal/v1/tasks/${taskId}/reject-latest-generation`, buildManualReviewPayload());
+                  renderOutput(result);
+                  await refreshRecent();
+                  await fetchWorkspace(taskId);
+                  return;
+                }
+                if (action === "allow-push") {
+                  setStatus("允许推草稿");
+                  const result = await request("POST", `/internal/v1/tasks/${taskId}/allow-wechat-draft-push`, buildManualReviewPayload());
+                  renderOutput(result);
+                  await refreshRecent();
+                  await fetchWorkspace(taskId);
+                  return;
+                }
+                if (action === "block-push") {
+                  setStatus("禁止推草稿");
+                  const result = await request("POST", `/internal/v1/tasks/${taskId}/block-wechat-draft-push`, buildManualReviewPayload());
                   renderOutput(result);
                   await refreshRecent();
                   await fetchWorkspace(taskId);

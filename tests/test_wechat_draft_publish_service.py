@@ -12,10 +12,12 @@ import app.models  # noqa: F401
 from app.core.enums import TaskStatus
 from app.db.base import Base
 from app.db.redis_client import get_redis_client
+from app.models.audit_log import AuditLog
 from app.models.generation import Generation
 from app.models.source_article import SourceArticle
 from app.models.task import Task
 from app.models.wechat_draft import WechatDraft
+from app.services.wechat_push_policy_service import WechatPushBlockedError
 from app.services.wechat_draft_publish_service import WechatDraftPublishService
 from app.settings import get_settings
 
@@ -172,4 +174,70 @@ class WechatDraftPublishServiceTests(unittest.TestCase):
         service.wechat.add_draft.assert_not_called()
         refreshed_task = session.get(Task, task.id)
         self.assertEqual(refreshed_task.status, TaskStatus.DRAFT_SAVED.value)
+        session.close()
+
+    def test_push_latest_accepted_generation_respects_block_policy(self) -> None:
+        session = self.Session()
+        task = Task(
+            task_code="tsk_push_blocked",
+            source_url="https://mp.weixin.qq.com/s/example-blocked",
+            normalized_url="https://mp.weixin.qq.com/s/example-blocked",
+            source_type="wechat",
+            status=TaskStatus.REVIEW_PASSED.value,
+        )
+        session.add(task)
+        session.flush()
+        session.add(
+            SourceArticle(
+                task_id=task.id,
+                url=task.source_url,
+                title="源标题",
+                author="作者",
+                summary="摘要",
+                cleaned_text="正文",
+                fetch_status="success",
+            )
+        )
+        generation = Generation(
+            task_id=task.id,
+            version_no=1,
+            model_name="glm-5",
+            title="重构稿标题",
+            digest="重构稿摘要",
+            html_content="<section><h1>重构稿标题</h1><p>正文</p></section>",
+            markdown_content="# 重构稿标题\n\n正文",
+            status="accepted",
+        )
+        session.add(generation)
+        session.add(
+            AuditLog(
+                task_id=task.id,
+                action="phase5.wechat_push.blocked",
+                operator="editor",
+                payload={"note": "人工拦截"},
+            )
+        )
+        session.commit()
+
+        service = WechatDraftPublishService(session)
+        service.wechat = MagicMock()
+
+        with self.assertRaises(WechatPushBlockedError):
+            service.push_latest_accepted_generation(task.id)
+
+        service.wechat.add_draft.assert_not_called()
+        service.wechat.upload_image_material.assert_not_called()
+        refreshed_task = session.get(Task, task.id)
+        self.assertEqual(refreshed_task.status, TaskStatus.REVIEW_PASSED.value)
+        blocked_attempt = session.scalar(
+            select(AuditLog)
+            .where(AuditLog.task_id == task.id, AuditLog.action == "phase5.wechat_push.blocked_attempt")
+            .order_by(AuditLog.created_at.desc())
+            .limit(1)
+        )
+        self.assertIsNotNone(blocked_attempt)
+        self.assertEqual(blocked_attempt.operator, "system")
+        self.assertEqual(blocked_attempt.payload["generation_id"], generation.id)
+        self.assertEqual(blocked_attempt.payload["mode"], "blocked")
+        self.assertEqual(blocked_attempt.payload["note"], "人工拦截")
         session.close()

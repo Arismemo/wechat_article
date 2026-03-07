@@ -61,6 +61,8 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("/internal/v1/phase4/ingest-and-enqueue", routes)
         self.assertIn("/internal/v1/tasks/{task_id}/approve-latest-generation", routes)
         self.assertIn("/internal/v1/tasks/{task_id}/reject-latest-generation", routes)
+        self.assertIn("/internal/v1/tasks/{task_id}/allow-wechat-draft-push", routes)
+        self.assertIn("/internal/v1/tasks/{task_id}/block-wechat-draft-push", routes)
         self.assertIn("/internal/v1/tasks/{task_id}/push-wechat-draft", routes)
         self.assertIn("/api/v1/ingest/link", routes)
         self.assertIn("/api/v1/tasks/{task_id}", routes)
@@ -95,6 +97,8 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("版本差异视图", response.text)
         self.assertIn("人工确认通过", response.text)
         self.assertIn("人工驳回重写", response.text)
+        self.assertIn("允许推草稿", response.text)
+        self.assertIn("禁止推草稿", response.text)
 
     def test_admin_pages_require_basic_auth_when_configured(self) -> None:
         with patch.dict(os.environ, {"ADMIN_USERNAME": "admin", "ADMIN_PASSWORD": "secret-pass"}, clear=False):
