@@ -1,7 +1,7 @@
 # 阶段 4 生成、审稿与重生成
 
 更新时间：2026-03-07
-状态：已完成首轮服务器验收
+状态：已完成服务器验收，并支持手动推送到微信草稿箱
 
 ## 1. 目标
 
@@ -14,7 +14,7 @@
 - 基于 `content_brief`、`article_analysis`、原文与入选素材生成新稿
 - 对新稿做结构化审稿与评分
 - 对 `revise` 结果自动修订一次
-- 仍不把 Phase 4 生成稿自动推送到微信草稿箱
+- 支持将最新 `review_passed` 稿件手动推送到微信草稿箱
 
 ## 2. 本轮边界
 
@@ -25,6 +25,7 @@
 - `POST /internal/v1/phase4/ingest-and-run`
 - `POST /internal/v1/phase4/ingest-and-enqueue`
 - `GET /api/v1/tasks/{task_id}/draft`
+- `POST /internal/v1/tasks/{task_id}/push-wechat-draft`
 - `phase4_worker`
 - `generations`、`review_reports` 正式落库
 
@@ -44,10 +45,13 @@
   - `POST /internal/v1/phase4/ingest-and-enqueue`
 - 查询接口：
   - `GET /api/v1/tasks/{task_id}/draft`
+- 微信草稿箱推送接口：
+  - `POST /internal/v1/tasks/{task_id}/push-wechat-draft`
 - `docker-compose` 已纳入 `phase4_worker`
 - 本地测试已覆盖：
   - 正常生成并审稿通过
   - `revise -> 自动修订一次 -> 审稿通过`
+  - 取最新 accepted generation 并推微信草稿箱
 
 ## 4. 服务器验收结果
 
@@ -61,6 +65,11 @@
   - 真实跑通了 `revise -> 自动修订一次 -> review_passed`
 - `GET /api/v1/tasks/{task_id}/draft`
   - 已可返回最新 generation 与最新 review 结果
+- 追加收口验证：
+  - 将写稿超时拆为 `LLM_WRITE_TIMEOUT_SECONDS=180`
+  - 将审稿超时拆为 `LLM_REVIEW_TIMEOUT_SECONDS=90`
+  - 复跑后已真实产出 `model_name=glm-5` 的 accepted generation
+  - `POST /internal/v1/tasks/{task_id}/push-wechat-draft` 已成功返回 `draft_saved`
 
 详细部署记录见：
 
@@ -68,7 +77,7 @@
 
 ### 2.2 本轮不做
 
-- 不做自动推微信草稿箱
+- 不做 `review_passed` 后自动推微信草稿箱
 - 不做后台审稿台
 - 不做多轮自动重生成
 - 不做相似度向量检索和外部事实校验服务
@@ -95,7 +104,7 @@
 
 ## 7. 当前限制
 
-- 仍未把 Phase 4 成稿自动推到微信草稿箱
+- 仍未把 Phase 4 成稿在 `review_passed` 后自动推到微信草稿箱
 - 仍未做后台审稿台与人工重生成页
 - 审稿 fallback 目前是启发式规则，不是外部事实校验服务
 

@@ -21,6 +21,15 @@ class WechatDraftRepository:
         )
         return self.session.scalar(statement)
 
+    def get_latest_by_generation_id(self, generation_id: str) -> Optional[WechatDraft]:
+        statement = (
+            select(WechatDraft)
+            .where(WechatDraft.generation_id == generation_id)
+            .order_by(WechatDraft.created_at.desc())
+            .limit(1)
+        )
+        return self.session.scalar(statement)
+
     def create(self, draft: WechatDraft) -> WechatDraft:
         self.session.add(draft)
         self.session.flush()

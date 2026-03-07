@@ -1,7 +1,7 @@
 # 阶段 4 部署与验收记录
 
 更新时间：2026-03-07
-状态：已完成首轮服务器验收
+状态：已完成服务器验收并闭合入草稿箱链路
 
 ## 1. 部署范围
 
@@ -74,10 +74,26 @@
 - 异步链路验证了“自动修订一次并通过审稿”
 - `phase4_worker` 已在服务器稳定运行
 
-## 7. 当前结论
+## 7. 追加收口验证
 
-Phase 4 初版已经具备服务器闭环：
+- 为解决 Phase 4 写作总是回退到 `phase4-fallback-template` 的问题，本轮补充了分档超时配置：
+  - `LLM_WRITE_TIMEOUT_SECONDS=180`
+  - `LLM_REVIEW_TIMEOUT_SECONDS=90`
+- 追加复跑同一 `task_id` 后，新增 `version 5`：
+  - `generation_id`: `6d4b12f3-5748-49d2-b2f5-88b82fda69f0`
+  - `model_name`: `glm-5`
+  - `review_report_id`: `80fabc3e-f6e7-4721-990b-16dbcea971c7`
+  - `review_decision`: `pass`
+  - `status`: `review_passed`
+- 追加验证手动推送微信草稿箱：
+  - 接口：`POST /internal/v1/tasks/{task_id}/push-wechat-draft`
+  - 结果：`status=draft_saved`
+  - `wechat_media_id`: `PyYQ74YwFFGh2wyA3BOdvzfhTwfMorm03-7lHNCD8etRTJjckK5xQ0LA24AFETkJ`
 
-`content_brief -> generation -> review -> reject/revise/pass -> 状态回写`
+## 8. 当前结论
 
-下一步可以继续把 `review_passed` 的最新 generation 接回微信草稿箱推送，形成真正的“研究 -> 写稿 -> 审稿 -> 入草稿箱”一体链路。
+Phase 4 当前已经具备服务器闭环：
+
+`content_brief -> generation -> review -> review_passed -> push-wechat-draft -> draft_saved`
+
+其中“入草稿箱”目前仍是手动触发内部接口，不是 `review_passed` 后自动推送。

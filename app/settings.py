@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     llm_model_write: str = Field(alias="LLM_MODEL_WRITE")
     llm_model_review: str = Field(alias="LLM_MODEL_REVIEW")
     llm_timeout_seconds: int = Field(default=60, alias="LLM_TIMEOUT_SECONDS")
+    llm_write_timeout_seconds: int = Field(default=180, alias="LLM_WRITE_TIMEOUT_SECONDS")
+    llm_review_timeout_seconds: int = Field(default=90, alias="LLM_REVIEW_TIMEOUT_SECONDS")
 
     search_provider: str = Field(alias="SEARCH_PROVIDER")
     search_api_base: Optional[str] = Field(default=None, alias="SEARCH_API_BASE")

@@ -119,6 +119,8 @@ class Phase4PipelineServiceTests(unittest.TestCase):
         self.assertEqual(generation_rows[0].status, "accepted")
         self.assertGreater(float(generation_rows[0].score_overall or 0), 75)
         self.assertEqual(review_rows[0].final_decision, "pass")
+        self.assertEqual(service.llm.complete_json.call_args_list[0].kwargs["timeout_seconds"], 180)
+        self.assertEqual(service.llm.complete_json.call_args_list[1].kwargs["timeout_seconds"], 90)
         session.close()
 
     def test_phase4_pipeline_auto_revises_once_after_revise_decision(self) -> None:

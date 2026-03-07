@@ -11,6 +11,7 @@
   - 当前也已纳入 `phase4_worker`
 - 阶段 2 最小闭环及补充项已完成并通过服务器验收：`原文抓取 -> 固定模板稿 -> 图片重写 -> 微信草稿箱`
 - 阶段 3 初版研究层已完成并通过服务器验收：`原文分析 -> 同题搜索 -> 差异矩阵 -> content_brief`
+- 阶段 4 已完成并通过服务器验收：`content_brief -> generation -> review -> 手动推送微信草稿箱`
 
 ## 当前已完成范围
 
@@ -40,14 +41,16 @@
   - 研究层 worker：`scripts/run_phase3_worker.py`
   - 智谱 `web_search` 搜索接入
   - `article_analysis`、`related_articles`、`content_brief` 落库
-- 阶段 4 初版已实现并完成首轮服务器验收：
+- 阶段 4 已完成服务器收口：
   - `POST /internal/v1/tasks/{task_id}/run-phase4`
   - `POST /internal/v1/tasks/{task_id}/enqueue-phase4`
   - `POST /internal/v1/phase4/ingest-and-run`
   - `POST /internal/v1/phase4/ingest-and-enqueue`
   - `GET /api/v1/tasks/{task_id}/draft`
+  - `POST /internal/v1/tasks/{task_id}/push-wechat-draft`
   - 创作与审稿 worker：`scripts/run_phase4_worker.py`
   - `generations`、`review_reports` 正式落库与查询
+  - 服务器已验证 `glm-5` 真稿生成、审稿通过、手动推送微信草稿箱
 
 ## 开发约束
 
@@ -65,3 +68,4 @@
 - `api`
 - `phase2_worker`
 - `phase3_worker`
+- `phase4_worker`

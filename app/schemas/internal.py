@@ -50,3 +50,11 @@ class Phase4EnqueueResponse(APIModel):
     status: str
     enqueued: bool
     queue_depth: int
+
+
+class WechatPushResponse(APIModel):
+    task_id: str
+    status: str
+    generation_id: Optional[str] = None
+    wechat_media_id: Optional[str] = None
+    reused_existing: bool = False

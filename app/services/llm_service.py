@@ -23,6 +23,8 @@ class LLMService:
         user_prompt: str,
         model: Optional[str] = None,
         temperature: float = 0.3,
+        json_mode: bool = False,
+        timeout_seconds: Optional[int] = None,
     ) -> dict[str, Any]:
         payload = {
             "model": model or self.settings.llm_model_analyze,
@@ -32,6 +34,8 @@ class LLMService:
             ],
             "temperature": temperature,
         }
+        if json_mode:
+            payload["response_format"] = {"type": "json_object"}
         response = httpx.post(
             self._completion_url(),
             headers={
@@ -39,7 +43,7 @@ class LLMService:
                 "Content-Type": "application/json",
             },
             json=payload,
-            timeout=self.settings.llm_timeout_seconds,
+            timeout=timeout_seconds or self.settings.llm_timeout_seconds,
         )
         response.raise_for_status()
         body = response.json()

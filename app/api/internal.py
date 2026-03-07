@@ -10,6 +10,7 @@ from app.services.phase3_queue_service import Phase3QueueService
 from app.services.phase4_pipeline_service import Phase4PipelineService
 from app.services.phase4_queue_service import Phase4QueueService
 from app.services.task_service import TaskService
+from app.services.wechat_draft_publish_service import WechatDraftPublishService
 from app.schemas.ingest import IngestLinkRequest
 from app.schemas.internal import (
     Phase2EnqueueResponse,
@@ -18,6 +19,7 @@ from app.schemas.internal import (
     Phase3RunResponse,
     Phase4EnqueueResponse,
     Phase4RunResponse,
+    WechatPushResponse,
 )
 
 router = APIRouter()
@@ -222,4 +224,22 @@ def ingest_and_enqueue_phase4(payload: IngestLinkRequest, session: Session = Dep
         status=task.status,
         enqueued=result.enqueued,
         queue_depth=result.queue_depth,
+    )
+
+
+@router.post("/tasks/{task_id}/push-wechat-draft", response_model=WechatPushResponse, dependencies=[Depends(verify_bearer_token)])
+def push_wechat_draft(task_id: str, session: Session = Depends(get_db_session)) -> WechatPushResponse:
+    try:
+        result = WechatDraftPublishService(session).push_latest_accepted_generation(task_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+
+    return WechatPushResponse(
+        task_id=result.task_id,
+        status=result.status,
+        generation_id=result.generation_id,
+        wechat_media_id=result.wechat_media_id,
+        reused_existing=result.reused_existing,
     )

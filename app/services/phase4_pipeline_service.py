@@ -134,6 +134,7 @@ class Phase4PipelineService:
         self.session.commit()
 
         payload, model_name = self._build_generation_payload(
+            task_id=task.id,
             source=source,
             analysis=analysis,
             brief=brief,
@@ -180,7 +181,13 @@ class Phase4PipelineService:
         self._log_action(task.id, "phase4.review.started", {"generation_id": generation.id})
         self.session.commit()
 
-        payload = self._build_review_payload(source=source, brief=brief, related=related, generation=generation)
+        payload = self._build_review_payload(
+            task_id=task.id,
+            source=source,
+            brief=brief,
+            related=related,
+            generation=generation,
+        )
         report = self.reviews.create(
             ReviewReport(
                 generation_id=generation.id,
@@ -325,6 +332,7 @@ class Phase4PipelineService:
     def _build_generation_payload(
         self,
         *,
+        task_id: str,
         source: SourceArticle,
         analysis: ArticleAnalysis,
         brief: ContentBrief,
@@ -371,15 +379,23 @@ class Phase4PipelineService:
                     user_prompt=user_prompt,
                     model=self.settings.llm_model_write,
                     temperature=0.6,
+                    json_mode=True,
+                    timeout_seconds=self.settings.llm_write_timeout_seconds,
                 ),
                 self.settings.llm_model_write,
             )
-        except Exception:
+        except Exception as exc:
+            self._log_action(
+                task_id,
+                "phase4.generation.fallback",
+                {"reason": str(exc)[:500], "fallback_model": "phase4-fallback-template"},
+            )
             return self._build_generation_fallback(source=source, analysis=analysis, brief=brief, related=related), "phase4-fallback-template"
 
     def _build_review_payload(
         self,
         *,
+        task_id: str,
         source: SourceArticle,
         brief: ContentBrief,
         related: list[RelatedArticle],
@@ -413,8 +429,15 @@ class Phase4PipelineService:
                 user_prompt=user_prompt,
                 model=self.settings.llm_model_review,
                 temperature=0.2,
+                json_mode=True,
+                timeout_seconds=self.settings.llm_review_timeout_seconds,
             )
-        except (LLMServiceError, Exception):
+        except (LLMServiceError, Exception) as exc:
+            self._log_action(
+                task_id,
+                "phase4.review.fallback",
+                {"reason": str(exc)[:500], "generation_id": generation.id},
+            )
             return self._build_review_fallback(source=source, brief=brief, related=related, generation=generation)
 
     def _build_generation_fallback(

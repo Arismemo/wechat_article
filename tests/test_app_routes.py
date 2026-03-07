@@ -58,6 +58,7 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("/internal/v1/tasks/{task_id}/enqueue-phase4", routes)
         self.assertIn("/internal/v1/phase4/ingest-and-run", routes)
         self.assertIn("/internal/v1/phase4/ingest-and-enqueue", routes)
+        self.assertIn("/internal/v1/tasks/{task_id}/push-wechat-draft", routes)
         self.assertIn("/api/v1/ingest/link", routes)
         self.assertIn("/api/v1/tasks/{task_id}", routes)
         self.assertIn("/api/v1/tasks/{task_id}/brief", routes)
