@@ -1,8 +1,11 @@
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.security import verify_bearer_token
 from app.db.session import get_db_session
+from app.services.manual_review_service import ManualReviewConflictError, ManualReviewService
 from app.services.phase2_pipeline_service import Phase2PipelineService
 from app.services.phase2_queue_service import Phase2QueueService
 from app.services.phase3_pipeline_service import Phase3PipelineService
@@ -13,6 +16,8 @@ from app.services.task_service import TaskService
 from app.services.wechat_draft_publish_service import WechatDraftPublishService
 from app.schemas.ingest import IngestLinkRequest
 from app.schemas.internal import (
+    ManualReviewActionRequest,
+    ManualReviewActionResponse,
     Phase2EnqueueResponse,
     Phase2RunResponse,
     Phase3EnqueueResponse,
@@ -224,6 +229,68 @@ def ingest_and_enqueue_phase4(payload: IngestLinkRequest, session: Session = Dep
         status=task.status,
         enqueued=result.enqueued,
         queue_depth=result.queue_depth,
+    )
+
+
+@router.post(
+    "/tasks/{task_id}/approve-latest-generation",
+    response_model=ManualReviewActionResponse,
+    dependencies=[Depends(verify_bearer_token)],
+)
+def approve_latest_generation(
+    task_id: str,
+    payload: Optional[ManualReviewActionRequest] = None,
+    session: Session = Depends(get_db_session),
+) -> ManualReviewActionResponse:
+    try:
+        result = ManualReviewService(session).approve_latest_generation(
+            task_id,
+            operator=payload.operator if payload else None,
+            note=payload.note if payload else None,
+        )
+    except ManualReviewConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+
+    return ManualReviewActionResponse(
+        task_id=result.task_id,
+        status=result.status,
+        generation_id=result.generation_id,
+        decision=result.decision,
+    )
+
+
+@router.post(
+    "/tasks/{task_id}/reject-latest-generation",
+    response_model=ManualReviewActionResponse,
+    dependencies=[Depends(verify_bearer_token)],
+)
+def reject_latest_generation(
+    task_id: str,
+    payload: Optional[ManualReviewActionRequest] = None,
+    session: Session = Depends(get_db_session),
+) -> ManualReviewActionResponse:
+    try:
+        result = ManualReviewService(session).reject_latest_generation(
+            task_id,
+            operator=payload.operator if payload else None,
+            note=payload.note if payload else None,
+        )
+    except ManualReviewConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+
+    return ManualReviewActionResponse(
+        task_id=result.task_id,
+        status=result.status,
+        generation_id=result.generation_id,
+        decision=result.decision,
     )
 
 

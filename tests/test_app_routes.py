@@ -58,6 +58,8 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("/internal/v1/tasks/{task_id}/enqueue-phase4", routes)
         self.assertIn("/internal/v1/phase4/ingest-and-run", routes)
         self.assertIn("/internal/v1/phase4/ingest-and-enqueue", routes)
+        self.assertIn("/internal/v1/tasks/{task_id}/approve-latest-generation", routes)
+        self.assertIn("/internal/v1/tasks/{task_id}/reject-latest-generation", routes)
         self.assertIn("/internal/v1/tasks/{task_id}/push-wechat-draft", routes)
         self.assertIn("/api/v1/ingest/link", routes)
         self.assertIn("/api/v1/tasks/{task_id}", routes)
@@ -90,6 +92,8 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("任务看板、人工审核与手动干预", response.text)
         self.assertIn("推送微信草稿", response.text)
         self.assertIn("版本差异视图", response.text)
+        self.assertIn("人工确认通过", response.text)
+        self.assertIn("人工驳回重写", response.text)
 
 
 if __name__ == "__main__":

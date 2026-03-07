@@ -5,6 +5,18 @@ from typing import Optional
 from app.schemas.common import APIModel
 
 
+class ManualReviewActionRequest(APIModel):
+    operator: Optional[str] = None
+    note: Optional[str] = None
+
+
+class ManualReviewActionResponse(APIModel):
+    task_id: str
+    status: str
+    generation_id: Optional[str] = None
+    decision: str
+
+
 class Phase2RunResponse(APIModel):
     task_id: str
     status: str

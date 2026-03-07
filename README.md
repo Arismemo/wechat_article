@@ -12,8 +12,8 @@
 - 阶段 2 最小闭环及补充项已完成并通过服务器验收：`原文抓取 -> 固定模板稿 -> 图片重写 -> 微信草稿箱`
 - 阶段 3 初版研究层已完成并通过服务器验收：`原文分析 -> 同题搜索 -> 差异矩阵 -> content_brief`
 - 阶段 4 已完成并通过服务器验收：`content_brief -> generation -> review -> 手动或按开关自动推送微信草稿箱`
-- 阶段 5 第一版后台工作台已完成本地交付：`任务看板 -> 聚合详情 -> 人工审核 -> 手动操作`
-  - 当前已支持按状态分组与“只看待处理任务”筛选
+- 阶段 5 后台工作台第二轮已完成并通过服务器 smoke test：`任务看板 -> 聚合详情 -> 人工审核 -> 手动操作`
+  - 当前已支持按状态分组与“只看待处理任务”筛选、版本 diff、人工确认通过 / 驳回重写
 
 ## 当前已完成范围
 
@@ -58,9 +58,12 @@
   - `GET /admin/phase5`
   - `GET /api/v1/tasks/{task_id}/workspace`
   - `GET /api/v1/tasks?active_only=true&status=...`
+  - `POST /internal/v1/tasks/{task_id}/approve-latest-generation`
+  - `POST /internal/v1/tasks/{task_id}/reject-latest-generation`
   - 最近任务看板、源文/Brief/生成稿聚合详情
   - 按状态分组的任务看板与待处理筛选
   - generation 版本差异视图、风险展示、审计轨迹
+  - 人工确认通过 / 驳回重写，并写入审计日志
   - 一键回补 Phase 3、一键重跑 Phase 4、一键推草稿
 
 ## 开发约束

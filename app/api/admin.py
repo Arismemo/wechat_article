@@ -241,6 +241,7 @@ def phase2_console() -> str:
             const tokenEl = document.getElementById("token");
             const urlEl = document.getElementById("url");
             const taskEl = document.getElementById("task");
+            const reviewNoteEl = document.getElementById("review-note");
             const deviceEl = document.getElementById("device");
             const outputEl = document.getElementById("output");
             const statusEl = document.getElementById("status");
@@ -938,6 +939,10 @@ def phase5_console() -> str:
                       <label for="task">task_id</label>
                       <input id="task" type="text" placeholder="f703c3ef-..." />
                     </div>
+                    <div>
+                      <label for="review-note">人工审核备注</label>
+                      <textarea id="review-note" placeholder="会写入 audit log，例如：结构已达标，可人工放行；或：观点重复，退回重写。"></textarea>
+                    </div>
                   </div>
                   <div class="actions">
                     <button id="queue-url">提交链接并入队 Phase4</button>
@@ -946,10 +951,12 @@ def phase5_console() -> str:
                     <button id="queue-phase3" class="secondary">入队 Phase3</button>
                     <button id="run-phase4" class="secondary">同步执行 Phase4</button>
                     <button id="queue-phase4" class="secondary">入队 Phase4</button>
+                    <button id="approve-generation" class="secondary">人工确认通过</button>
+                    <button id="reject-generation" class="danger">人工驳回重写</button>
                     <button id="push-draft" class="warn">推送微信草稿</button>
                     <button id="clear" class="danger">清空输出</button>
                   </div>
-                  <p class="hint">推荐 SOP：先加载工作台看最新状态和风险，再决定是回补 Phase3、重生成，还是直接推送草稿。`推送微信草稿` 只会推最新 accepted generation。</p>
+                  <p class="hint">推荐 SOP：先加载工作台看最新状态和风险，再决定是回补 Phase3、重生成，还是人工放行 / 驳回。`推送微信草稿` 只会推最新 accepted generation；人工审核备注会写入 audit log。</p>
                 </section>
 
                 <section class="panel">
@@ -958,8 +965,9 @@ def phase5_console() -> str:
                     <div>1. 先看任务状态、风险分和最近一次审稿结论，确认是 `review_passed`、`needs_regenerate` 还是 `needs_manual_review`。</div>
                     <div>2. 再看源文摘要、Brief 新角度、最近两版生成稿，判断问题是研究输入不足，还是写稿结构和表达有偏差。</div>
                     <div>3. 如果研究层明显缺信息，先入队 Phase3；如果 Brief 已够，但稿子不行，直接重跑 Phase4。</div>
-                    <div>4. 只有在 latest generation 为 accepted 且风险可接受时，才推微信草稿箱。</div>
-                    <div>5. 最后核对审计轨迹，确认这次手动操作已经落日志，避免重复触发。</div>
+                    <div>4. 如果人工判断稿件可用，就执行“人工确认通过”；如果需要重写，就执行“人工驳回重写”。已推草稿的版本不允许再驳回。</div>
+                    <div>5. 只有在 latest generation 为 accepted 且风险可接受时，才推微信草稿箱。</div>
+                    <div>6. 最后核对审计轨迹，确认这次手动操作已经落日志，避免重复触发。</div>
                   </div>
                 </section>
 
@@ -1089,6 +1097,7 @@ def phase5_console() -> str:
               tokenEl.value = localStorage.getItem("phase5_console_token") || "";
               urlEl.value = localStorage.getItem("phase5_console_url") || "";
               taskEl.value = localStorage.getItem("phase5_console_task") || "";
+              reviewNoteEl.value = localStorage.getItem("phase5_console_review_note") || "";
               recentStatusEl.value = localStorage.getItem("phase5_console_recent_status") || "";
               recentLimitEl.value = localStorage.getItem("phase5_console_recent_limit") || "18";
               recentActiveEl.checked = (localStorage.getItem("phase5_console_recent_active_only") || "true") !== "false";
@@ -1098,6 +1107,7 @@ def phase5_console() -> str:
               localStorage.setItem("phase5_console_token", tokenEl.value.trim());
               localStorage.setItem("phase5_console_url", urlEl.value.trim());
               localStorage.setItem("phase5_console_task", taskEl.value.trim());
+              localStorage.setItem("phase5_console_review_note", reviewNoteEl.value.trim());
               localStorage.setItem("phase5_console_recent_status", recentStatusEl.value);
               localStorage.setItem("phase5_console_recent_limit", recentLimitEl.value);
               localStorage.setItem("phase5_console_recent_active_only", recentActiveEl.checked ? "true" : "false");
@@ -1474,6 +1484,8 @@ def phase5_console() -> str:
                               <button data-action="workspace" data-task-id="${escapeHtml(task.task_id)}">查看工作台</button>
                               <button data-action="phase3" data-task-id="${escapeHtml(task.task_id)}" class="secondary">入队 P3</button>
                               <button data-action="phase4" data-task-id="${escapeHtml(task.task_id)}" class="secondary">执行 P4</button>
+                              <button data-action="approve" data-task-id="${escapeHtml(task.task_id)}" class="secondary">人工通过</button>
+                              <button data-action="reject" data-task-id="${escapeHtml(task.task_id)}" class="danger">驳回重写</button>
                               <button data-action="push" data-task-id="${escapeHtml(task.task_id)}" class="warn">推草稿</button>
                             </div>
                           </div>
@@ -1509,6 +1521,10 @@ def phase5_console() -> str:
                 note: "phase5-console",
               };
             };
+            const buildManualReviewPayload = () => ({
+              operator: deviceEl.value.trim() || "phase5-console",
+              note: reviewNoteEl.value.trim() || null,
+            });
 
             document.getElementById("queue-url").addEventListener("click", async () => {
               try {
@@ -1592,6 +1608,36 @@ def phase5_console() -> str:
               }
             });
 
+            document.getElementById("approve-generation").addEventListener("click", async () => {
+              try {
+                const taskId = taskEl.value.trim();
+                if (!taskId) throw new Error("请先输入 task_id");
+                setStatus("人工确认通过");
+                const result = await request("POST", `/internal/v1/tasks/${taskId}/approve-latest-generation`, buildManualReviewPayload());
+                renderOutput(result);
+                await refreshRecent();
+                await fetchWorkspace(taskId);
+              } catch (error) {
+                setStatus("失败");
+                renderOutput(error.message || String(error));
+              }
+            });
+
+            document.getElementById("reject-generation").addEventListener("click", async () => {
+              try {
+                const taskId = taskEl.value.trim();
+                if (!taskId) throw new Error("请先输入 task_id");
+                setStatus("人工驳回重写");
+                const result = await request("POST", `/internal/v1/tasks/${taskId}/reject-latest-generation`, buildManualReviewPayload());
+                renderOutput(result);
+                await refreshRecent();
+                await fetchWorkspace(taskId);
+              } catch (error) {
+                setStatus("失败");
+                renderOutput(error.message || String(error));
+              }
+            });
+
             document.getElementById("push-draft").addEventListener("click", async () => {
               try {
                 const taskId = taskEl.value.trim();
@@ -1661,6 +1707,22 @@ def phase5_console() -> str:
                 if (action === "phase4") {
                   setStatus("执行 Phase4");
                   const result = await request("POST", `/internal/v1/tasks/${taskId}/run-phase4`);
+                  renderOutput(result);
+                  await refreshRecent();
+                  await fetchWorkspace(taskId);
+                  return;
+                }
+                if (action === "approve") {
+                  setStatus("人工确认通过");
+                  const result = await request("POST", `/internal/v1/tasks/${taskId}/approve-latest-generation`, buildManualReviewPayload());
+                  renderOutput(result);
+                  await refreshRecent();
+                  await fetchWorkspace(taskId);
+                  return;
+                }
+                if (action === "reject") {
+                  setStatus("人工驳回重写");
+                  const result = await request("POST", `/internal/v1/tasks/${taskId}/reject-latest-generation`, buildManualReviewPayload());
                   renderOutput(result);
                   await refreshRecent();
                   await fetchWorkspace(taskId);
