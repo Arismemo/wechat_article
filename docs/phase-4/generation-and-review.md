@@ -1,7 +1,7 @@
 # 阶段 4 生成、审稿与重生成
 
 更新时间：2026-03-07
-状态：已完成本地实现，待服务器联调
+状态：已完成首轮服务器验收
 
 ## 1. 目标
 
@@ -49,6 +49,23 @@
   - 正常生成并审稿通过
   - `revise -> 自动修订一次 -> 审稿通过`
 
+## 4. 服务器验收结果
+
+`2026-03-07` 已完成首轮服务器 smoke test，验收结论如下：
+
+- `POST /internal/v1/phase4/ingest-and-run`
+  - 已成功产出 `generation` 和 `review_report`
+  - 低分稿件会被打到 `needs_regenerate`
+- `POST /internal/v1/phase4/ingest-and-enqueue`
+  - 已成功由 `phase4_worker` 消费
+  - 真实跑通了 `revise -> 自动修订一次 -> review_passed`
+- `GET /api/v1/tasks/{task_id}/draft`
+  - 已可返回最新 generation 与最新 review 结果
+
+详细部署记录见：
+
+- `docs/phase-4/deployment-log.md`
+
 ### 2.2 本轮不做
 
 - 不做自动推微信草稿箱
@@ -56,7 +73,7 @@
 - 不做多轮自动重生成
 - 不做相似度向量检索和外部事实校验服务
 
-## 4. 设计约束
+## 5. 设计约束
 
 - Phase 4 必须允许直接从任务链接启动；若缺少 Phase 3 结果，服务端应自动补跑 Phase 3。
 - 写作输出必须落 `generations`，不能只返回临时字符串。
@@ -66,7 +83,7 @@
   - `reject`
 - 自动修订最多执行一次；再次不通过则转人工。
 
-## 5. 状态流
+## 6. 状态流
 
 - `generating`
 - `reviewing`
@@ -76,14 +93,13 @@
 - `generate_failed`
 - `review_failed`
 
-## 6. 当前限制
+## 7. 当前限制
 
-- 仍未接服务器真实联调
 - 仍未把 Phase 4 成稿自动推到微信草稿箱
 - 仍未做后台审稿台与人工重生成页
 - 审稿 fallback 目前是启发式规则，不是外部事实校验服务
 
-## 7. 验收标准
+## 8. 验收标准
 
 - 每个 `brief_ready` 任务能产出一版 `generation`
 - 每版 `generation` 都能得到一份 `review_report`

@@ -40,7 +40,7 @@
   - 研究层 worker：`scripts/run_phase3_worker.py`
   - 智谱 `web_search` 搜索接入
   - `article_analysis`、`related_articles`、`content_brief` 落库
-- 阶段 4 已开始实现最小闭环：
+- 阶段 4 初版已实现并完成首轮服务器验收：
   - `POST /internal/v1/tasks/{task_id}/run-phase4`
   - `POST /internal/v1/tasks/{task_id}/enqueue-phase4`
   - `POST /internal/v1/phase4/ingest-and-run`
