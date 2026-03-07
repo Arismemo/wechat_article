@@ -25,6 +25,7 @@ from app.repositories.source_article_repository import SourceArticleRepository
 from app.repositories.task_repository import TaskRepository
 from app.services.llm_service import LLMService, LLMServiceError
 from app.services.phase3_pipeline_service import Phase3PipelineService
+from app.services.wechat_draft_publish_service import WechatDraftPublishService
 from app.settings import get_settings
 
 
@@ -51,6 +52,7 @@ class Phase4PipelineService:
         self.generations = GenerationRepository(session)
         self.reviews = ReviewReportRepository(session)
         self.llm = LLMService()
+        self.wechat_publisher = WechatDraftPublishService(session)
 
     def run(self, task_id: str) -> Phase4PipelineResult:
         task = self._require_task(task_id)
@@ -277,6 +279,8 @@ class Phase4PipelineService:
             {"generation_id": generation.id, "review_report_id": review.id, "auto_revised": auto_revised},
         )
         self.session.commit()
+        if self.settings.phase4_auto_push_wechat_draft:
+            return self._auto_push_wechat_draft(task, generation, review, auto_revised=auto_revised)
         return Phase4PipelineResult(
             task_id=task.id,
             status=task.status,
@@ -285,6 +289,50 @@ class Phase4PipelineService:
             decision=review.final_decision,
             auto_revised=auto_revised,
         )
+
+    def _auto_push_wechat_draft(
+        self,
+        task: Task,
+        generation: Generation,
+        review: ReviewReport,
+        *,
+        auto_revised: bool,
+    ) -> Phase4PipelineResult:
+        if not self.settings.wechat_enable_draft_push:
+            self._log_action(
+                task.id,
+                "phase4.wechat_push.skipped",
+                {"generation_id": generation.id, "reason": "WECHAT_ENABLE_DRAFT_PUSH disabled"},
+            )
+            self.session.commit()
+            return Phase4PipelineResult(
+                task_id=task.id,
+                status=task.status,
+                generation_id=generation.id,
+                review_report_id=review.id,
+                decision=review.final_decision,
+                auto_revised=auto_revised,
+            )
+
+        try:
+            publish_result = self.wechat_publisher.push_generation(task, generation)
+            return Phase4PipelineResult(
+                task_id=task.id,
+                status=publish_result.status,
+                generation_id=generation.id,
+                review_report_id=review.id,
+                decision=review.final_decision,
+                auto_revised=auto_revised,
+            )
+        except Exception:
+            return Phase4PipelineResult(
+                task_id=task.id,
+                status=task.status,
+                generation_id=generation.id,
+                review_report_id=review.id,
+                decision=review.final_decision,
+                auto_revised=auto_revised,
+            )
 
     def _mark_needs_regenerate(self, task: Task, generation: Generation, review: ReviewReport) -> Phase4PipelineResult:
         generation.status = "rejected"

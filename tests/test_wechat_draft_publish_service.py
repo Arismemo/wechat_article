@@ -115,3 +115,61 @@ class WechatDraftPublishServiceTests(unittest.TestCase):
         self.assertEqual(draft.media_id, "draft-1")
         self.assertEqual(draft.generation_id, generation.id)
         session.close()
+
+    def test_push_latest_accepted_generation_reuses_existing_draft_and_marks_task_saved(self) -> None:
+        session = self.Session()
+        task = Task(
+            task_code="tsk_push_reuse",
+            source_url="https://mp.weixin.qq.com/s/example-reuse",
+            normalized_url="https://mp.weixin.qq.com/s/example-reuse",
+            source_type="wechat",
+            status=TaskStatus.REVIEW_PASSED.value,
+        )
+        session.add(task)
+        session.flush()
+        session.add(
+            SourceArticle(
+                task_id=task.id,
+                url=task.source_url,
+                title="源标题",
+                author="作者",
+                summary="摘要",
+                cleaned_text="正文",
+                fetch_status="success",
+            )
+        )
+        generation = Generation(
+            task_id=task.id,
+            version_no=1,
+            model_name="glm-5",
+            title="重构稿标题",
+            digest="重构稿摘要",
+            html_content="<section><h1>重构稿标题</h1><p>正文</p></section>",
+            markdown_content="# 重构稿标题\n\n正文",
+            status="accepted",
+        )
+        session.add(generation)
+        session.flush()
+        session.add(
+            WechatDraft(
+                task_id=task.id,
+                generation_id=generation.id,
+                media_id="draft-existing",
+                push_status="success",
+                push_response={"draft": {"media_id": "draft-existing"}},
+            )
+        )
+        session.commit()
+
+        service = WechatDraftPublishService(session)
+        service.wechat = MagicMock()
+
+        result = service.push_latest_accepted_generation(task.id)
+
+        self.assertEqual(result.status, TaskStatus.DRAFT_SAVED.value)
+        self.assertEqual(result.wechat_media_id, "draft-existing")
+        self.assertTrue(result.reused_existing)
+        service.wechat.add_draft.assert_not_called()
+        refreshed_task = session.get(Task, task.id)
+        self.assertEqual(refreshed_task.status, TaskStatus.DRAFT_SAVED.value)
+        session.close()

@@ -1,7 +1,7 @@
 # 阶段 4 生成、审稿与重生成
 
 更新时间：2026-03-07
-状态：已完成服务器验收，并支持手动推送到微信草稿箱
+状态：已完成服务器验收，并支持手动或按开关自动推送到微信草稿箱
 
 ## 1. 目标
 
@@ -15,6 +15,7 @@
 - 对新稿做结构化审稿与评分
 - 对 `revise` 结果自动修订一次
 - 支持将最新 `review_passed` 稿件手动推送到微信草稿箱
+- 支持通过 `PHASE4_AUTO_PUSH_WECHAT_DRAFT=true` 在 `review_passed` 后自动推送
 
 ## 2. 本轮边界
 
@@ -47,6 +48,9 @@
   - `GET /api/v1/tasks/{task_id}/draft`
 - 微信草稿箱推送接口：
   - `POST /internal/v1/tasks/{task_id}/push-wechat-draft`
+- 自动推送开关：
+  - `PHASE4_AUTO_PUSH_WECHAT_DRAFT=true`
+  - 仍需同时满足 `WECHAT_ENABLE_DRAFT_PUSH=true`
 - `docker-compose` 已纳入 `phase4_worker`
 - 本地测试已覆盖：
   - 正常生成并审稿通过
@@ -77,7 +81,6 @@
 
 ### 2.2 本轮不做
 
-- 不做 `review_passed` 后自动推微信草稿箱
 - 不做后台审稿台
 - 不做多轮自动重生成
 - 不做相似度向量检索和外部事实校验服务
@@ -104,7 +107,7 @@
 
 ## 7. 当前限制
 
-- 仍未把 Phase 4 成稿在 `review_passed` 后自动推到微信草稿箱
+- 生产环境默认仍不会把 Phase 4 成稿在 `review_passed` 后自动推到微信草稿箱，需显式打开 `PHASE4_AUTO_PUSH_WECHAT_DRAFT`
 - 仍未做后台审稿台与人工重生成页
 - 审稿 fallback 目前是启发式规则，不是外部事实校验服务
 

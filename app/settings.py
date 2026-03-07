@@ -91,6 +91,7 @@ class Settings(BaseSettings):
     phase4_policy_risk_max: float = Field(default=0.35, alias="PHASE4_POLICY_RISK_MAX")
     phase4_factual_risk_max: float = Field(default=0.40, alias="PHASE4_FACTUAL_RISK_MAX")
     phase4_max_auto_revisions: int = Field(default=1, alias="PHASE4_MAX_AUTO_REVISIONS")
+    phase4_auto_push_wechat_draft: bool = Field(default=False, alias="PHASE4_AUTO_PUSH_WECHAT_DRAFT")
 
     local_storage_root: Path = Field(default=Path("./data"), alias="LOCAL_STORAGE_ROOT")
 

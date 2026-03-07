@@ -69,6 +69,8 @@
 | `LLM_MODEL_REVIEW` | 是 | 审稿模型名 |
 | `LLM_MODEL_GROWTH` | 否 | 爆款增强器模型名 |
 | `LLM_TIMEOUT_SECONDS` | 否 | 模型请求超时 |
+| `LLM_WRITE_TIMEOUT_SECONDS` | 否 | 写作请求超时，默认长于通用超时 |
+| `LLM_REVIEW_TIMEOUT_SECONDS` | 否 | 审稿请求超时 |
 
 当前确认值：
 
@@ -134,6 +136,7 @@
 | `PHASE4_POLICY_RISK_MAX` | 否 | 阶段 4 合规风险上限 |
 | `PHASE4_FACTUAL_RISK_MAX` | 否 | 阶段 4 事实风险上限 |
 | `PHASE4_MAX_AUTO_REVISIONS` | 否 | 阶段 4 自动修订最大次数，当前默认 1 |
+| `PHASE4_AUTO_PUSH_WECHAT_DRAFT` | 否 | 阶段 4 审稿通过后是否自动推送微信草稿箱，默认关闭 |
 
 当前确认值：
 

@@ -20,6 +20,7 @@ from app.models.review_report import ReviewReport
 from app.models.source_article import SourceArticle
 from app.models.task import Task
 from app.services.phase4_pipeline_service import Phase4PipelineService
+from app.services.wechat_draft_publish_service import WechatDraftPublishResult
 from app.settings import get_settings
 
 
@@ -205,6 +206,70 @@ class Phase4PipelineServiceTests(unittest.TestCase):
         self.assertEqual(review_rows[0].final_decision, "revise")
         self.assertEqual(review_rows[-1].final_decision, "pass")
         session.close()
+
+    def test_phase4_pipeline_auto_pushes_wechat_draft_when_enabled(self) -> None:
+        session = self.Session()
+        task = self._seed_phase4_ready_task(session, "tsk_phase4_autopush")
+
+        with patch.dict(
+            os.environ,
+            {"PHASE4_AUTO_PUSH_WECHAT_DRAFT": "true", "WECHAT_ENABLE_DRAFT_PUSH": "true"},
+            clear=False,
+        ):
+            get_settings.cache_clear()
+            service = Phase4PipelineService(session)
+            service.llm = MagicMock()
+            service.llm.complete_json.side_effect = [
+                {
+                    "title": "虚拟内存真正的价值，是抽象带来的秩序",
+                    "subtitle": "自动推送测试",
+                    "digest": "自动推送测试摘要",
+                    "markdown_content": (
+                        "# 虚拟内存真正的价值，是抽象带来的秩序\n\n"
+                        "## 先纠偏\n"
+                        "虚拟内存不是 swap。\n\n"
+                        "## 再讲代价\n"
+                        "缺页异常会带来成本。\n\n"
+                        "## 最后给框架\n"
+                        "- 地址空间\n"
+                        "- 分页\n"
+                        "- 缺页异常\n"
+                    ),
+                },
+                {
+                    "final_decision": "pass",
+                    "similarity_score": 0.18,
+                    "factual_risk_score": 0.10,
+                    "policy_risk_score": 0.05,
+                    "readability_score": 87,
+                    "title_score": 85,
+                    "novelty_score": 84,
+                    "issues": ["通过。"],
+                    "suggestions": ["可以推草稿箱。"],
+                },
+            ]
+            service.wechat_publisher = MagicMock()
+
+            def push_generation_side_effect(passed_task, generation):
+                passed_task.status = TaskStatus.DRAFT_SAVED.value
+                return WechatDraftPublishResult(
+                    task_id=passed_task.id,
+                    status=TaskStatus.DRAFT_SAVED.value,
+                    generation_id=generation.id,
+                    wechat_media_id="draft-auto-1",
+                    reused_existing=False,
+                )
+
+            service.wechat_publisher.push_generation.side_effect = push_generation_side_effect
+
+            result = service.run(task.id)
+
+        self.assertEqual(result.status, TaskStatus.DRAFT_SAVED.value)
+        refreshed_task = session.get(Task, task.id)
+        self.assertEqual(refreshed_task.status, TaskStatus.DRAFT_SAVED.value)
+        service.wechat_publisher.push_generation.assert_called_once()
+        session.close()
+        get_settings.cache_clear()
 
     def _seed_phase4_ready_task(self, session, task_code: str) -> Task:
         task = Task(

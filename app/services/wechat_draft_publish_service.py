@@ -58,6 +58,13 @@ class WechatDraftPublishService:
 
         existing = self.wechat_drafts.get_latest_by_generation_id(generation.id)
         if existing is not None and existing.push_status == "success" and existing.media_id:
+            self._set_task_status(task, TaskStatus.DRAFT_SAVED)
+            self._log_action(
+                task.id,
+                "wechat.push.reused_existing",
+                {"generation_id": generation.id, "media_id": existing.media_id},
+            )
+            self.session.commit()
             return WechatDraftPublishResult(
                 task_id=task.id,
                 status=task.status,
