@@ -94,6 +94,8 @@
 
 - 服务器推荐入口：`scripts/deploy_from_git.sh`
 - 如果服务器工作区的 `.git` 已损坏，先执行：`scripts/repair_server_git_checkout.sh`
+- Docker 镜像现在会先安装 `requirements.runtime.txt` 和 Playwright，再复制 `app/` 代码
+  - 普通业务代码变更不会重新触发依赖层和浏览器下载层
 - `scripts/deploy_from_git.sh` 支持：
   - `SERVICES="api phase4_worker"` 只部署部分服务
   - `SKIP_BUILD=1` 跳过镜像构建，仅做 `git pull + migration + compose up`

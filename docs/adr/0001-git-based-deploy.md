@@ -32,11 +32,11 @@
 - 新增 `scripts/sync_to_server.sh` 作为临时过渡同步方案，并显式禁用 macOS 扩展属性打包
 - 新增 `scripts/deploy_from_git.sh` 作为服务器侧 Git 部署入口
 - 新增 `scripts/repair_server_git_checkout.sh`，用于修复服务器损坏的 `.git` 元数据并保留 `.env` / `data/`
+- Dockerfile 已拆分依赖层与代码层，`requirements.runtime.txt` 与 Playwright 浏览器层可在代码变更后继续复用缓存
 
 待完成：
 
-- 优化 Dockerfile 层缓存，避免每次代码变更都重新安装 Playwright 浏览器
-- 将服务器正式部署路径从 `sync_to_server.sh` 完整切到 `git pull + deploy_from_git.sh`
+- 将服务器正式部署路径从“临时 `sync_to_server.sh` + 容器注入代码”完整切到“纯 Git 拉取 + 正常镜像构建”
 
 ## 追加记录
 
@@ -56,6 +56,11 @@
 - `scripts/deploy_from_git.sh`
   - 增加坏 Git 工作树前置检查
   - 支持 `SERVICES=...` 与 `SKIP_BUILD=1` 两个部署参数
+- `Dockerfile`
+  - 改为先安装 `requirements.runtime.txt` 中的运行时依赖
+  - 再执行 `python -m playwright install --with-deps --no-shell chromium`
+  - 最后才复制 `app/`、`migrations/`、`scripts/`
+  - 这样普通代码改动不会导致 Playwright 浏览器层失效
 
 ## 影响
 
