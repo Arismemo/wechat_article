@@ -36,6 +36,8 @@
   - 阶段 2 服务器部署与联调记录
 - `docs/phase-3/research-pipeline.md`
   - 阶段 3 研究层、同题搜索、差异矩阵和 Brief 管道说明
+- `docs/phase-3/deployment-log.md`
+  - 阶段 3 服务器部署与 smoke test 记录
 - `docs/research-wechat-fetch-and-browser-options-2026-03-07.md`
   - 微信公众号读取方案、Claude Code skill 和浏览器自动化方案调研
 - `docs/adr/0001-git-based-deploy.md`

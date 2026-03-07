@@ -1,7 +1,7 @@
 # 阶段 3 研究层与 Brief 管道
 
 更新时间：2026-03-07
-状态：In Progress
+状态：已完成首轮服务器验收
 
 ## 1. 目标
 
@@ -167,11 +167,29 @@ Authorization: Bearer <token>
 - 搜索失败仍会把任务打到 `search_failed`
 - 当前后台页还没有单独做 Phase 3 控台，先以 API 和 worker 为主
 
-## 8. 下一步
+## 8. 服务器验收结果
+
+`2026-03-07` 已完成首轮服务器 smoke test，真实验收文章：
+
+- `https://mp.weixin.qq.com/s/OE0GJvalYOl9OJvQIg3bew`
+
+验收结论：
+
+- `POST /internal/v1/phase3/ingest-and-run` 已成功返回 `brief_ready`
+- `POST /internal/v1/phase3/ingest-and-enqueue` 已成功由 `phase3_worker` 消费完成
+- 服务器环境下智谱 `web_search` 已确认可用
+- `GET /api/v1/tasks/{task_id}/brief` 可返回最新分析、Brief 和入选素材
+- 当同一 URL 再次走 `ingest-and-enqueue` 时，会命中去重逻辑并复用已有任务，新的研究结果会继续写入更高版本的 `content_brief`
+
+详细部署记录见：
+
+- `docs/phase-3/deployment-log.md`
+
+## 9. 下一步
 
 建议按这个顺序继续：
 
-1. 在服务器部署 `phase3_worker` 并跑一轮真实 smoke test
-2. 为 `article_analysis` 与 `content_brief` 增加后台查看页
-3. 为搜索与抓取增加失败重试和监控指标
+1. 为 `article_analysis` 与 `content_brief` 增加后台查看页
+2. 为搜索与抓取增加失败重试和监控指标
+3. 为去重任务补更明确的“重新生成 brief 版本”展示
 4. 进入阶段 4：基于 `content_brief` 生成正文与审稿
