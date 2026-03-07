@@ -58,18 +58,12 @@ class SearchService:
                 "Content-Type": "application/json",
             },
             json={
-                "request_id": str(uuid4()),
-                "tool": "web-search-pro",
-                "stream": False,
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": query,
-                    }
-                ],
+                "search_query": query,
                 "search_engine": self.settings.search_engine,
                 "search_intent": False,
                 "count": count,
+                "content_size": "medium",
+                "request_id": str(uuid4()),
             },
             timeout=self.settings.search_timeout_seconds,
         )

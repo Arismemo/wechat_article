@@ -51,9 +51,7 @@ class Phase3PipelineService:
 
     def run(self, task_id: str) -> Phase3PipelineResult:
         task = self._require_task(task_id)
-        source_article = self.source_articles.get_latest_by_task_id(task.id)
-        if source_article is None:
-            raise ValueError("Source article not found. Run phase 2 fetch first.")
+        source_article = self._ensure_source_article(task)
 
         try:
             self._set_task_status(task, TaskStatus.ANALYZING_SOURCE)
@@ -185,6 +183,54 @@ class Phase3PipelineService:
             if row.selected:
                 selected_rows.append(row)
         return selected_rows
+
+    def _ensure_source_article(self, task: Task) -> SourceArticle:
+        source_article = self.source_articles.get_latest_by_task_id(task.id)
+        if source_article is not None:
+            return source_article
+
+        try:
+            self._set_task_status(task, TaskStatus.FETCHING_SOURCE)
+            self._log_action(task.id, "phase3.fetch.started", {"source_url": task.source_url})
+            self.session.commit()
+
+            fetched = self.fetcher.fetch(task.id, task.source_url, task.source_type or "web")
+            source_article = self._save_source_article(task, fetched)
+            self._set_task_status(task, TaskStatus.SOURCE_READY)
+            self._log_action(
+                task.id,
+                "phase3.fetch.completed",
+                {
+                    "title": fetched.title,
+                    "fetch_method": fetched.fetch_method,
+                    "snapshot_path": fetched.snapshot_path,
+                },
+            )
+            self.session.commit()
+            return source_article
+        except Exception as exc:
+            self._fail_task(task, TaskStatus.FETCH_FAILED, "phase3_source_fetch_failed", str(exc))
+            raise
+
+    def _save_source_article(self, task: Task, fetched: FetchedArticle) -> SourceArticle:
+        source_article = self.source_articles.get_latest_by_task_id(task.id)
+        if source_article is None:
+            source_article = self.source_articles.create(SourceArticle(task_id=task.id, url=fetched.final_url))
+
+        source_article.url = fetched.final_url
+        source_article.title = fetched.title
+        source_article.author = fetched.author
+        source_article.published_at = fetched.published_at
+        source_article.cover_image_url = fetched.cover_image_url
+        source_article.raw_html = fetched.raw_html
+        source_article.cleaned_text = fetched.cleaned_text
+        source_article.summary = fetched.summary
+        source_article.snapshot_path = fetched.snapshot_path
+        source_article.fetch_status = "success"
+        source_article.word_count = fetched.word_count
+        source_article.content_hash = fetched.content_hash
+        self.session.flush()
+        return source_article
 
     def _apply_fetched_related(self, row: RelatedArticle, fetched: FetchedArticle) -> None:
         row.title = fetched.title or row.title

@@ -208,3 +208,101 @@ class Phase3PipelineServiceTests(unittest.TestCase):
         self.assertEqual(related_rows[0].snapshot_path, "/tmp/related-1.html")
 
         session.close()
+
+    def test_phase3_pipeline_fetches_source_when_missing(self) -> None:
+        session = self.Session()
+        task = Task(
+            task_code="tsk_phase3_fetch",
+            source_url="https://mp.weixin.qq.com/s/example-missing-source",
+            normalized_url="https://mp.weixin.qq.com/s/example-missing-source",
+            source_type="wechat",
+            status=TaskStatus.QUEUED.value,
+        )
+        session.add(task)
+        session.commit()
+
+        service = Phase3PipelineService(session)
+        service.llm = MagicMock()
+        service.search = MagicMock()
+        service.fetcher = MagicMock()
+        service.fetcher.fetch.side_effect = [
+            FetchedArticle(
+                url=task.source_url,
+                final_url=task.source_url,
+                fetch_method="http",
+                title="源文章标题",
+                author="作者",
+                published_at=datetime(2026, 3, 7, tzinfo=timezone.utc),
+                cover_image_url=None,
+                raw_html="<article>source</article>",
+                cleaned_text="源文章正文",
+                summary="源文章摘要",
+                snapshot_path="/tmp/source.html",
+                word_count=666,
+                content_hash="source-hash",
+            ),
+            FetchedArticle(
+                url="https://example.com/related",
+                final_url="https://example.com/related",
+                fetch_method="http",
+                title="相关标题",
+                author="甲",
+                published_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+                cover_image_url=None,
+                raw_html="<article>related</article>",
+                cleaned_text="相关正文",
+                summary="相关文章摘要",
+                snapshot_path="/tmp/related.html",
+                word_count=321,
+                content_hash="related-hash",
+            ),
+        ]
+        service.llm.complete_json.side_effect = [
+            {
+                "theme": "源主题",
+                "audience": "技术读者",
+                "angle": "从误区切入",
+                "tone": "理性拆解",
+                "key_points": ["点 1"],
+                "facts": ["事实 1"],
+                "hooks": ["钩子 1"],
+                "risks": ["风险 1"],
+                "gaps": ["空白 1"],
+                "structure": [{"section": "定义", "purpose": "解释"}],
+            },
+            {
+                "positioning": "重构稿定位",
+                "new_angle": "新角度",
+                "target_reader": "读者",
+                "must_cover": ["覆盖点"],
+                "must_avoid": ["避免点"],
+                "difference_matrix": [{"topic": "主题", "source_coverage": "已覆盖", "opportunity": "新机会"}],
+                "outline": [{"heading": "标题", "goal": "目标"}],
+                "title_directions": ["方向 1"],
+            },
+        ]
+        service.search.search_many.return_value = []
+        service.search.rank_results.return_value = [
+            RankedSearchResult(
+                query_text="源主题 分析",
+                title="相关标题",
+                url="https://example.com/related",
+                summary="相关文章摘要",
+                source_site="Example",
+                published_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+                overall_score=0.9,
+                relevance_score=0.9,
+                diversity_score=0.8,
+                factual_density_score=0.7,
+            )
+        ]
+
+        result = service.run(task.id)
+
+        self.assertEqual(result.status, TaskStatus.BRIEF_READY.value)
+        self.assertEqual(service.fetcher.fetch.call_count, 2)
+        article = session.scalar(select(SourceArticle).where(SourceArticle.task_id == task.id))
+        self.assertIsNotNone(article)
+        self.assertEqual(article.title, "源文章标题")
+
+        session.close()
