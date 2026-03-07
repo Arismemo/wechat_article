@@ -14,6 +14,7 @@
 - 阶段 4 已完成并通过服务器验收：`content_brief -> generation -> review -> 手动或按开关自动推送微信草稿箱`
 - 阶段 5 后台工作台第二轮已完成并通过服务器 smoke test：`任务看板 -> 聚合详情 -> 人工审核 -> 手动操作`
   - 当前已支持按状态分组与“只看待处理任务”筛选、版本 diff、人工确认通过 / 驳回重写
+  - `/admin/*` 现已支持可选 Basic Auth 保护
 
 ## 当前已完成范围
 
@@ -56,6 +57,7 @@
   - 可选开关：`PHASE4_AUTO_PUSH_WECHAT_DRAFT=true`
 - 阶段 5 第一版已实现：
   - `GET /admin/phase5`
+  - `/admin/*` 可选 `ADMIN_USERNAME` / `ADMIN_PASSWORD` Basic Auth
   - `GET /api/v1/tasks/{task_id}/workspace`
   - `GET /api/v1/tasks?active_only=true&status=...`
   - `POST /internal/v1/tasks/{task_id}/approve-latest-generation`

@@ -18,6 +18,8 @@ class Settings(BaseSettings):
 
     api_bearer_token: str = Field(alias="API_BEARER_TOKEN")
     api_hmac_secret: Optional[str] = Field(default=None, alias="API_HMAC_SECRET")
+    admin_username: Optional[str] = Field(default=None, alias="ADMIN_USERNAME")
+    admin_password: Optional[str] = Field(default=None, alias="ADMIN_PASSWORD")
 
     database_url: str = Field(alias="DATABASE_URL")
     redis_url: str = Field(alias="REDIS_URL")

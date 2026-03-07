@@ -25,7 +25,8 @@
 | --- | --- | --- |
 | `API_BEARER_TOKEN` | 是 | 快捷指令调用接入 API 的 Bearer Token |
 | `API_HMAC_SECRET` | 否 | 如果启用 HMAC 签名则必填 |
-| `ADMIN_JWT_SECRET` | 否 | 后台管理登录或签发 token |
+| `ADMIN_USERNAME` | 否 | 后台页 Basic Auth 用户名；配置后 `/admin/*` 将要求浏览器先登录 |
+| `ADMIN_PASSWORD` | 否 | 后台页 Basic Auth 密码；建议仅在服务器环境注入 |
 | `ALLOWED_IPS` | 否 | 对管理接口做 IP 限制时使用 |
 
 ## 4. 数据库与缓存

@@ -23,6 +23,7 @@
 - `GET /admin/phase5`
 
 页面本身不内置服务端密钥，所有写操作仍依赖手动输入 Bearer Token。
+如果服务器配置了 `ADMIN_USERNAME` / `ADMIN_PASSWORD`，浏览器访问 `/admin/phase2`、`/admin/phase5` 时会先弹出 Basic Auth 登录框。
 
 ## 3. 聚合详情接口
 
@@ -85,6 +86,12 @@
 - `reject-latest-generation` 会把 latest generation 标为 `rejected`，并把任务打回 `needs_regenerate`
 - 如果该 generation 已成功推送到微信草稿箱，接口会返回 `409 conflict`，避免状态和外部草稿不一致
 
+后台访问保护：
+
+- `/admin/*` 现在支持最小登录保护
+- 只要服务端配置了 `ADMIN_USERNAME` 与 `ADMIN_PASSWORD`，后台页就会要求浏览器先通过 Basic Auth
+- 这层保护只负责页面入口；页面内的写操作仍然需要手动输入 `API_BEARER_TOKEN`
+
 任务看板当前支持这些筛选能力：
 
 - `active_only=true`：只看待处理任务
@@ -126,6 +133,7 @@
 本地已完成：
 
 - `/admin/phase5` 页面渲染测试
+- `/admin/phase5` Basic Auth 保护测试
 - `/api/v1/tasks/{task_id}/workspace` API 测试
 - `ManualReviewService` 人工通过 / 驳回 / 冲突保护测试
 - 全量测试通过
@@ -133,6 +141,7 @@
 服务器已完成：
 
 - `GET /admin/phase5`
+- `/admin/phase5` 未登录返回 `401`，带 Basic Auth 返回 `200`
 - `GET /api/v1/tasks/{task_id}/workspace`
 - `GET /api/v1/tasks?active_only=true`
 - `POST /internal/v1/tasks/{task_id}/approve-latest-generation`
@@ -140,7 +149,7 @@
 
 当前测试结果：
 
-- `pytest -q` -> `33 passed`
+- `pytest -q` -> `34 passed`
 - `python3 -m compileall app tests` -> 通过
 
 ## 8. 下一步建议

@@ -1,3 +1,4 @@
+import base64
 import os
 import tempfile
 import unittest
@@ -94,6 +95,24 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("版本差异视图", response.text)
         self.assertIn("人工确认通过", response.text)
         self.assertIn("人工驳回重写", response.text)
+
+    def test_admin_pages_require_basic_auth_when_configured(self) -> None:
+        with patch.dict(os.environ, {"ADMIN_USERNAME": "admin", "ADMIN_PASSWORD": "secret-pass"}, clear=False):
+            get_settings.cache_clear()
+            app_module = reload(import_module("app.main"))
+            client = TestClient(app_module.create_app())
+
+            unauthorized = client.get("/admin/phase5")
+            self.assertEqual(unauthorized.status_code, 401)
+            self.assertEqual(unauthorized.headers.get("www-authenticate"), 'Basic realm="wechat_artical-admin"')
+
+            encoded = base64.b64encode(b"admin:secret-pass").decode("ascii")
+            authorized = client.get("/admin/phase5", headers={"Authorization": f"Basic {encoded}"})
+            self.assertEqual(authorized.status_code, 200)
+            self.assertIn("Phase 5 工作台", authorized.text)
+
+            client.close()
+            get_settings.cache_clear()
 
 
 if __name__ == "__main__":

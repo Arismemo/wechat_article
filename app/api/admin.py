@@ -2,14 +2,16 @@ from __future__ import annotations
 
 from textwrap import dedent
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import HTMLResponse
+
+from app.core.security import verify_admin_basic_auth
 
 
 router = APIRouter()
 
 
-@router.get("/admin/phase2", response_class=HTMLResponse, tags=["admin"])
+@router.get("/admin/phase2", response_class=HTMLResponse, tags=["admin"], dependencies=[Depends(verify_admin_basic_auth)])
 def phase2_console() -> str:
     return dedent(
         """\
@@ -497,7 +499,7 @@ def phase2_console() -> str:
     )
 
 
-@router.get("/admin/phase5", response_class=HTMLResponse, tags=["admin"])
+@router.get("/admin/phase5", response_class=HTMLResponse, tags=["admin"], dependencies=[Depends(verify_admin_basic_auth)])
 def phase5_console() -> str:
     return dedent(
         """\
