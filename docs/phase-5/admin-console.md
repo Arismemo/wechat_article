@@ -9,7 +9,8 @@
 
 本轮先交付最小可用后台：
 
-- 最近任务看板
+- 按状态分组的任务看板
+- “只看待处理任务”筛选
 - 任务聚合详情页
 - 生成稿版本与审稿结果对比
 - 审计轨迹展示
@@ -71,6 +72,12 @@
 - `POST /internal/v1/tasks/{task_id}/enqueue-phase4`
 - `POST /internal/v1/tasks/{task_id}/push-wechat-draft`
 
+任务看板当前支持这些筛选能力：
+
+- `active_only=true`：只看待处理任务
+- `status=<task_status>`：只看某一个具体状态
+- 页面会按状态自动分组显示卡片
+
 ## 5. 人工审核 SOP
 
 页面内已写入简化 SOP，核心规则是：
@@ -104,17 +111,18 @@
 
 - `GET /admin/phase5`
 - `GET /api/v1/tasks/{task_id}/workspace`
+- `GET /api/v1/tasks?active_only=true`
 
 当前测试结果：
 
-- `pytest -q` -> `28 passed`
+- `pytest -q` -> `29 passed`
 - `python3 -m compileall app tests` -> 通过
 
 ## 8. 下一步建议
 
 如果继续推进 Phase 5，优先级建议如下：
 
-1. 后台增加“只看待处理任务”的筛选与状态分组
-2. 增加 generation 间 diff 视图，而不只是版本卡片并排
-3. 增加人工确认通过/驳回动作，而不只依赖模型审稿结论
-4. 为后台接入最小登录保护，而不是只靠 Bearer Token
+1. 增加 generation 间 diff 视图，而不只是版本卡片并排
+2. 增加人工确认通过/驳回动作，而不只依赖模型审稿结论
+3. 为后台接入最小登录保护，而不是只靠 Bearer Token
+4. 增加“我的待处理任务 / 今日新增失败任务”这类面向运营的快捷视图

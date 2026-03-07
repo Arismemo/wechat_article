@@ -661,6 +661,61 @@ def phase5_console() -> str:
               display: grid;
               gap: 12px;
             }
+            .filter-grid {
+              display: grid;
+              grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+              gap: 10px;
+              margin-bottom: 12px;
+            }
+            .filter-grid select {
+              width: 100%;
+              padding: 12px 14px;
+              border-radius: 14px;
+              border: 1px solid var(--line);
+              background: #fffdf9;
+              color: var(--text);
+              font: inherit;
+            }
+            .check-row {
+              display: flex;
+              align-items: center;
+              gap: 10px;
+              min-height: 48px;
+              padding: 0 12px;
+              border: 1px solid var(--line);
+              border-radius: 14px;
+              background: #fffdf9;
+              color: var(--text);
+            }
+            .check-row input {
+              width: auto;
+              margin: 0;
+            }
+            .summary-strip {
+              display: flex;
+              flex-wrap: wrap;
+              gap: 8px;
+              margin-bottom: 12px;
+            }
+            .group-block {
+              display: grid;
+              gap: 10px;
+            }
+            .group-title {
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              gap: 12px;
+              margin-top: 2px;
+            }
+            .group-title h3 {
+              margin: 0;
+              font-size: 15px;
+            }
+            .group-title span {
+              font-size: 12px;
+              color: var(--muted);
+            }
             .task-card, .detail-card, .generation-card, .audit-card {
               background: #fffdf9;
               border: 1px solid var(--line);
@@ -845,11 +900,38 @@ def phase5_console() -> str:
                 </section>
 
                 <section class="panel">
-                  <h2>最近任务</h2>
+                  <h2>任务看板</h2>
+                  <div class="filter-grid">
+                    <div>
+                      <label for="recent-status-filter">状态筛选</label>
+                      <select id="recent-status-filter">
+                        <option value="">全部状态</option>
+                        <option value="queued">queued</option>
+                        <option value="review_passed">review_passed</option>
+                        <option value="needs_regenerate">needs_regenerate</option>
+                        <option value="needs_manual_review">needs_manual_review</option>
+                        <option value="draft_saved">draft_saved</option>
+                        <option value="review_failed">review_failed</option>
+                        <option value="push_failed">push_failed</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label for="recent-limit">任务数量</label>
+                      <input id="recent-limit" type="number" min="6" max="50" value="18" />
+                    </div>
+                    <div>
+                      <label>队列过滤</label>
+                      <div class="check-row">
+                        <input id="recent-active-only" type="checkbox" checked />
+                        <span>只看待处理任务</span>
+                      </div>
+                    </div>
+                  </div>
                   <div class="actions" style="margin-top: 0;">
                     <button id="refresh-recent" class="secondary">刷新最近任务</button>
                   </div>
-                  <p class="hint">卡片按钮会直接填入 `task_id` 并执行对应动作。工作台详情会展示源文、Brief、生成稿版本与审计轨迹。</p>
+                  <p class="hint">默认优先显示仍需要人或系统处理的任务。看板会按状态自动分组，方便先处理 `needs_regenerate`、`needs_manual_review`、`review_passed` 这类关键卡点。</p>
+                  <div class="summary-strip" id="recent-summary"></div>
                   <div class="board" id="recent-list">
                     <div class="hint">等待加载最近任务...</div>
                   </div>
@@ -881,7 +963,54 @@ def phase5_console() -> str:
             const outputEl = document.getElementById("output");
             const statusEl = document.getElementById("status");
             const recentListEl = document.getElementById("recent-list");
+            const recentSummaryEl = document.getElementById("recent-summary");
+            const recentStatusEl = document.getElementById("recent-status-filter");
+            const recentLimitEl = document.getElementById("recent-limit");
+            const recentActiveEl = document.getElementById("recent-active-only");
             const workspaceEl = document.getElementById("workspace");
+            const STATUS_LABELS = {
+              queued: "待执行",
+              deduping: "去重中",
+              fetching_source: "抓原文",
+              source_ready: "原文就绪",
+              analyzing_source: "分析中",
+              searching_related: "搜索中",
+              fetching_related: "拉素材",
+              building_brief: "建 Brief",
+              brief_ready: "Brief 就绪",
+              generating: "生成中",
+              reviewing: "审稿中",
+              review_passed: "待推草稿",
+              pushing_wechat_draft: "推草稿中",
+              draft_saved: "已入草稿",
+              fetch_failed: "抓取失败",
+              analyze_failed: "分析失败",
+              search_failed: "搜索失败",
+              brief_failed: "Brief 失败",
+              generate_failed: "生成失败",
+              review_failed: "审稿失败",
+              push_failed: "推草稿失败",
+              needs_manual_source: "待人工抓源",
+              needs_manual_review: "待人工审核",
+              needs_regenerate: "待重生成",
+            };
+            const STATUS_ORDER = [
+              "needs_regenerate",
+              "needs_manual_review",
+              "review_passed",
+              "push_failed",
+              "review_failed",
+              "generate_failed",
+              "queued",
+              "fetching_source",
+              "analyzing_source",
+              "searching_related",
+              "building_brief",
+              "generating",
+              "reviewing",
+              "pushing_wechat_draft",
+              "draft_saved",
+            ];
 
             const escapeHtml = (value) => {
               return String(value ?? "")
@@ -896,12 +1025,18 @@ def phase5_console() -> str:
               tokenEl.value = localStorage.getItem("phase5_console_token") || "";
               urlEl.value = localStorage.getItem("phase5_console_url") || "";
               taskEl.value = localStorage.getItem("phase5_console_task") || "";
+              recentStatusEl.value = localStorage.getItem("phase5_console_recent_status") || "";
+              recentLimitEl.value = localStorage.getItem("phase5_console_recent_limit") || "18";
+              recentActiveEl.checked = (localStorage.getItem("phase5_console_recent_active_only") || "true") !== "false";
             };
 
             const saveDraft = () => {
               localStorage.setItem("phase5_console_token", tokenEl.value.trim());
               localStorage.setItem("phase5_console_url", urlEl.value.trim());
               localStorage.setItem("phase5_console_task", taskEl.value.trim());
+              localStorage.setItem("phase5_console_recent_status", recentStatusEl.value);
+              localStorage.setItem("phase5_console_recent_limit", recentLimitEl.value);
+              localStorage.setItem("phase5_console_recent_active_only", recentActiveEl.checked ? "true" : "false");
             };
 
             const setStatus = (text) => {
@@ -957,6 +1092,7 @@ def phase5_console() -> str:
               if (decision === "revise") return "pill warn";
               return "pill";
             };
+            const statusLabel = (status) => STATUS_LABELS[status] || status || "未知状态";
 
             const renderWorkspace = (workspace) => {
               const latest = workspace.generations[0];
@@ -1098,30 +1234,72 @@ def phase5_console() -> str:
               saveDraft();
             };
 
-            const refreshRecent = async () => {
-              const tasks = await request("GET", "/api/v1/tasks?limit=12");
+            const renderRecentBoard = (tasks) => {
               if (!Array.isArray(tasks) || tasks.length === 0) {
-                recentListEl.innerHTML = '<div class="hint">最近没有任务。</div>';
+                recentSummaryEl.innerHTML = "";
+                recentListEl.innerHTML = '<div class="hint">当前筛选条件下没有任务。</div>';
                 return;
               }
-              recentListEl.innerHTML = tasks.map((task) => `
-                <div class="task-card">
-                  <h3>${escapeHtml(task.title || "未命名任务")}</h3>
-                  <div class="meta">
-                    <div><strong>task_id</strong> ${escapeHtml(task.task_id)}</div>
-                    <div><strong>状态</strong> ${escapeHtml(task.status)} · ${escapeHtml(task.progress)}%</div>
-                    <div><strong>草稿</strong> ${escapeHtml(task.wechat_media_id || "暂无")}</div>
-                    <div><strong>更新时间</strong> ${escapeHtml(formatDate(task.updated_at))}</div>
-                    <div><strong>链接</strong> ${escapeHtml(truncate(task.source_url, 88))}</div>
-                  </div>
-                  <div class="task-actions">
-                    <button data-action="workspace" data-task-id="${escapeHtml(task.task_id)}">查看工作台</button>
-                    <button data-action="phase3" data-task-id="${escapeHtml(task.task_id)}" class="secondary">入队 P3</button>
-                    <button data-action="phase4" data-task-id="${escapeHtml(task.task_id)}" class="secondary">执行 P4</button>
-                    <button data-action="push" data-task-id="${escapeHtml(task.task_id)}" class="warn">推草稿</button>
-                  </div>
-                </div>
-              `).join("");
+
+              const counts = tasks.reduce((map, item) => {
+                map[item.status] = (map[item.status] || 0) + 1;
+                return map;
+              }, {});
+              const orderedStatuses = [
+                ...STATUS_ORDER.filter((item) => counts[item]),
+                ...Object.keys(counts).filter((item) => !STATUS_ORDER.includes(item)).sort(),
+              ];
+
+              recentSummaryEl.innerHTML = orderedStatuses
+                .map((item) => `<span class="pill">${escapeHtml(statusLabel(item))} · ${escapeHtml(counts[item])}</span>`)
+                .join("");
+
+              recentListEl.innerHTML = orderedStatuses
+                .map((groupStatus) => `
+                  <section class="group-block">
+                    <div class="group-title">
+                      <h3>${escapeHtml(statusLabel(groupStatus))}</h3>
+                      <span>${escapeHtml(counts[groupStatus])} 个任务</span>
+                    </div>
+                    <div class="board">
+                      ${tasks
+                        .filter((task) => task.status === groupStatus)
+                        .map((task) => `
+                          <div class="task-card">
+                            <h3>${escapeHtml(task.title || "未命名任务")}</h3>
+                            <div class="meta">
+                              <div><strong>task_id</strong> ${escapeHtml(task.task_id)}</div>
+                              <div><strong>状态</strong> ${escapeHtml(task.status)} · ${escapeHtml(task.progress)}%</div>
+                              <div><strong>草稿</strong> ${escapeHtml(task.wechat_media_id || "暂无")}</div>
+                              <div><strong>更新时间</strong> ${escapeHtml(formatDate(task.updated_at))}</div>
+                              <div><strong>链接</strong> ${escapeHtml(truncate(task.source_url, 88))}</div>
+                            </div>
+                            <div class="task-actions">
+                              <button data-action="workspace" data-task-id="${escapeHtml(task.task_id)}">查看工作台</button>
+                              <button data-action="phase3" data-task-id="${escapeHtml(task.task_id)}" class="secondary">入队 P3</button>
+                              <button data-action="phase4" data-task-id="${escapeHtml(task.task_id)}" class="secondary">执行 P4</button>
+                              <button data-action="push" data-task-id="${escapeHtml(task.task_id)}" class="warn">推草稿</button>
+                            </div>
+                          </div>
+                        `)
+                        .join("")}
+                    </div>
+                  </section>
+                `)
+                .join("");
+            };
+
+            const refreshRecent = async () => {
+              const params = new URLSearchParams();
+              params.set("limit", String(Math.min(Math.max(Number(recentLimitEl.value) || 18, 1), 50)));
+              if (recentActiveEl.checked) {
+                params.set("active_only", "true");
+              }
+              if (recentStatusEl.value) {
+                params.set("status", recentStatusEl.value);
+              }
+              const tasks = await request("GET", `/api/v1/tasks?${params.toString()}`);
+              renderRecentBoard(tasks);
             };
 
             const buildIngestPayload = () => {
@@ -1248,6 +1426,19 @@ def phase5_console() -> str:
                 setStatus("失败");
                 renderOutput(error.message || String(error));
               }
+            });
+
+            [recentStatusEl, recentLimitEl, recentActiveEl].forEach((element) => {
+              element.addEventListener("change", async () => {
+                try {
+                  setStatus("刷新列表中");
+                  await refreshRecent();
+                  setStatus("空闲");
+                } catch (error) {
+                  setStatus("失败");
+                  renderOutput(error.message || String(error));
+                }
+              });
             });
 
             recentListEl.addEventListener("click", async (event) => {

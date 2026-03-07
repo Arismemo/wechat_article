@@ -1,3 +1,5 @@
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
@@ -35,8 +37,18 @@ router = APIRouter()
 
 
 @router.get("/tasks", response_model=list[TaskSummaryResponse], dependencies=[Depends(verify_bearer_token)])
-def list_tasks(limit: int = Query(default=10, ge=1, le=50), session: Session = Depends(get_db_session)) -> list[TaskSummaryResponse]:
-    items = TaskService(session).list_recent(limit)
+def list_tasks(
+    limit: int = Query(default=10, ge=1, le=50),
+    active_only: bool = Query(default=False),
+    status_filter: Optional[str] = Query(default=None, alias="status"),
+    session: Session = Depends(get_db_session),
+) -> list[TaskSummaryResponse]:
+    if status_filter is not None:
+        try:
+            TaskStatus(status_filter)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid status filter.") from exc
+    items = TaskService(session).list_recent(limit, active_only=active_only, status_filter=status_filter)
     return [
         TaskSummaryResponse(
             task_id=item.task_id,

@@ -26,8 +26,13 @@ class TaskRepository:
         )
         return self.session.scalar(statement)
 
-    def list_recent(self, limit: int = 10) -> list[Task]:
-        statement = select(Task).order_by(Task.created_at.desc()).limit(limit)
+    def list_recent(self, limit: int = 10, *, active_only: bool = False, status_filter: Optional[str] = None) -> list[Task]:
+        statement = select(Task)
+        if active_only:
+            statement = statement.where(Task.status.in_([status.value for status in ACTIVE_TASK_STATUSES]))
+        if status_filter:
+            statement = statement.where(Task.status == status_filter)
+        statement = statement.order_by(Task.created_at.desc()).limit(limit)
         return list(self.session.scalars(statement))
 
     def create(self, task: Task) -> Task:
