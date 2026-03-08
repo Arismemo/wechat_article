@@ -957,6 +957,8 @@ def phase5_console() -> str:
               }
             }
             @media (max-width: 720px) {
+              main { padding: 22px 14px 36px; }
+              .panel { padding: 16px; border-radius: 20px; }
               .hero h1 { font-size: 30px; }
               .actions { grid-template-columns: 1fr; }
               .action-grid { grid-template-columns: 1fr; }
@@ -1194,6 +1196,14 @@ def phase5_console() -> str:
 
             const setStatus = (text) => {
               statusEl.textContent = text;
+            };
+            const scrollWorkspaceIntoView = () => {
+              if (!window.matchMedia("(max-width: 1024px)").matches) return;
+              const panel = workspaceEl.closest(".panel");
+              if (!panel) return;
+              window.requestAnimationFrame(() => {
+                panel.scrollIntoView({ behavior: "smooth", block: "start" });
+              });
             };
 
             const renderOutput = (payload) => {
@@ -1525,6 +1535,7 @@ def phase5_console() -> str:
               const data = await request("GET", `/api/v1/tasks/${taskId}/workspace`);
               renderWorkspace(data);
               renderOutput(data);
+              scrollWorkspaceIntoView();
               return data;
             };
 
@@ -2128,6 +2139,8 @@ def phase6_console() -> str:
               .layout { grid-template-columns: 1fr; }
             }
             @media (max-width: 720px) {
+              main { padding: 22px 14px 36px; }
+              .panel { padding: 16px; border-radius: 20px; }
               .hero h1 { font-size: 30px; }
               .actions { flex-direction: column; }
               .actions button { width: 100%; }
@@ -2300,7 +2313,7 @@ def phase6_console() -> str:
 
                 <section class="panel">
                   <h2>任务反馈快照</h2>
-                  <p class="hint">按 task 查看已导入的反馈指标，确认当前 generation 在 T+1 / T+3 / T+7 的留痕是否完整。</p>
+                  <p class="hint">看这条任务已经回收到了哪些反馈。</p>
                   <div class="list" id="task-feedback-list">
                     <div class="hint">等待查询任务反馈...</div>
                   </div>
@@ -2308,7 +2321,7 @@ def phase6_console() -> str:
 
                 <section class="panel">
                   <h2>Prompt 实验榜</h2>
-                  <p class="hint">按 prompt 版本和观察窗口聚合。</p>
+                  <p class="hint">看哪套 prompt 更稳。</p>
                   <div class="list" id="experiment-list">
                     <div class="hint">等待加载实验榜...</div>
                   </div>
@@ -2316,7 +2329,7 @@ def phase6_console() -> str:
 
                 <section class="panel">
                   <h2>风格资产库</h2>
-                  <p class="hint">只保留已经验证过、值得复用的写法。</p>
+                  <p class="hint">看哪些写法值得留下来复用。</p>
                   <div class="list" id="style-asset-list">
                     <div class="hint">等待加载风格资产...</div>
                   </div>

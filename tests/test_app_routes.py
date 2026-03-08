@@ -127,6 +127,7 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("允许推草稿", response.text)
         self.assertIn("禁止推草稿", response.text)
         self.assertIn("const apiUrl = (path) => new URL(path, window.location.origin).toString();", response.text)
+        self.assertIn("const scrollWorkspaceIntoView = () => {", response.text)
 
     def test_admin_console_page_renders(self) -> None:
         app_module = reload(import_module("app.main"))
@@ -176,6 +177,7 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("这里只收微信公众号文章链接。", response.text)
         self.assertIn("composer-actions", response.text)
         self.assertIn("alignSelectedTaskToVisibleTasks", response.text)
+        self.assertIn("scrollTaskDetailIntoView", response.text)
         self.assertIn("当前筛选下没有任务。换个筛选看看。", response.text)
 
     def test_admin_phase6_page_renders(self) -> None:
@@ -191,6 +193,8 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("批量导入 CSV", response.text)
         self.assertIn("Prompt 实验榜", response.text)
         self.assertIn("风格资产库", response.text)
+        self.assertIn("看哪套 prompt 更稳。", response.text)
+        self.assertIn("看哪些写法值得留下来复用。", response.text)
         self.assertIn("同步当前任务", response.text)
         self.assertIn("const apiUrl = (path) => new URL(path, window.location.origin).toString();", response.text)
 

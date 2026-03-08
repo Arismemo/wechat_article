@@ -747,9 +747,21 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             }}
             @media (max-width: 720px) {{
               main {{ padding: 18px 14px 32px; }}
+              .hero {{ padding: 18px; }}
+              .hero-note {{ font-size: 12px; line-height: 1.6; }}
+              .panel {{ padding: 16px; border-radius: 20px; }}
               h1 {{ font-size: 32px; }}
+              .filter-row {{
+                flex-wrap: nowrap;
+                overflow-x: auto;
+                padding-bottom: 4px;
+                scrollbar-width: none;
+              }}
+              .filter-row::-webkit-scrollbar {{ display: none; }}
+              .pill {{ flex: 0 0 auto; white-space: nowrap; }}
               .composer-actions {{ grid-template-columns: 1fr; }}
               .metrics {{ grid-template-columns: 1fr; }}
+              .task-list {{ max-height: none; overflow: visible; }}
               .kv-grid {{ grid-template-columns: 1fr; }}
               .action-grid {{ grid-template-columns: 1fr; }}
             }}
@@ -995,6 +1007,14 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             const setFlashMessage = (message, tone = "") => {{
               elements.flashMessage.textContent = message;
               elements.autoRefresh.className = `status-chip ${{tone}}`.trim();
+            }};
+            const scrollTaskDetailIntoView = () => {{
+              if (!window.matchMedia("(max-width: 1080px)").matches) return;
+              const panel = elements.taskDetail.closest(".panel");
+              if (!panel) return;
+              window.requestAnimationFrame(() => {{
+                panel.scrollIntoView({{ behavior: "smooth", block: "start" }});
+              }});
             }};
 
             const copyText = async (label, value) => {{
@@ -1390,6 +1410,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                 await apiPost(appUrl(`/admin/api/tasks/${{taskId}}/${{action}}`));
                 state.selectedTaskId = taskId;
                 await loadSnapshot();
+                scrollTaskDetailIntoView();
                 setFlashMessage(labels[action] || "完成了。", action === "push-draft" ? "done" : "");
               }} catch (error) {{
                 setFlashMessage(error.message || "操作失败。", "fail");
@@ -1415,6 +1436,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                 state.selectedTaskId = data.task_id;
                 elements.ingestUrl.value = "";
                 await loadSnapshot();
+                scrollTaskDetailIntoView();
                 if (data.deduped) {{
                   setFlashMessage("这篇文章之前跑过，已经帮你打开原来的任务。", "waiting");
                   return;
@@ -1460,7 +1482,9 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               if (!card) return;
               state.selectedTaskId = card.dataset.taskId;
               syncUrl();
-              loadSnapshot().catch((error) => setFlashMessage(error.message || "加载任务失败。", "fail"));
+              loadSnapshot()
+                .then(() => scrollTaskDetailIntoView())
+                .catch((error) => setFlashMessage(error.message || "加载任务失败。", "fail"));
             }});
 
             elements.ingestButton.addEventListener("click", ingestTask);
@@ -2843,6 +2867,8 @@ def settings_console() -> str:
               .layout { grid-template-columns: 1fr; }
             }
             @media (max-width: 720px) {
+              main { padding: 20px 14px 36px; }
+              .panel { padding: 16px; border-radius: 20px; }
               .hero h1 { font-size: 30px; }
               .setting-actions, .actions { flex-direction: column; }
               button { width: 100%; }
