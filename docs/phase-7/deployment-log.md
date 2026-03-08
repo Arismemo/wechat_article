@@ -1,9 +1,9 @@
 # Phase 7 统一控制台部署记录
 
 更新时间：2026-03-08
-状态：Completed
+状态：Phase 7D Completed
 
-## 1. 本次目标
+## 1. Phase 7C 发布目标
 
 将 Phase 7C 第一刀发布到服务器：
 
@@ -90,10 +90,100 @@ Phase 7 当前已具备：
 - `/admin/phase6`
   - 反馈台
 
-## 7. 后续建议
+## 7. Phase 7D 发布目标
 
-下一刀建议进入 Phase 7D：
+在 Phase 7C 的基础上继续补：
 
 - 只读环境变量状态面板
 - 告警入口
 - 更完整的成功率和异常卡片
+
+## 8. Phase 7D 本次提交
+
+- Git commit：`9e8e7d0`
+- 标题：`Start phase 7D runtime observability`
+
+## 9. Phase 7D 本地验证
+
+- `pytest -q`
+  - 结果：`66 passed`
+- `PYTHONPYCACHEPREFIX=/tmp/pycache python3 -m compileall app tests`
+  - 结果：通过
+
+新增验证重点：
+
+- `GET /api/v1/admin/runtime-status`
+- `POST /api/v1/admin/alerts/test`
+- `/admin/settings` 页面环境状态与告警测试文案
+
+## 10. Phase 7D 服务器发布方式
+
+本次仍优先尝试“预构建镜像发布”，但远端镜像加载继续偏慢。
+
+最终采用的兜底方式：
+
+1. 本地推送代码到 GitHub
+2. 将最新 `app/` 热同步到服务器工作区
+3. 将远端 `app/` 直接 `docker cp` 到 `wechat_artical_api`
+4. 重启 `api` 容器
+
+说明：
+
+- 本次无 schema 变更
+- worker 无需跟随重启
+- 服务器运行态已是 Phase 7D 新代码
+
+## 11. Phase 7D 服务器验收
+
+实际 smoke test：
+
+- `GET https://auto.709970.xyz/healthz`
+  - 返回：`{"status":"ok"}`
+- `GET https://auto.709970.xyz/api/v1/admin/monitor/snapshot?limit=3`
+  - 返回新增字段：
+    - `filtered_stuck`
+    - `today_failed`
+    - `today_review_success_rate`
+    - `today_auto_push_success_rate`
+- `GET https://auto.709970.xyz/api/v1/admin/runtime-status`
+  - 成功返回：
+    - `APP_BASE_URL`
+    - `ADMIN_USERNAME`
+    - `API_BEARER_TOKEN`
+    - `WECHAT_APP_SECRET`
+    - `ALERT_WEBHOOK_URL`
+  - 密钥类字段未明文暴露
+- `GET https://auto.709970.xyz/admin/settings`
+  - 页面已包含：
+    - `RUNTIME SETTINGS & STATUS`
+    - `告警测试`
+    - `环境状态`
+- `POST https://auto.709970.xyz/api/v1/admin/alerts/test`
+  - 当前服务器未配置 `ALERT_WEBHOOK_URL`
+  - 返回：`400 {"detail":"ALERT_WEBHOOK_URL is not configured."}`
+  - 说明 Phase 7D 的测试告警入口行为符合预期
+
+## 12. 当前结果
+
+Phase 7 当前已具备：
+
+- `/admin/console`
+  - 实时监控
+  - SSE 推送
+  - 成功率与异常卡片
+- `/admin/settings`
+  - 运行参数网页配置
+  - `.env` 只读环境状态面板
+  - 测试告警入口
+- `/admin/phase5`
+  - 审核台
+- `/admin/phase6`
+  - 反馈台
+
+## 13. 后续建议
+
+下一刀建议进入 Phase 7E：
+
+- 队列深度与 worker 观测面板
+- 告警分级、去重和静默
+- 趋势图与时间序列统计
