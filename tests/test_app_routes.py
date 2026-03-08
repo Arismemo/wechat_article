@@ -166,6 +166,8 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("任务详情", response.text)
         self.assertIn("开始处理", response.text)
         self.assertIn("手机快捷指令只是附加入口", response.text)
+        self.assertIn("alignSelectedTaskToVisibleTasks", response.text)
+        self.assertIn("当前筛选下没有任务。换个筛选看看。", response.text)
 
     def test_admin_phase6_page_renders(self) -> None:
         app_module = reload(import_module("app.main"))

@@ -967,9 +967,10 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             const currentTasks = () => state.snapshot?.tasks || [];
 
             const findSelectedTask = () => {{
+              if (!state.selectedTaskId) return null;
               const workspace = state.snapshot?.workspace;
               if (workspace && workspace.task_id === state.selectedTaskId) return workspace;
-              return currentTasks().find((item) => item.task_id === state.selectedTaskId) || workspace || null;
+              return currentTasks().find((item) => item.task_id === state.selectedTaskId) || null;
             }};
 
             const matchesFilter = (task) => {{
@@ -987,6 +988,28 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             }};
 
             const filteredTasks = () => currentTasks().filter(matchesFilter);
+
+            const alignSelectedTaskToVisibleTasks = () => {{
+              const visibleTasks = filteredTasks();
+              if (!visibleTasks.length) {{
+                if (!state.selectedTaskId) {{
+                  return {{ changed: false, needsReload: false }};
+                }}
+                state.selectedTaskId = null;
+                syncUrl();
+                return {{ changed: true, needsReload: false }};
+              }}
+              if (visibleTasks.some((item) => item.task_id === state.selectedTaskId)) {{
+                return {{ changed: false, needsReload: false }};
+              }}
+              const previousSelectedTaskId = state.selectedTaskId;
+              state.selectedTaskId = visibleTasks[0].task_id;
+              syncUrl();
+              return {{
+                changed: true,
+                needsReload: state.selectedTaskId !== previousSelectedTaskId,
+              }};
+            }};
 
             const suggestFilter = (summary) => {{
               if (!summary) return "all";
@@ -1078,7 +1101,10 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               const task = findSelectedTask();
               if (!task) {{
                 elements.selectedTaskCode.textContent = "先点左边任意一条";
-                elements.taskDetail.innerHTML = '<div class="empty">选中一条任务后，这里会告诉你现在到了哪一步，以及下一步该按哪个按钮。</div>';
+                const emptyDetail = filteredTasks().length
+                  ? "选中一条任务后，这里会告诉你现在到了哪一步，以及下一步该按哪个按钮。"
+                  : (state.search ? "当前搜索没有找到任务。换个关键词，或者点“全部”再看。" : "当前筛选下没有任务。换个筛选看看。");
+                elements.taskDetail.innerHTML = `<div class="empty">${{emptyDetail}}</div>`;
                 return;
               }}
               elements.selectedTaskCode.textContent = task.task_code || task.task_id;
@@ -1202,7 +1228,6 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             }};
 
             const loadSnapshot = async () => {{
-              const previousSelectedTaskId = state.selectedTaskId;
               const response = await fetch(appUrl("/admin/api/home-snapshot", {{
                 limit: 18,
                 selected_task_id: state.selectedTaskId,
@@ -1226,14 +1251,8 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               ) {{
                 state.selectedTaskId = state.snapshot.tasks[0]?.task_id || null;
               }}
-              const visibleTasks = filteredTasks();
-              if (
-                visibleTasks.length &&
-                (!state.selectedTaskId || !visibleTasks.some((item) => item.task_id === state.selectedTaskId))
-              ) {{
-                state.selectedTaskId = visibleTasks[0].task_id;
-              }}
-              if (state.selectedTaskId && state.selectedTaskId !== previousSelectedTaskId) {{
+              const selectionAlignment = alignSelectedTaskToVisibleTasks();
+              if (selectionAlignment.needsReload && state.selectedTaskId) {{
                 return loadSnapshot();
               }}
               syncUrl();
@@ -1304,17 +1323,26 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               }}
             }};
 
+            const refreshVisibleSelection = async () => {{
+              const selectionAlignment = alignSelectedTaskToVisibleTasks();
+              if (selectionAlignment.needsReload && state.selectedTaskId) {{
+                await loadSnapshot();
+                return;
+              }}
+              render();
+            }};
+
             elements.filterButtons.forEach((button) => {{
               button.addEventListener("click", () => {{
                 state.filterPinned = true;
                 state.filter = button.dataset.filter;
-                render();
+                refreshVisibleSelection().catch((error) => setFlashMessage(error.message || "加载任务失败。", "fail"));
               }});
             }});
 
             elements.taskSearch.addEventListener("input", (event) => {{
               state.search = event.target.value.trim();
-              render();
+              refreshVisibleSelection().catch((error) => setFlashMessage(error.message || "加载任务失败。", "fail"));
             }});
 
             elements.taskList.addEventListener("click", (event) => {{
