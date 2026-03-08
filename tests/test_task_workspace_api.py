@@ -21,6 +21,7 @@ from app.models.generation import Generation
 from app.models.review_report import ReviewReport
 from app.models.source_article import SourceArticle
 from app.models.task import Task
+from app.models.wechat_draft import WechatDraft
 from app.settings import get_settings
 
 
@@ -171,6 +172,15 @@ class TaskWorkspaceApiTests(unittest.TestCase):
                 final_decision="pass",
             )
         )
+        session.add(
+            WechatDraft(
+                task_id=task.id,
+                generation_id=generation_v2.id,
+                media_id="mid-1",
+                push_status="success",
+                push_response={"draft": {"media_id": "mid-1"}},
+            )
+        )
         session.add(AuditLog(task_id=task.id, action="phase4.review.passed", operator="system", payload={"version": 2}))
         session.add(AuditLog(task_id=task.id, action="wechat.push.completed", operator="system", payload={"media_id": "mid-1"}))
         session.add(
@@ -199,6 +209,10 @@ class TaskWorkspaceApiTests(unittest.TestCase):
         self.assertEqual(body["generations"][0]["version_no"], 2)
         self.assertEqual(body["generations"][0]["prompt_version"], "phase4-v1")
         self.assertEqual(body["generations"][0]["review"]["final_decision"], "pass")
+        self.assertEqual(body["wechat_media_id"], "mid-1")
+        self.assertEqual(body["wechat_draft_url"], "https://mp.weixin.qq.com/")
+        self.assertFalse(body["wechat_draft_url_direct"])
+        self.assertIn("media_id", body["wechat_draft_url_hint"])
         self.assertEqual(body["wechat_push_policy"]["mode"], "blocked")
         self.assertFalse(body["wechat_push_policy"]["can_push"])
         self.assertEqual(body["wechat_push_policy"]["note"], "先别推草稿")

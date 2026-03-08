@@ -15,7 +15,7 @@ from app.db.session import get_db_session, get_session_factory
 from app.api.admin_ui import admin_section_nav, admin_section_nav_styles
 from app.schemas.admin_monitor import AdminMonitorSnapshotResponse
 from app.schemas.ingest import IngestLinkRequest, IngestLinkResponse
-from app.schemas.internal import ManualReviewActionResponse, Phase4EnqueueResponse, WechatPushResponse
+from app.schemas.internal import ManualReviewActionResponse, Phase4EnqueueResponse, TaskDeleteResponse, WechatPushResponse
 from app.services.admin_monitor_service import AdminMonitorFilters, AdminMonitorService
 from app.services.manual_review_service import ManualReviewConflictError, ManualReviewService
 from app.services.phase4_queue_service import Phase4QueueService
@@ -183,6 +183,23 @@ def admin_push_wechat_draft(
         wechat_media_id=result.wechat_media_id,
         reused_existing=result.reused_existing,
     )
+
+
+@router.delete(
+    "/admin/api/tasks/{task_id}",
+    response_model=TaskDeleteResponse,
+    tags=["admin"],
+    dependencies=[Depends(verify_admin_basic_auth)],
+)
+def admin_delete_task(
+    task_id: str,
+    session: Session = Depends(get_db_session),
+) -> TaskDeleteResponse:
+    try:
+        result = TaskService(session).delete_task(task_id, operator="admin-home")
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return TaskDeleteResponse(task_id=result.task_id, task_code=result.task_code, deleted=result.deleted)
 
 
 @router.get(
@@ -401,8 +418,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               gap: 18px;
             }}
             .detail-column {{
-              position: sticky;
-              top: 18px;
+              min-width: 0;
             }}
             .panel-head {{
               display: flex;
@@ -458,7 +474,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               font-size: 13px;
               line-height: 1.7;
             }}
-            input, button {{
+            input, button, .button-link {{
               width: 100%;
               font: inherit;
               border-radius: 999px;
@@ -471,6 +487,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             }}
             input:focus-visible,
             button:focus-visible,
+            .button-link:focus-visible,
             a:focus-visible,
             summary:focus-visible {{
               outline: 2px solid rgba(31, 93, 83, 0.18);
@@ -479,31 +496,39 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             input:focus-visible {{
               border-color: rgba(31, 93, 83, 0.4);
             }}
-            button {{
+            button,
+            .button-link {{
               border: none;
               padding: 14px 16px;
               cursor: pointer;
               background: var(--accent);
               color: #f7faf8;
+              text-decoration: none;
+              text-align: center;
               transition: transform 120ms ease, background 120ms ease, opacity 120ms ease;
             }}
-            button:hover {{
+            button:hover,
+            .button-link:hover {{
               background: var(--accent-strong);
               transform: translateY(-1px);
             }}
-            button.secondary {{
+            button.secondary,
+            .button-link.secondary {{
               background: #dfceb3;
               color: #2f261d;
             }}
-            button.ghost {{
+            button.ghost,
+            .button-link.ghost {{
               background: transparent;
               border: 1px solid rgba(31, 93, 83, 0.22);
               color: var(--accent-strong);
             }}
-            button.warn {{
+            button.warn,
+            .button-link.warn {{
               background: var(--gold);
             }}
-            button.danger {{
+            button.danger,
+            .button-link.danger {{
               background: var(--danger);
             }}
             button:disabled {{
@@ -644,9 +669,6 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               align-content: start;
               grid-auto-rows: max-content;
               gap: 10px;
-              max-height: 780px;
-              overflow: auto;
-              padding-right: 4px;
             }}
             .task-card {{
               display: grid;
@@ -734,6 +756,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             .detail-grid {{
               display: grid;
               gap: 18px;
+              align-content: start;
             }}
             .summary-block {{
               display: grid;
@@ -813,6 +836,50 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               grid-template-columns: repeat(4, minmax(0, 1fr));
               gap: 10px;
             }}
+            .detail-sections {{
+              display: grid;
+              gap: 14px;
+            }}
+            .detail-section {{
+              display: grid;
+              gap: 12px;
+              padding: 16px;
+              border-radius: 22px;
+              border: 1px solid var(--line);
+              background: rgba(255, 253, 249, 0.9);
+            }}
+            .detail-section-head {{
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-start;
+              gap: 12px;
+              flex-wrap: wrap;
+            }}
+            .detail-section-head strong {{
+              display: block;
+              font-size: 16px;
+            }}
+            .detail-section-head span {{
+              color: var(--muted);
+              font-size: 13px;
+              line-height: 1.7;
+            }}
+            .section-actions {{
+              display: flex;
+              flex-wrap: wrap;
+              gap: 10px;
+            }}
+            .section-actions .button-link,
+            .section-actions button {{
+              width: auto;
+              min-width: 132px;
+            }}
+            .section-hint {{
+              margin: 0;
+              color: var(--muted);
+              font-size: 13px;
+              line-height: 1.7;
+            }}
             .action-empty {{
               padding: 14px 16px;
               border-radius: 18px;
@@ -867,6 +934,29 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               margin: 0;
               line-height: 1.7;
             }}
+            .danger-card {{
+              border-color: rgba(161, 69, 52, 0.18);
+              background: linear-gradient(180deg, rgba(255, 248, 245, 0.96), rgba(255, 252, 249, 0.92));
+            }}
+            .danger-card .button-link,
+            .danger-card button {{
+              width: auto;
+            }}
+            .article-preview-shell {{
+              margin-top: 2px;
+              padding: 16px;
+              border-radius: 18px;
+              border: 1px solid rgba(65, 48, 27, 0.12);
+              background: linear-gradient(180deg, rgba(255, 252, 247, 0.98), rgba(247, 242, 233, 0.96));
+              overflow: auto;
+            }}
+            .article-preview-shell img {{
+              max-width: 100%;
+              height: auto;
+            }}
+            .article-preview-shell section {{
+              margin: 0 auto;
+            }}
             .footer-note {{
               color: var(--muted);
               font-size: 12px;
@@ -877,7 +967,6 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               .hero-grid {{ grid-template-columns: 1fr; }}
               .overview-strip {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
               .layout {{ grid-template-columns: 1fr; }}
-              .detail-column {{ position: static; }}
               .action-grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
             }}
             @media (max-width: 720px) {{
@@ -898,9 +987,9 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               .composer-actions {{ grid-template-columns: 1fr; }}
               .overview-strip {{ grid-template-columns: 1fr; }}
               .overview-card.highlight {{ grid-column: span 1; }}
-              .task-list {{ max-height: none; overflow: visible; }}
               .kv-grid {{ grid-template-columns: 1fr; }}
               .action-grid {{ grid-template-columns: 1fr; }}
+              .detail-section-head {{ flex-direction: column; }}
               .search-row {{ grid-template-columns: 1fr; }}
             }}
           </style>
@@ -914,7 +1003,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                   <div class="hero-copy">
                     <span class="badge">PRIMARY CONTROL ROOM</span>
                     <h1>微信文章工厂</h1>
-                    <p>贴链接，任务会自己往下走。</p>
+                    <p>贴链接后系统会自动往下跑。左侧只负责选任务，右侧统一处理动作、草稿和预览。</p>
                   </div>
                   <aside class="hero-status-card" aria-label="运行状态">
                     <div class="status-line">
@@ -938,7 +1027,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                     </div>
                   </aside>
                 </div>
-                <p class="hero-note">先贴链接。需要人工判断时，再点下面这排。</p>
+                <p class="hero-note">界面按“任务列表 / 当前动作 / 微信草稿 / 成稿预览 / 危险操作”组织，尽量把每一步放在固定位置。</p>
                 __ADMIN_SECTION_NAV__
               </section>
 
@@ -1015,14 +1104,14 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
 
                   <section class="panel">
                     <div class="panel-head">
-                      <h2>最近任务</h2>
+                      <h2>任务列表</h2>
                       <div class="panel-tools">
                         <span class="mini" id="task-count">0 个</span>
                         <span class="mini" id="generated-at">刚刚更新</span>
                         <button id="refresh-button" class="tiny-button" type="button">刷新列表</button>
                       </div>
                     </div>
-                    <p class="panel-intro">先用筛选找“等我处理”或“失败”，再点进右侧详情。状态会自动刷新，搜索支持标题、链接和任务号。</p>
+                    <p class="panel-intro">左侧只负责筛选和切换任务。所有操作、草稿入口、预览和删除都在右侧工作区完成。</p>
                     <div class="task-toolbar">
                       <div class="filter-row">
                         <button class="pill active" data-filter="all" data-label="全部" type="button">全部</button>
@@ -1045,10 +1134,10 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                 <section class="stack detail-column">
                   <section class="panel">
                     <div class="panel-head">
-                      <h2>任务详情</h2>
+                      <h2>工作区</h2>
                       <span class="mini" id="selected-task-code">先点左边任意一条</span>
                     </div>
-                    <p class="panel-intro">右侧先告诉你下一步，再展示关键状态、可执行动作和必要的补充信息。</p>
+                    <p class="panel-intro">右侧固定按当前动作、微信草稿、成稿预览、详细信息和危险操作分区展示。</p>
                     <div class="detail-grid" id="task-detail" aria-live="polite" aria-busy="false">
                       <div class="empty">选中一条任务后，这里会告诉你现在到了哪一步，以及下一步该按哪个按钮。</div>
                     </div>
@@ -1158,6 +1247,14 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               .replaceAll(">", "&gt;")
               .replaceAll('"', "&quot;")
               .replaceAll("'", "&#39;");
+            const hydrateArticlePreview = (root, generations) => {{
+              if (!root || !Array.isArray(generations)) return;
+              root.querySelectorAll("[data-generation-html]").forEach((node) => {{
+                const generationId = node.getAttribute("data-generation-html");
+                const generation = generations.find((item) => item.generation_id === generationId);
+                node.innerHTML = generation?.html_content || '<div class="empty">暂无 HTML 预览。</div>';
+              }});
+            }};
 
             const formatDateTime = (value) => {{
               if (!value) return "刚刚";
@@ -1243,6 +1340,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                 approve: "通过中…",
                 reject: "退回中…",
                 "push-draft": "推送中…",
+                delete: "删除中…",
               }};
               return labels[action] || `${{fallback}}中…`;
             }};
@@ -1269,6 +1367,13 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               if (!panel) return;
               window.requestAnimationFrame(() => {{
                 panel.scrollIntoView({{ behavior: "smooth", block: "start" }});
+              }});
+            }};
+            const scrollPreviewIntoView = () => {{
+              const preview = document.getElementById("preview-section");
+              if (!preview) return;
+              window.requestAnimationFrame(() => {{
+                preview.scrollIntoView({{ behavior: "smooth", block: "start" }});
               }});
             }};
 
@@ -1524,14 +1629,22 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                 ? state.snapshot.workspace
                 : null;
               const latestGeneration = workspace?.generations?.[0] || null;
+              const latestDecision = latestGeneration?.review?.final_decision || latestGeneration?.status || "暂无";
               const rawSourceUrl = task.source_url || "";
               const sourceUrl = escapeHtml(rawSourceUrl);
               const sourceLabel = escapeHtml(compactUrl(rawSourceUrl, 80));
               const title = escapeHtml(task.title || workspace?.source_article?.title || "未命名任务");
               const hint = escapeHtml(nextStepText(task));
-              const digest = escapeHtml(latestGeneration?.digest || "");
+              const digest = escapeHtml(latestGeneration?.digest || "这里会显示最新一稿的摘要。");
               const rawMediaId = task.wechat_media_id || workspace?.wechat_media_id || "";
+              const rawDraftUrl = workspace?.wechat_draft_url || task.wechat_draft_url || "";
+              const rawDraftHint = workspace?.wechat_draft_url_hint || task.wechat_draft_url_hint || "";
+              const rawDraftDirect = Boolean(workspace?.wechat_draft_url_direct || task.wechat_draft_url_direct);
               const mediaId = escapeHtml(rawMediaId || "还没有");
+              const draftUrl = escapeHtml(rawDraftUrl);
+              const draftHint = escapeHtml(rawDraftHint || "还没有微信草稿记录。");
+              const draftLinkLabel = rawDraftDirect ? "打开微信草稿" : "打开公众号后台";
+              const previewAvailable = Boolean(latestGeneration?.generation_id);
               const canRetry = !ACTIVE.has(task.status);
               const canApprove = task.status === "needs_manual_review";
               const canReject = ["needs_manual_review", "review_passed"].includes(task.status);
@@ -1580,11 +1693,6 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                     >${{state.pendingAction?.taskId === task.task_id && state.pendingAction?.action === button.action ? actionBusyLabel(button.action, button.label) : button.label}}</button>
                   `).join("")}}</div>`
                 : '<div class="action-empty">现在先不用点按钮，等系统自己跑完就行。</div>';
-              const utilityButtons = [
-                `<button type="button" id="copy-task-id" class="tiny-button">复制任务号</button>`,
-                rawMediaId ? `<button type="button" id="copy-media-id" class="tiny-button">复制草稿号</button>` : "",
-                rawSourceUrl ? `<button type="button" id="copy-source-url" class="tiny-button">复制原文链接</button>` : "",
-              ].filter(Boolean).join("");
               const visibleError = escapeHtml(shorten(task.error || "", 280));
               const sourceLink = rawSourceUrl
                 ? `<a href="${{sourceUrl}}" title="${{sourceUrl}}" target="_blank" rel="noreferrer">${{sourceLabel}}</a>`
@@ -1596,6 +1704,13 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                 `参考：${{task.related_article_count || 0}} 篇`,
                 rawMediaId ? "草稿已生成" : "还没进草稿",
               ];
+              const utilityButtons = [
+                `<button type="button" id="copy-task-id" class="tiny-button">复制任务号</button>`,
+                rawMediaId ? `<button type="button" id="copy-media-id" class="tiny-button">复制草稿号</button>` : "",
+                rawDraftUrl ? `<button type="button" id="copy-draft-url" class="tiny-button">复制草稿入口</button>` : "",
+                rawSourceUrl ? `<button type="button" id="copy-source-url" class="tiny-button">复制原文链接</button>` : "",
+                previewAvailable ? `<button type="button" id="jump-preview" class="tiny-button">定位预览</button>` : "",
+              ].filter(Boolean).join("");
               elements.taskDetail.innerHTML = `
                 <div class="summary-block">
                   <div class="summary-title">
@@ -1618,45 +1733,102 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
 
                 ${{actionHtml}}
 
-                <details class="detail-more" ${{isDetailExpanded(task.task_id) ? "open" : ""}}>
-                  <summary>更多信息</summary>
-                  <div class="detail-more-grid">
+                <div class="detail-sections">
+                  <section class="detail-section">
+                    <div class="detail-section-head">
+                      <div>
+                        <strong>微信草稿</strong>
+                        <span>把草稿入口、media_id 和当前版本放在一起，减少来回找信息。</span>
+                      </div>
+                      <div class="section-actions">
+                        ${{rawDraftUrl ? `<a href="${{draftUrl}}" target="_blank" rel="noreferrer" class="button-link ghost">${{escapeHtml(draftLinkLabel)}}</a>` : ""}}
+                        ${{rawMediaId ? `<button type="button" id="copy-media-id-inline" class="secondary">复制 media_id</button>` : ""}}
+                      </div>
+                    </div>
                     <div class="kv-grid">
                       <div class="kv"><strong>任务状态</strong><span>${{statusLabel(task.status)}}</span></div>
-                      <div class="kv"><strong>微信草稿</strong><span>${{mediaId}}</span></div>
-                      <div class="kv"><strong>任务号</strong><span>${{escapeHtml(task.task_code || task.task_id)}}</span></div>
-                      <div class="kv"><strong>原文链接</strong><span>${{sourceLabel || "还没有"}}</span></div>
+                      <div class="kv"><strong>草稿 media_id</strong><span>${{mediaId}}</span></div>
+                      <div class="kv"><strong>草稿入口链接</strong><span>${{escapeHtml(rawDraftUrl || "还没有")}}</span></div>
+                      <div class="kv"><strong>最新版本</strong><span>${{escapeHtml(latestGeneration?.title || "还没有生成稿件")}}</span></div>
+                      <div class="kv"><strong>版本状态</strong><span>${{escapeHtml(latestDecision)}}</span></div>
                     </div>
+                    <p class="section-hint">${{draftHint}}</p>
+                  </section>
 
-                    <div class="utility-grid">
-                      ${{utilityButtons}}
+                  <section class="detail-section" id="preview-section">
+                    <div class="detail-section-head">
+                      <div>
+                        <strong>成稿预览</strong>
+                        <span>这里展示最近一版的 HTML 成稿，便于在进入公众号后台前先看一眼排版。</span>
+                      </div>
+                      <div class="section-actions">
+                        ${{utilityButtons}}
+                      </div>
                     </div>
+                    ${{previewAvailable
+                      ? `<div class="article-preview-shell" data-generation-html="${{escapeHtml(latestGeneration.generation_id)}}"></div>`
+                      : '<div class="empty">还没有生成稿件，所以这里暂时没有预览。</div>'}}
+                    ${{previewAvailable ? `<div class="latest-box"><strong>最新一稿</strong><p>${{escapeHtml(latestGeneration?.title || "还没有生成稿件")}}</p><p class="mini">${{escapeHtml(latestGeneration?.prompt_version || "未记录 Prompt 版本")}}</p><p>${{digest}}</p></div>` : ""}}
+                  </section>
 
-                    <div class="latest-box">
-                      <strong>最新一稿</strong>
-                      <p>${{escapeHtml(latestGeneration?.title || "还没有生成稿件")}}</p>
-                      <p class="mini">${{escapeHtml(latestGeneration?.prompt_version || "")}}</p>
-                      <p>${{digest || "这里会显示最新一稿的摘要。"}}</p>
+                  <details class="detail-more" ${{isDetailExpanded(task.task_id) ? "open" : ""}}>
+                    <summary>详细信息</summary>
+                    <div class="detail-more-grid">
+                      <div class="kv-grid">
+                        <div class="kv"><strong>任务号</strong><span>${{escapeHtml(task.task_code || task.task_id)}}</span></div>
+                        <div class="kv"><strong>原文链接</strong><span>${{escapeHtml(rawSourceUrl || "还没有")}}</span></div>
+                        <div class="kv"><strong>作者</strong><span>${{escapeHtml(workspace?.source_article?.author || "未知")}}</span></div>
+                        <div class="kv"><strong>源文摘要</strong><span>${{escapeHtml(workspace?.source_article?.summary || "暂无")}}</span></div>
+                        <div class="kv"><strong>新角度</strong><span>${{escapeHtml(workspace?.brief?.new_angle || "暂无")}}</span></div>
+                        <div class="kv"><strong>定位</strong><span>${{escapeHtml(workspace?.brief?.positioning || "暂无")}}</span></div>
+                      </div>
                     </div>
-                  </div>
-                </details>
+                  </details>
 
-                ${{task.error ? `<div class="latest-box"><strong>报错</strong><p>${{visibleError}}</p></div>` : ""}}
+                  ${{task.error ? `<div class="latest-box"><strong>报错</strong><p>${{visibleError}}</p></div>` : ""}}
+
+                  <section class="detail-section danger-card">
+                    <div class="detail-section-head">
+                      <div>
+                        <strong>危险操作</strong>
+                        <span>如果这条任务已经不需要了，可以彻底删除。删除后任务、生成稿、草稿记录和审计关联都会一起清理。</span>
+                      </div>
+                      <div class="section-actions">
+                        <button
+                          type="button"
+                          id="delete-task-button"
+                          class="danger"
+                          ${{state.pendingAction?.taskId === task.task_id ? "disabled" : ""}}
+                          aria-busy="${{state.pendingAction?.taskId === task.task_id && state.pendingAction?.action === "delete" ? "true" : "false"}}"
+                        >${{state.pendingAction?.taskId === task.task_id && state.pendingAction?.action === "delete" ? actionBusyLabel("delete", "彻底删除") : "彻底删除"}}</button>
+                      </div>
+                    </div>
+                  </section>
+                </div>
               `;
 
+              hydrateArticlePreview(elements.taskDetail, workspace?.generations || []);
               actionButtons.forEach((button) => {{
-                document.getElementById(button.id)?.addEventListener("click", () => runAction(button.action, task.task_id));
+                elements.taskDetail.querySelector(`#${{button.id}}`)?.addEventListener("click", () => runAction(button.action, task.task_id));
               }});
               elements.taskDetail.querySelector(".detail-more")?.addEventListener("toggle", (event) => {{
                 setDetailExpanded(task.task_id, event.currentTarget.open);
               }});
-              document.getElementById("copy-task-id")?.addEventListener("click", () => copyText("任务号", task.task_code || task.task_id));
+              elements.taskDetail.querySelector("#copy-task-id")?.addEventListener("click", () => copyText("任务号", task.task_code || task.task_id));
               if (rawMediaId) {{
-                document.getElementById("copy-media-id")?.addEventListener("click", () => copyText("草稿号", rawMediaId));
+                elements.taskDetail.querySelector("#copy-media-id")?.addEventListener("click", () => copyText("草稿号", rawMediaId));
+                elements.taskDetail.querySelector("#copy-media-id-inline")?.addEventListener("click", () => copyText("草稿号", rawMediaId));
+              }}
+              if (rawDraftUrl) {{
+                elements.taskDetail.querySelector("#copy-draft-url")?.addEventListener("click", () => copyText("草稿入口", rawDraftUrl));
               }}
               if (rawSourceUrl) {{
-                document.getElementById("copy-source-url")?.addEventListener("click", () => copyText("原文链接", rawSourceUrl));
+                elements.taskDetail.querySelector("#copy-source-url")?.addEventListener("click", () => copyText("原文链接", rawSourceUrl));
               }}
+              if (previewAvailable) {{
+                elements.taskDetail.querySelector("#jump-preview")?.addEventListener("click", scrollPreviewIntoView);
+              }}
+              elements.taskDetail.querySelector("#delete-task-button")?.addEventListener("click", () => runAction("delete", task.task_id));
             }};
 
             const render = () => {{
@@ -1672,6 +1844,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             const loadSnapshot = async () => {{
               setRegionsBusy(true);
               try {{
+                const requestedTaskId = state.selectedTaskId;
                 const response = await fetch(appUrl("/admin/api/home-snapshot", {{
                   limit: 18,
                   selected_task_id: state.selectedTaskId,
@@ -1687,6 +1860,10 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                 }}
                 if (!state.selectedTaskId && state.snapshot.tasks.length) {{
                   state.selectedTaskId = state.snapshot.tasks[0].task_id;
+                }}
+                if (!requestedTaskId && state.selectedTaskId && !state.snapshot.workspace) {{
+                  await loadSnapshot();
+                  return;
                 }}
                 if (
                   state.selectedTaskId &&
@@ -1707,14 +1884,16 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               }}
             }};
 
-            const apiPost = async (url, payload) => {{
+            const apiRequest = async (url, {{ method = "POST", payload = undefined }} = {{}}) => {{
               const response = await fetch(url, {{
-                method: "POST",
+                method,
                 headers: {{
                   "Content-Type": "application/json",
                   Accept: "application/json",
                 }},
-                body: payload ? JSON.stringify(payload) : JSON.stringify({{}}),
+                body: method === "DELETE"
+                  ? undefined
+                  : (payload ? JSON.stringify(payload) : JSON.stringify({{}})),
               }});
               const text = await response.text();
               let data = {{}};
@@ -1730,6 +1909,8 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               }}
               return data;
             }};
+            const apiPost = async (url, payload) => apiRequest(url, {{ method: "POST", payload }});
+            const apiDelete = async (url) => apiRequest(url, {{ method: "DELETE" }});
 
             const runAction = async (action, taskId) => {{
               const labels = {{
@@ -1737,22 +1918,37 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                 approve: "已通过。",
                 reject: "已改成重写。",
                 "push-draft": "已推送到微信草稿箱。",
+                delete: "任务已彻底删除。",
               }};
               const pendingMessages = {{
                 retry: "正在重新跑一版…",
                 approve: "正在人工通过…",
                 reject: "正在退回重写…",
                 "push-draft": "正在推送到微信草稿箱…",
+                delete: "正在删除任务…",
               }};
               if (state.pendingAction) return;
+              if (action === "delete") {{
+                const confirmed = window.confirm("将永久删除这个任务、生成稿、草稿记录和相关工作数据，且无法恢复。确定继续吗？");
+                if (!confirmed) return;
+              }}
               try {{
                 setPendingAction(action, taskId);
                 setFlashMessage(pendingMessages[action] || "正在处理…", "waiting");
-                await apiPost(appUrl(`/admin/api/tasks/${{taskId}}/${{action}}`));
-                state.selectedTaskId = taskId;
+                if (action === "delete") {{
+                  await apiDelete(appUrl(`/admin/api/tasks/${{taskId}}`));
+                  if (state.selectedTaskId === taskId) {{
+                    state.selectedTaskId = null;
+                  }}
+                }} else {{
+                  await apiPost(appUrl(`/admin/api/tasks/${{taskId}}/${{action}}`));
+                  state.selectedTaskId = taskId;
+                }}
                 await loadSnapshot();
-                scrollTaskDetailIntoView();
-                setFlashMessage(labels[action] || "完成了。", action === "push-draft" ? "done" : "");
+                if (action !== "delete") {{
+                  scrollTaskDetailIntoView();
+                }}
+                setFlashMessage(labels[action] || "完成了。", action === "push-draft" || action === "delete" ? "done" : "");
               }} catch (error) {{
                 setFlashMessage(error.message || "操作失败。", "fail");
               }} finally {{

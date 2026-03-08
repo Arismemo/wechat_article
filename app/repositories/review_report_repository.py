@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.models.review_report import ReviewReport
@@ -25,3 +25,8 @@ class ReviewReportRepository:
         self.session.add(report)
         self.session.flush()
         return report
+
+    def delete_by_generation_ids(self, generation_ids: list[str]) -> None:
+        if not generation_ids:
+            return
+        self.session.execute(delete(ReviewReport).where(ReviewReport.generation_id.in_(generation_ids)))

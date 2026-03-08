@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.models.prompt_experiment import PromptExperiment
@@ -45,3 +45,19 @@ class PromptExperimentRepository:
         self.session.add(experiment)
         self.session.flush()
         return experiment
+
+    def clear_last_task_refs(self, task_id: str) -> None:
+        self.session.execute(
+            update(PromptExperiment)
+            .where(PromptExperiment.last_task_id == task_id)
+            .values(last_task_id=None)
+        )
+
+    def clear_last_generation_refs(self, generation_ids: list[str]) -> None:
+        if not generation_ids:
+            return
+        self.session.execute(
+            update(PromptExperiment)
+            .where(PromptExperiment.last_generation_id.in_(generation_ids))
+            .values(last_generation_id=None)
+        )

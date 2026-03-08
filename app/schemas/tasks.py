@@ -12,6 +12,9 @@ class TaskResponse(APIModel):
     progress: int
     title: Optional[str] = None
     wechat_media_id: Optional[str] = None
+    wechat_draft_url: Optional[str] = None
+    wechat_draft_url_direct: bool = False
+    wechat_draft_url_hint: Optional[str] = None
     brief_id: Optional[str] = None
     generation_id: Optional[str] = None
     related_article_count: int = 0
@@ -27,6 +30,9 @@ class TaskSummaryResponse(APIModel):
     progress: int
     title: Optional[str] = None
     wechat_media_id: Optional[str] = None
+    wechat_draft_url: Optional[str] = None
+    wechat_draft_url_direct: bool = False
+    wechat_draft_url_hint: Optional[str] = None
     brief_id: Optional[str] = None
     generation_id: Optional[str] = None
     related_article_count: int = 0
@@ -173,6 +179,9 @@ class TaskWorkspaceResponse(APIModel):
     progress: int
     title: Optional[str] = None
     wechat_media_id: Optional[str] = None
+    wechat_draft_url: Optional[str] = None
+    wechat_draft_url_direct: bool = False
+    wechat_draft_url_hint: Optional[str] = None
     brief_id: Optional[str] = None
     generation_id: Optional[str] = None
     related_article_count: int = 0

@@ -35,6 +35,7 @@ from app.schemas.tasks import (
     WechatPushPolicyResponse,
 )
 from app.services.task_service import TaskService
+from app.services.wechat_draft_metadata_service import build_wechat_draft_metadata
 from app.services.wechat_push_policy_service import WechatPushPolicyService
 
 router = APIRouter()
@@ -73,6 +74,9 @@ def list_tasks(
             progress=item.progress,
             title=item.title,
             wechat_media_id=item.wechat_media_id,
+            wechat_draft_url=item.wechat_draft_url,
+            wechat_draft_url_direct=item.wechat_draft_url_direct,
+            wechat_draft_url_hint=item.wechat_draft_url_hint,
             brief_id=item.brief_id,
             generation_id=item.generation_id,
             related_article_count=item.related_article_count,
@@ -95,6 +99,7 @@ def get_task(task_id: str, session: Session = Depends(get_db_session)) -> TaskRe
     generation = GenerationRepository(session).get_latest_by_task_id(task_id)
     related_count = RelatedArticleRepository(session).count_by_task_id(task_id, selected_only=True)
     wechat_draft = WechatDraftRepository(session).get_latest_by_task_id(task_id)
+    draft_metadata = build_wechat_draft_metadata(wechat_draft)
     task_status = TaskStatus(task.status)
     push_policy = WechatPushPolicyService(session).get_policy(task_id)
     error = task.error_message or task.error_code
@@ -103,7 +108,10 @@ def get_task(task_id: str, session: Session = Depends(get_db_session)) -> TaskRe
         status=task.status,
         progress=get_progress(task_status),
         title=source_article.title if source_article else None,
-        wechat_media_id=wechat_draft.media_id if wechat_draft else None,
+        wechat_media_id=draft_metadata.media_id,
+        wechat_draft_url=draft_metadata.draft_url,
+        wechat_draft_url_direct=draft_metadata.draft_url_direct,
+        wechat_draft_url_hint=draft_metadata.draft_url_hint,
         brief_id=content_brief.id if content_brief else None,
         generation_id=generation.id if generation else None,
         related_article_count=related_count,
@@ -257,6 +265,7 @@ def get_task_workspace(task_id: str, session: Session = Depends(get_db_session))
     audits = audit_repo.list_by_task_id(task_id, limit=25)
     related_count = related_repo.count_by_task_id(task_id, selected_only=True)
     wechat_draft = wechat_draft_repo.get_latest_by_task_id(task_id)
+    draft_metadata = build_wechat_draft_metadata(wechat_draft)
     push_policy = WechatPushPolicyService(session).get_policy(task_id)
     error = task.error_message or task.error_code
     task_status = TaskStatus(task.status)
@@ -315,7 +324,10 @@ def get_task_workspace(task_id: str, session: Session = Depends(get_db_session))
         status=task.status,
         progress=get_progress(task_status),
         title=source_article.title if source_article else None,
-        wechat_media_id=wechat_draft.media_id if wechat_draft else None,
+        wechat_media_id=draft_metadata.media_id,
+        wechat_draft_url=draft_metadata.draft_url,
+        wechat_draft_url_direct=draft_metadata.draft_url_direct,
+        wechat_draft_url_hint=draft_metadata.draft_url_hint,
         brief_id=brief.id if brief else None,
         generation_id=generations[0].id if generations else None,
         related_article_count=related_count,

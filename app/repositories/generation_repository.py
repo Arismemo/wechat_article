@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.models.generation import Generation
@@ -43,6 +43,10 @@ class GenerationRepository:
         )
         return list(self.session.scalars(statement))
 
+    def list_ids_by_task_id(self, task_id: str) -> list[str]:
+        statement = select(Generation.id).where(Generation.task_id == task_id)
+        return [str(item) for item in self.session.scalars(statement)]
+
     def get_next_version_no(self, task_id: str) -> int:
         statement = select(func.coalesce(func.max(Generation.version_no), 0)).where(Generation.task_id == task_id)
         return int(self.session.scalar(statement) or 0) + 1
@@ -51,3 +55,6 @@ class GenerationRepository:
         self.session.add(generation)
         self.session.flush()
         return generation
+
+    def delete_by_task_id(self, task_id: str) -> None:
+        self.session.execute(delete(Generation).where(Generation.task_id == task_id))

@@ -43,6 +43,7 @@ from app.services.phase2_queue_service import Phase2QueueService
 from app.services.phase3_queue_service import Phase3QueueService
 from app.services.phase4_queue_service import Phase4QueueService
 from app.services.task_service import TaskService
+from app.services.wechat_draft_metadata_service import build_wechat_draft_metadata
 from app.services.wechat_push_policy_service import WechatPushPolicyService
 from app.settings import get_settings
 
@@ -110,6 +111,7 @@ class AdminMonitorService:
         audits = self.audit_logs.list_by_task_id(task_id, limit=25)
         related_count = self.related_articles.count_by_task_id(task_id, selected_only=True)
         wechat_draft = self.wechat_drafts.get_latest_by_task_id(task_id)
+        draft_metadata = build_wechat_draft_metadata(wechat_draft)
         push_policy = self.wechat_push_policy.get_policy(task_id)
         error = task.error_message or task.error_code
         task_status = TaskStatus(task.status)
@@ -168,7 +170,10 @@ class AdminMonitorService:
             status=task.status,
             progress=get_progress(task_status),
             title=source_article.title if source_article else None,
-            wechat_media_id=wechat_draft.media_id if wechat_draft else None,
+            wechat_media_id=draft_metadata.media_id,
+            wechat_draft_url=draft_metadata.draft_url,
+            wechat_draft_url_direct=draft_metadata.draft_url_direct,
+            wechat_draft_url_hint=draft_metadata.draft_url_hint,
             brief_id=brief.id if brief else None,
             generation_id=generations[0].id if generations else None,
             related_article_count=related_count,
@@ -364,6 +369,9 @@ class AdminMonitorService:
             progress=item.progress,
             title=item.title,
             wechat_media_id=item.wechat_media_id,
+            wechat_draft_url=item.wechat_draft_url,
+            wechat_draft_url_direct=item.wechat_draft_url_direct,
+            wechat_draft_url_hint=item.wechat_draft_url_hint,
             brief_id=item.brief_id,
             generation_id=item.generation_id,
             related_article_count=item.related_article_count,

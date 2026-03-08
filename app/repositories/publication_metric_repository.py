@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.models.publication_metric import PublicationMetric
@@ -46,3 +46,11 @@ class PublicationMetricRepository:
         self.session.add(metric)
         self.session.flush()
         return metric
+
+    def delete_by_task_id(self, task_id: str) -> None:
+        self.session.execute(delete(PublicationMetric).where(PublicationMetric.task_id == task_id))
+
+    def delete_by_generation_ids(self, generation_ids: list[str]) -> None:
+        if not generation_ids:
+            return
+        self.session.execute(delete(PublicationMetric).where(PublicationMetric.generation_id.in_(generation_ids)))

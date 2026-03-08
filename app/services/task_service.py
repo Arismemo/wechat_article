@@ -11,15 +11,21 @@ from app.core.enums import TaskStatus
 from app.core.progress import get_progress
 from app.models.audit_log import AuditLog
 from app.models.task import Task
+from app.repositories.article_analysis_repository import ArticleAnalysisRepository
 from app.repositories.audit_log_repository import AuditLogRepository
 from app.repositories.content_brief_repository import ContentBriefRepository
 from app.repositories.generation_repository import GenerationRepository
+from app.repositories.prompt_experiment_repository import PromptExperimentRepository
+from app.repositories.publication_metric_repository import PublicationMetricRepository
 from app.repositories.related_article_repository import RelatedArticleRepository
+from app.repositories.review_report_repository import ReviewReportRepository
 from app.repositories.source_article_repository import SourceArticleRepository
+from app.repositories.style_asset_repository import StyleAssetRepository
 from app.repositories.task_repository import TaskRepository
 from app.repositories.wechat_draft_repository import WechatDraftRepository
 from app.schemas.ingest import IngestLinkRequest
 from app.services.url_service import detect_source_type, normalize_url
+from app.services.wechat_draft_metadata_service import build_wechat_draft_metadata
 
 
 @dataclass
@@ -32,6 +38,9 @@ class TaskSummary:
     progress: int
     title: Optional[str]
     wechat_media_id: Optional[str]
+    wechat_draft_url: Optional[str]
+    wechat_draft_url_direct: bool
+    wechat_draft_url_hint: Optional[str]
     brief_id: Optional[str]
     generation_id: Optional[str]
     related_article_count: int
@@ -40,15 +49,27 @@ class TaskSummary:
     updated_at: datetime
 
 
+@dataclass
+class TaskDeleteResult:
+    task_id: str
+    task_code: str
+    deleted: bool
+
+
 class TaskService:
     def __init__(self, session: Session) -> None:
         self.session = session
         self.tasks = TaskRepository(session)
+        self.analyses = ArticleAnalysisRepository(session)
         self.audit_logs = AuditLogRepository(session)
         self.source_articles = SourceArticleRepository(session)
         self.content_briefs = ContentBriefRepository(session)
         self.generations = GenerationRepository(session)
+        self.prompt_experiments = PromptExperimentRepository(session)
+        self.publication_metrics = PublicationMetricRepository(session)
         self.related_articles = RelatedArticleRepository(session)
+        self.reviews = ReviewReportRepository(session)
+        self.style_assets = StyleAssetRepository(session)
         self.wechat_drafts = WechatDraftRepository(session)
 
     def ingest_link(self, payload: IngestLinkRequest) -> tuple[Task, bool]:
@@ -139,6 +160,7 @@ class TaskService:
             content_brief = self.content_briefs.get_latest_by_task_id(task.id)
             generation = self.generations.get_latest_by_task_id(task.id)
             wechat_draft = self.wechat_drafts.get_latest_by_task_id(task.id)
+            draft_metadata = build_wechat_draft_metadata(wechat_draft)
             related_count = self.related_articles.count_by_task_id(task.id, selected_only=True)
             error = task.error_message or task.error_code
             items.append(
@@ -150,7 +172,10 @@ class TaskService:
                     status=task.status,
                     progress=self._progress_for_status(task.status),
                     title=source_article.title if source_article else None,
-                    wechat_media_id=wechat_draft.media_id if wechat_draft else None,
+                    wechat_media_id=draft_metadata.media_id,
+                    wechat_draft_url=draft_metadata.draft_url,
+                    wechat_draft_url_direct=draft_metadata.draft_url_direct,
+                    wechat_draft_url_hint=draft_metadata.draft_url_hint,
                     brief_id=content_brief.id if content_brief else None,
                     generation_id=generation.id if generation else None,
                     related_article_count=related_count,
@@ -160,6 +185,42 @@ class TaskService:
                 )
             )
         return items
+
+    def delete_task(self, task_id: str, *, operator: str) -> TaskDeleteResult:
+        task = self.require_task(task_id)
+        generation_ids = self.generations.list_ids_by_task_id(task.id)
+
+        self.audit_logs.clear_task_refs(task.id)
+        self.style_assets.clear_source_task_refs(task.id)
+        self.style_assets.clear_source_generation_refs(generation_ids)
+        self.prompt_experiments.clear_last_task_refs(task.id)
+        self.prompt_experiments.clear_last_generation_refs(generation_ids)
+
+        self.wechat_drafts.delete_by_task_id(task.id)
+        self.publication_metrics.delete_by_generation_ids(generation_ids)
+        self.publication_metrics.delete_by_task_id(task.id)
+        self.reviews.delete_by_generation_ids(generation_ids)
+        self.generations.delete_by_task_id(task.id)
+        self.content_briefs.delete_by_task_id(task.id)
+        self.related_articles.delete_by_task_id(task.id)
+        self.source_articles.delete_by_task_id(task.id)
+        self.analyses.delete_by_task_id(task.id)
+        self.tasks.delete(task)
+        self.audit_logs.create(
+            AuditLog(
+                task_id=None,
+                action="task.deleted",
+                operator=operator or "system",
+                payload={
+                    "task_id": task.id,
+                    "task_code": task.task_code,
+                    "source_url": task.source_url,
+                    "status": task.status,
+                },
+            )
+        )
+        self.session.commit()
+        return TaskDeleteResult(task_id=task.id, task_code=task.task_code, deleted=True)
 
     def _generate_task_code(self) -> str:
         return f"tsk_{uuid4().hex[:12]}"

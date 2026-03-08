@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.models.source_article import SourceArticle
@@ -25,3 +25,6 @@ class SourceArticleRepository:
         self.session.add(article)
         self.session.flush()
         return article
+
+    def delete_by_task_id(self, task_id: str) -> None:
+        self.session.execute(delete(SourceArticle).where(SourceArticle.task_id == task_id))

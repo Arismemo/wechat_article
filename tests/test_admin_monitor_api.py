@@ -183,6 +183,9 @@ class AdminMonitorApiTests(unittest.TestCase):
         self.assertEqual(body["operations"]["workers"][0]["name"], "phase2")
         self.assertEqual(body["workspace"]["task_id"], self.draft_task_id)
         self.assertEqual(body["workspace"]["wechat_media_id"], "media-monitor-1")
+        self.assertEqual(body["workspace"]["wechat_draft_url"], "https://mp.weixin.qq.com/")
+        self.assertFalse(body["workspace"]["wechat_draft_url_direct"])
+        self.assertIn("media_id", body["workspace"]["wechat_draft_url_hint"])
 
     def test_admin_console_stream_once_returns_snapshot_event(self) -> None:
         response = self.client.get("/admin/console/stream?once=true&limit=20")

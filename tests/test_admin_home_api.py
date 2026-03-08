@@ -16,7 +16,11 @@ import app.models  # noqa: F401
 from app.db.base import Base
 from app.db.redis_client import get_redis_client
 from app.db.session import get_engine, get_session_factory
+from app.models.audit_log import AuditLog
+from app.models.generation import Generation
+from app.models.source_article import SourceArticle
 from app.models.task import Task
+from app.models.wechat_draft import WechatDraft
 from app.settings import get_settings
 from app.services.phase4_queue_service import Phase4EnqueueResult
 
@@ -201,6 +205,69 @@ class AdminHomeApiTests(unittest.TestCase):
         self.assertEqual(reject_response.json()["decision"], "rejected")
         self.assertEqual(push_response.status_code, 200)
         self.assertEqual(push_response.json()["wechat_media_id"], "media-1")
+
+    def test_admin_delete_task_removes_related_rows(self) -> None:
+        with self.Session() as session:
+            task = Task(
+                task_code="tsk_delete_home",
+                source_url="https://mp.weixin.qq.com/s/delete-home",
+                normalized_url="https://mp.weixin.qq.com/s/delete-home",
+                source_type="wechat",
+                status="draft_saved",
+            )
+            session.add(task)
+            session.flush()
+            session.add(SourceArticle(task_id=task.id, url=task.source_url, title="待删除源文"))
+            generation = Generation(
+                task_id=task.id,
+                version_no=1,
+                model_name="glm-5",
+                title="待删除稿件",
+                markdown_content="# 待删除稿件",
+                status="accepted",
+            )
+            session.add(generation)
+            session.flush()
+            session.add(
+                WechatDraft(
+                    task_id=task.id,
+                    generation_id=generation.id,
+                    media_id="delete-media-1",
+                    push_status="success",
+                    push_response={"draft": {"media_id": "delete-media-1"}},
+                )
+            )
+            existing_log = AuditLog(task_id=task.id, action="wechat.push.completed", operator="system")
+            session.add(existing_log)
+            session.commit()
+            task_id = task.id
+            generation_id = generation.id
+            existing_log_id = existing_log.id
+
+        response = self.client.delete(f"/admin/api/tasks/{task_id}", headers=self.auth_headers)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {
+                "task_id": task_id,
+                "task_code": "tsk_delete_home",
+                "deleted": True,
+            },
+        )
+
+        with self.Session() as session:
+            self.assertIsNone(session.get(Task, task_id))
+            self.assertIsNone(session.get(Generation, generation_id))
+            self.assertEqual(session.query(SourceArticle).count(), 0)
+            self.assertEqual(session.query(WechatDraft).count(), 0)
+            refreshed_log = session.get(AuditLog, existing_log_id)
+            self.assertIsNotNone(refreshed_log)
+            self.assertIsNone(refreshed_log.task_id)
+            delete_log = session.query(AuditLog).filter(AuditLog.action == "task.deleted").one()
+            self.assertIsNone(delete_log.task_id)
+            self.assertEqual(delete_log.operator, "admin-home")
+            self.assertEqual(delete_log.payload["task_id"], task_id)
 
 
 if __name__ == "__main__":

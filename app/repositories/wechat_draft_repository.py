@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.models.wechat_draft import WechatDraft
@@ -44,3 +44,6 @@ class WechatDraftRepository:
         self.session.add(draft)
         self.session.flush()
         return draft
+
+    def delete_by_task_id(self, task_id: str) -> None:
+        self.session.execute(delete(WechatDraft).where(WechatDraft.task_id == task_id))

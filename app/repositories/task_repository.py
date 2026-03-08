@@ -76,6 +76,9 @@ class TaskRepository:
         self.session.flush()
         return task
 
+    def delete(self, task: Task) -> None:
+        self.session.delete(task)
+
     def _apply_filters(
         self,
         statement: Select,

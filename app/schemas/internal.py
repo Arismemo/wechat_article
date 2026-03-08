@@ -88,6 +88,12 @@ class WechatPushResponse(APIModel):
     reused_existing: bool = False
 
 
+class TaskDeleteResponse(APIModel):
+    task_id: str
+    task_code: str
+    deleted: bool = True
+
+
 class FeedbackImportRequest(APIModel):
     generation_id: Optional[str] = None
     day_offset: int = Field(ge=0)
