@@ -24,6 +24,8 @@
   - 环境变量清单与配置约束
 - `docs/phase-0/confirmation-log.md`
   - 阶段 0 已确认输入与未决问题
+- `docs/phase-0/ios-shortcuts.md`
+  - iPhone 快捷指令接入约定、一站式入口与排查要点
 - `docs/phase-1/backend-scaffold.md`
   - 阶段 1 后端骨架说明
 - `docs/phase-1/database-schema.md`
@@ -50,6 +52,8 @@
   - 阶段 6 服务器部署与 smoke test 记录
 - `docs/research-wechat-fetch-and-browser-options-2026-03-07.md`
   - 微信公众号读取方案、Claude Code skill 和浏览器自动化方案调研
+- `docs/mvp-closeout-2026-03-08.md`
+  - MVP 主链路收口结论与真实验收记录
 - `docs/adr/0001-git-based-deploy.md`
   - 从文件拷贝切换到 Git 部署的技术决策
 

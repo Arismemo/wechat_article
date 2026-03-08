@@ -113,6 +113,7 @@
 | `WECHAT_DEFAULT_DIGEST_PREFIX` | 否 | 摘要前缀 |
 | `WECHAT_REQUEST_TIMEOUT_SECONDS` | 否 | 微信接口请求超时 |
 | `WECHAT_INLINE_IMAGE_MAX_BYTES` | 否 | 正文内图片上传到微信前允许的最大字节数 |
+| `INGEST_SHORTCUT_AUTO_ENQUEUE_PHASE4` | 否 | 公开入口收到 `ios-shortcuts` / `ios-share-sheet` 时，是否默认直接进入 Phase 4 异步队列，默认开启 |
 | `PHASE2_INCLUDE_SOURCE_IMAGES` | 否 | 阶段 2 测试稿是否带入原文配图 |
 | `PHASE2_MAX_INLINE_IMAGES` | 否 | 阶段 2 测试稿最多带入多少张原文图片 |
 | `PHASE2_QUEUE_KEY` | 否 | 阶段 2 worker 主队列 Redis key |
@@ -158,6 +159,10 @@
 - Tailscale 管理入口：`100.112.123.6`
 - 真实公网出口 IP：`117.72.155.136`
 - 本地或测试环境如需验证自动反馈链路，可设：`FEEDBACK_SYNC_PROVIDER=mock`
+- 若要实现“快捷指令提交后直接跑完整链路到草稿箱”，需同时满足：
+  - `INGEST_SHORTCUT_AUTO_ENQUEUE_PHASE4=true`
+  - `WECHAT_ENABLE_DRAFT_PUSH=true`
+  - `PHASE4_AUTO_PUSH_WECHAT_DRAFT=true`
 
 ## 9. 抓取与渲染
 

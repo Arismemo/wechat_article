@@ -333,7 +333,8 @@ def phase2_console() -> str:
               url: urlEl.value.trim(),
               source: "admin-console",
               device_id: deviceEl.value.trim() || "admin-console",
-              trigger: "manual-ui"
+              trigger: "manual-ui",
+              dispatch_mode: "ingest_only"
             });
 
             const setTaskId = (taskId) => {

@@ -20,6 +20,11 @@
   - 当前不依赖微信分析接口，已支持从后台手工录入 T+1 / T+3 / T+7 数据
   - 当前已支持 Phase 6 后台页：`GET /admin/phase6`
   - 当前已支持自动反馈入口：`HTTP Provider -> feedback_worker -> publication_metrics`
+- MVP 主链路已在服务器完成最终收口：
+  - 公开入口 `POST /api/v1/ingest/link`
+  - `source=ios-shortcuts`
+  - 自动进入 Phase 4 异步队列
+  - 审稿通过后自动进入微信草稿箱
 
 ## 当前已完成范围
 
@@ -29,6 +34,8 @@
   - `POST /api/v1/ingest/link`
   - `GET /api/v1/tasks`
   - `GET /api/v1/tasks/{task_id}`
+  - 公开入口现支持 `dispatch_mode=auto|ingest_only|phase4_enqueue`
+  - `source=ios-shortcuts` / `ios-share-sheet` 且 `dispatch_mode=auto` 时，会直接进入 Phase 4 异步队列
 - 实现阶段 2 内部联调入口：
   - `POST /internal/v1/tasks/{task_id}/run-phase2`
   - `POST /internal/v1/tasks/{task_id}/enqueue-phase2`
@@ -60,6 +67,31 @@
   - `generations`、`review_reports` 正式落库与查询
   - 服务器已验证 `glm-5` 真稿生成、审稿通过、手动推送微信草稿箱
   - 可选开关：`PHASE4_AUTO_PUSH_WECHAT_DRAFT=true`
+
+## iPhone 快捷指令最终接法
+
+- 手机端主入口仍是：
+  - `复制链接 + 双击背面 + 读取剪贴板`
+- 快捷指令默认调用：
+  - `POST /api/v1/ingest/link`
+- 推荐请求体：
+
+```json
+{
+  "url": "https://mp.weixin.qq.com/s/xxxxxxxxxxxx",
+  "source": "ios-shortcuts",
+  "device_id": "iphone-15-pro",
+  "trigger": "back-tap",
+  "dispatch_mode": "auto"
+}
+```
+
+- 若要让这条链路在审稿通过后自动进入微信草稿箱，服务器需同时满足：
+  - `INGEST_SHORTCUT_AUTO_ENQUEUE_PHASE4=true`
+  - `WECHAT_ENABLE_DRAFT_PUSH=true`
+  - `PHASE4_AUTO_PUSH_WECHAT_DRAFT=true`
+- 详细手机端接法与排查要点见：
+  - `docs/phase-0/ios-shortcuts.md`
 - 阶段 5 第一版已实现：
   - `GET /admin/phase5`
   - `/admin/*` 可选 `ADMIN_USERNAME` / `ADMIN_PASSWORD` Basic Auth

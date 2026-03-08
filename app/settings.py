@@ -67,6 +67,7 @@ class Settings(BaseSettings):
     wechat_default_digest_prefix: Optional[str] = Field(default=None, alias="WECHAT_DEFAULT_DIGEST_PREFIX")
     wechat_request_timeout_seconds: int = Field(default=30, alias="WECHAT_REQUEST_TIMEOUT_SECONDS")
     wechat_inline_image_max_bytes: int = Field(default=1_000_000, alias="WECHAT_INLINE_IMAGE_MAX_BYTES")
+    ingest_shortcut_auto_enqueue_phase4: bool = Field(default=True, alias="INGEST_SHORTCUT_AUTO_ENQUEUE_PHASE4")
     phase2_include_source_images: bool = Field(default=True, alias="PHASE2_INCLUDE_SOURCE_IMAGES")
     phase2_max_inline_images: int = Field(default=3, alias="PHASE2_MAX_INLINE_IMAGES")
 
