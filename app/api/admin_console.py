@@ -953,13 +953,17 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             }};
 
             const syncUrl = () => {{
-              const url = new URL(window.location.pathname + window.location.search, window.location.origin);
-              if (state.selectedTaskId) {{
-                url.searchParams.set("task_id", state.selectedTaskId);
-              }} else {{
-                url.searchParams.delete("task_id");
+              try {{
+                const url = new URL(window.location.pathname + window.location.search, window.location.origin);
+                if (state.selectedTaskId) {{
+                  url.searchParams.set("task_id", state.selectedTaskId);
+                }} else {{
+                  url.searchParams.delete("task_id");
+                }}
+                window.history.replaceState({{}}, "", url);
+              }} catch (_error) {{
+                // Browsers may block replaceState when the current URL includes Basic Auth credentials.
               }}
-              window.history.replaceState({{}}, "", url);
             }};
 
             const renderSummary = () => {{
