@@ -15,6 +15,8 @@ class Generation(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     task_id: Mapped[str] = mapped_column(ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False, index=True)
     brief_id: Mapped[Optional[str]] = mapped_column(ForeignKey("content_briefs.id", ondelete="SET NULL"), nullable=True)
     version_no: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    prompt_type: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    prompt_version: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     model_name: Mapped[str] = mapped_column(Text, nullable=False)
     title: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     subtitle: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

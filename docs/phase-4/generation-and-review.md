@@ -35,6 +35,7 @@
 - `Phase4PipelineService`
   - 若缺少 Phase 3 结果，会先自动补跑 Phase 3
   - 基于 `content_brief`、原文分析、原文与入选素材生成新稿
+  - 会额外读取 `style_assets` 中的 active 资产，并把已验证的开头、标题方向、结构资产注入写稿 Prompt
   - 审稿结论支持 `pass / revise / reject`
   - `revise` 会自动修订一次并重新审稿
 - `Phase4QueueService`
@@ -94,6 +95,10 @@
   - `revise`
   - `reject`
 - 自动修订最多执行一次；再次不通过则转人工。
+- 新 generation 会真实落库：
+  - `prompt_type`
+  - `prompt_version`
+  当前写稿版本为 `phase4-v2`
 
 ## 6. 状态流
 

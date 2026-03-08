@@ -18,6 +18,7 @@ from app.models.generation import Generation
 from app.models.related_article import RelatedArticle
 from app.models.review_report import ReviewReport
 from app.models.source_article import SourceArticle
+from app.models.style_asset import StyleAsset
 from app.models.task import Task
 from app.services.phase4_pipeline_service import Phase4PipelineService
 from app.services.wechat_draft_publish_service import WechatDraftPublishResult
@@ -67,6 +68,7 @@ class Phase4PipelineServiceTests(unittest.TestCase):
     def test_phase4_pipeline_generates_and_reviews_passed_draft(self) -> None:
         session = self.Session()
         task = self._seed_phase4_ready_task(session, "tsk_phase4_pass")
+        self._seed_style_assets(session, task.id)
 
         service = Phase4PipelineService(session)
         service.llm = MagicMock()
@@ -118,8 +120,12 @@ class Phase4PipelineServiceTests(unittest.TestCase):
         self.assertEqual(len(generation_rows), 1)
         self.assertEqual(len(review_rows), 1)
         self.assertEqual(generation_rows[0].status, "accepted")
+        self.assertEqual(generation_rows[0].prompt_type, "phase4_write")
+        self.assertEqual(generation_rows[0].prompt_version, "phase4-v2")
         self.assertGreater(float(generation_rows[0].score_overall or 0), 75)
         self.assertEqual(review_rows[0].final_decision, "pass")
+        self.assertIn("已验证风格资产", service.llm.complete_json.call_args_list[0].kwargs["user_prompt"])
+        self.assertIn("先给反直觉结论，再拆误区", service.llm.complete_json.call_args_list[0].kwargs["user_prompt"])
         self.assertEqual(service.llm.complete_json.call_args_list[0].kwargs["timeout_seconds"], 180)
         self.assertEqual(service.llm.complete_json.call_args_list[1].kwargs["timeout_seconds"], 90)
         session.close()
@@ -351,3 +357,28 @@ class Phase4PipelineServiceTests(unittest.TestCase):
         )
         session.commit()
         return task
+
+    def _seed_style_assets(self, session, task_id: str) -> None:
+        session.add(
+            StyleAsset(
+                asset_type="opening_hook",
+                title="反直觉开头",
+                content="先给反直觉结论，再拆误区。",
+                tags=["虚拟内存", "技术读者"],
+                status="active",
+                weight=1.6,
+                source_task_id=task_id,
+            )
+        )
+        session.add(
+            StyleAsset(
+                asset_type="outline",
+                title="纠偏型结构",
+                content="先纠偏，再讲代价，最后给判断框架。",
+                tags=["虚拟内存", "误区纠偏"],
+                status="active",
+                weight=1.4,
+                source_task_id=task_id,
+            )
+        )
+        session.commit()

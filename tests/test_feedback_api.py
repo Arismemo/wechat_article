@@ -82,6 +82,8 @@ class FeedbackApiTests(unittest.TestCase):
             task_id=task.id,
             brief_id=brief.id,
             version_no=3,
+            prompt_type="phase4_write",
+            prompt_version="phase4-v2",
             model_name="glm-5",
             title="终版",
             markdown_content="# 终版",
@@ -132,7 +134,7 @@ class FeedbackApiTests(unittest.TestCase):
         first_body = first.json()
         self.assertEqual(first_body["generation_id"], self.generation_id)
         self.assertEqual(first_body["prompt_type"], "phase4_write")
-        self.assertEqual(first_body["prompt_version"], "phase4-v1")
+        self.assertEqual(first_body["prompt_version"], "phase4-v2")
         self.assertEqual(first_body["sample_count"], 1)
 
         second = self.client.post(

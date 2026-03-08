@@ -89,7 +89,8 @@ Phase 6 第一刀先不接微信官方分析接口，先把“手工反馈导入
 调用 `POST /internal/v1/tasks/{task_id}/import-feedback` 时：
 
 1. 如果未指定 `generation_id`，优先取最新 `accepted` generation，否则退回最新 generation。
-2. 如果未指定 `prompt_type/prompt_version`，会按当前 generation 模型推断：
+2. 如果未指定 `prompt_type/prompt_version`，会优先读取 generation 已落库的真实版本字段。
+3. 如果 generation 还没有真实版本字段，再回退到兼容映射：
    - `glm-5` / `phase4-fallback-template` -> `phase4_write / phase4-v1`
 3. 如果未指定 `wechat_media_id`，会尝试回填该 generation 最近一次成功草稿的 `media_id`
 4. 写入或覆盖 `publication_metrics`
@@ -136,7 +137,7 @@ Phase 6 第一刀先不接微信官方分析接口，先把“手工反馈导入
 - 微信官方分析接口对接
 - 自动反馈 worker
 - 将 `style_assets` 真正接回 Phase 4 生成 Prompt
-- Prompt 版本从固定映射升级为真实版本表关联
+- Prompt 版本进一步接入 `prompt_versions` 表，而不只是 generation 上的字符串字段
 - 增长优化器与自动策略推荐
 
 ## 下一步建议

@@ -91,6 +91,8 @@ class TaskBriefResponse(APIModel):
 class GenerationResponse(APIModel):
     generation_id: str
     version_no: int
+    prompt_type: Optional[str] = None
+    prompt_version: Optional[str] = None
     model_name: str
     title: Optional[str] = None
     subtitle: Optional[str] = None
@@ -159,7 +161,6 @@ class WechatPushPolicyResponse(APIModel):
 
 class GenerationWorkspaceResponse(GenerationResponse):
     created_at: datetime
-    prompt_version: Optional[str] = None
     review: Optional[ReviewReportResponse] = None
 
 

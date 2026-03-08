@@ -7,6 +7,7 @@ from typing import Any, Optional
 from sqlalchemy.orm import Session
 
 from app.core.enums import TaskStatus
+from app.core.prompt_versions import CURRENT_PHASE4_PROMPT_VERSION, DEFAULT_GENERATION_PROMPT_TYPE
 from app.models.article_analysis import ArticleAnalysis
 from app.models.audit_log import AuditLog
 from app.models.content_brief import ContentBrief
@@ -14,6 +15,7 @@ from app.models.generation import Generation
 from app.models.related_article import RelatedArticle
 from app.models.review_report import ReviewReport
 from app.models.source_article import SourceArticle
+from app.models.style_asset import StyleAsset
 from app.models.task import Task
 from app.repositories.article_analysis_repository import ArticleAnalysisRepository
 from app.repositories.audit_log_repository import AuditLogRepository
@@ -22,6 +24,7 @@ from app.repositories.generation_repository import GenerationRepository
 from app.repositories.related_article_repository import RelatedArticleRepository
 from app.repositories.review_report_repository import ReviewReportRepository
 from app.repositories.source_article_repository import SourceArticleRepository
+from app.repositories.style_asset_repository import StyleAssetRepository
 from app.repositories.task_repository import TaskRepository
 from app.services.llm_service import LLMService, LLMServiceError
 from app.services.phase3_pipeline_service import Phase3PipelineService
@@ -40,6 +43,9 @@ class Phase4PipelineResult:
 
 
 class Phase4PipelineService:
+    _MAX_STYLE_ASSETS = 6
+    _MAX_STYLE_ASSETS_PER_TYPE = 2
+
     def __init__(self, session: Session) -> None:
         self.session = session
         self.settings = get_settings()
@@ -49,6 +55,7 @@ class Phase4PipelineService:
         self.analyses = ArticleAnalysisRepository(session)
         self.briefs = ContentBriefRepository(session)
         self.related_articles = RelatedArticleRepository(session)
+        self.style_assets = StyleAssetRepository(session)
         self.generations = GenerationRepository(session)
         self.reviews = ReviewReportRepository(session)
         self.llm = LLMService()
@@ -124,6 +131,12 @@ class Phase4PipelineService:
         prior_generation: Optional[Generation] = None,
         prior_review: Optional[ReviewReport] = None,
     ) -> Generation:
+        selected_style_assets = self._select_style_assets(
+            source=source,
+            analysis=analysis,
+            brief=brief,
+            related=related,
+        )
         self._set_task_status(task, TaskStatus.GENERATING)
         self._log_action(
             task.id,
@@ -131,6 +144,9 @@ class Phase4PipelineService:
             {
                 "brief_id": brief.id,
                 "revision_from_generation_id": prior_generation.id if prior_generation else None,
+                "prompt_type": DEFAULT_GENERATION_PROMPT_TYPE,
+                "prompt_version": CURRENT_PHASE4_PROMPT_VERSION,
+                "style_asset_ids": [item.id for item in selected_style_assets],
             },
         )
         self.session.commit()
@@ -141,6 +157,7 @@ class Phase4PipelineService:
             analysis=analysis,
             brief=brief,
             related=related,
+            style_assets=selected_style_assets,
             prior_generation=prior_generation,
             prior_review=prior_review,
         )
@@ -153,6 +170,8 @@ class Phase4PipelineService:
                 task_id=task.id,
                 brief_id=brief.id,
                 version_no=self.generations.get_next_version_no(task.id),
+                prompt_type=DEFAULT_GENERATION_PROMPT_TYPE,
+                prompt_version=CURRENT_PHASE4_PROMPT_VERSION,
                 model_name=model_name,
                 title=self._limit(str(payload.get("title") or self._fallback_title(source, brief)), 64),
                 subtitle=self._limit(str(payload.get("subtitle") or ""), 120) or None,
@@ -165,7 +184,14 @@ class Phase4PipelineService:
         self._log_action(
             task.id,
             "phase4.generation.completed",
-            {"generation_id": generation.id, "version_no": generation.version_no, "model_name": generation.model_name},
+            {
+                "generation_id": generation.id,
+                "version_no": generation.version_no,
+                "model_name": generation.model_name,
+                "prompt_type": generation.prompt_type,
+                "prompt_version": generation.prompt_version,
+                "style_asset_ids": [item.id for item in selected_style_assets],
+            },
         )
         self.session.commit()
         return generation
@@ -385,12 +411,14 @@ class Phase4PipelineService:
         analysis: ArticleAnalysis,
         brief: ContentBrief,
         related: list[RelatedArticle],
+        style_assets: list[StyleAsset],
         prior_generation: Optional[Generation],
         prior_review: Optional[ReviewReport],
     ) -> tuple[dict[str, Any], str]:
         system_prompt = (
             "你是微信公众号资深编辑。"
             "请基于输入的原文分析、content_brief 和同题素材，输出严格 JSON。"
+            "如果提供了风格资产，只吸收其中已验证的结构、节奏和写法优势，不要逐句照抄。"
             "不要输出 Markdown 解释，不要输出代码块。"
         )
         user_prompt = (
@@ -409,6 +437,7 @@ class Phase4PipelineService:
             f"差异矩阵：{self._json_items(brief.difference_matrix)}\n"
             f"推荐大纲：{self._json_items(brief.outline)}\n"
             f"标题方向：{self._json_items(brief.title_directions)}\n"
+            f"已验证风格资产：{self._style_asset_context(style_assets)}\n"
             f"同题素材：{self._related_context(related)}\n"
         )
         if prior_generation is not None and prior_review is not None:
@@ -436,9 +465,23 @@ class Phase4PipelineService:
             self._log_action(
                 task_id,
                 "phase4.generation.fallback",
-                {"reason": str(exc)[:500], "fallback_model": "phase4-fallback-template"},
+                {
+                    "reason": str(exc)[:500],
+                    "fallback_model": "phase4-fallback-template",
+                    "prompt_version": CURRENT_PHASE4_PROMPT_VERSION,
+                    "style_asset_ids": [item.id for item in style_assets],
+                },
             )
-            return self._build_generation_fallback(source=source, analysis=analysis, brief=brief, related=related), "phase4-fallback-template"
+            return (
+                self._build_generation_fallback(
+                    source=source,
+                    analysis=analysis,
+                    brief=brief,
+                    related=related,
+                    style_assets=style_assets,
+                ),
+                "phase4-fallback-template",
+            )
 
     def _build_review_payload(
         self,
@@ -495,12 +538,22 @@ class Phase4PipelineService:
         analysis: ArticleAnalysis,
         brief: ContentBrief,
         related: list[RelatedArticle],
+        style_assets: list[StyleAsset],
     ) -> dict[str, str]:
         must_cover = self._items_from_json(brief.must_cover)[:4]
         must_avoid = self._items_from_json(brief.must_avoid)[:3]
         outline = self._items_from_json(brief.outline)[:3]
         related_points = [item.title or item.url for item in related[:3]]
+        opening_assets = self._style_asset_items(style_assets, "opening_hook", limit=1)
+        title_assets = self._style_asset_items(style_assets, "title_direction", limit=1)
+        structure_assets = self._style_asset_items(style_assets, "outline", limit=2) + self._style_asset_items(
+            style_assets,
+            "argument_frame",
+            limit=1,
+        )
         title = self._fallback_title(source, brief)
+        if title_assets:
+            title = self._limit(title_assets[0], 64)
         subtitle = brief.target_reader or analysis.audience or "给技术读者的一次重构解读"
         digest = self._fallback_digest(source, brief)
         markdown_lines = [
@@ -509,7 +562,7 @@ class Phase4PipelineService:
             f"> {subtitle}",
             "",
             "## 先说结论：这篇内容为什么值得重写",
-            f"{brief.new_angle or '这篇稿件将从新的判断框架切入，而不是重复原文顺序。'}",
+            f"{opening_assets[0] if opening_assets else (brief.new_angle or '这篇稿件将从新的判断框架切入，而不是重复原文顺序。')}",
             "",
             "## 这次重构必须讲清楚的三件事",
         ]
@@ -533,7 +586,10 @@ class Phase4PipelineService:
                 "## 推荐成稿结构",
             ]
         )
-        markdown_lines.extend(f"- {item}" for item in outline or ["开头纠偏", "中段展开判断框架", "结尾给出落地结论"])
+        markdown_lines.extend(
+            f"- {item}"
+            for item in (structure_assets or outline or ["开头纠偏", "中段展开判断框架", "结尾给出落地结论"])
+        )
         markdown_lines.extend(
             [
                 "",
@@ -709,6 +765,97 @@ class Phase4PipelineService:
 
     def _related_titles(self, related: list[RelatedArticle]) -> str:
         return " | ".join(item.title or item.url for item in related[:5])
+
+    def _select_style_assets(
+        self,
+        *,
+        source: SourceArticle,
+        analysis: ArticleAnalysis,
+        brief: ContentBrief,
+        related: list[RelatedArticle],
+    ) -> list[StyleAsset]:
+        candidates = self.style_assets.list_recent(limit=40, status="active")
+        if not candidates:
+            return []
+
+        context = self._style_asset_context_text(source=source, analysis=analysis, brief=brief, related=related)
+        scored: list[tuple[float, StyleAsset]] = []
+        for asset in candidates:
+            score = float(asset.weight or 1.0) * 100.0
+            if asset.asset_type in {"title_direction", "opening_hook", "outline", "argument_frame"}:
+                score += 10.0
+            title = (asset.title or "").strip().lower()
+            if title and title in context:
+                score += 8.0
+            for tag in asset.tags or []:
+                normalized_tag = str(tag).strip().lower()
+                if normalized_tag and normalized_tag in context:
+                    score += 18.0
+            scored.append((score, asset))
+
+        selected: list[StyleAsset] = []
+        per_type_count: dict[str, int] = {}
+        for _, asset in sorted(
+            scored,
+            key=lambda item: (item[0], float(item[1].weight or 1.0), item[1].updated_at, item[1].created_at),
+            reverse=True,
+        ):
+            current_count = per_type_count.get(asset.asset_type, 0)
+            if current_count >= self._MAX_STYLE_ASSETS_PER_TYPE:
+                continue
+            selected.append(asset)
+            per_type_count[asset.asset_type] = current_count + 1
+            if len(selected) >= self._MAX_STYLE_ASSETS:
+                break
+        return selected
+
+    def _style_asset_context_text(
+        self,
+        *,
+        source: SourceArticle,
+        analysis: ArticleAnalysis,
+        brief: ContentBrief,
+        related: list[RelatedArticle],
+    ) -> str:
+        fields = [
+            source.title or "",
+            source.summary or "",
+            analysis.theme or "",
+            analysis.angle or "",
+            analysis.audience or "",
+            brief.positioning or "",
+            brief.new_angle or "",
+            brief.target_reader or "",
+            " ".join(self._items_from_json(brief.must_cover)),
+            " ".join(self._items_from_json(brief.title_directions)),
+            " ".join((item.title or "") for item in related[:5]),
+        ]
+        return " ".join(part.strip().lower() for part in fields if part and part.strip())
+
+    def _style_asset_context(self, style_assets: list[StyleAsset]) -> str:
+        if not style_assets:
+            return "无"
+        lines: list[str] = []
+        for asset in style_assets:
+            tags = ", ".join(asset.tags or [])
+            content = self._limit((asset.content or "").strip().replace("\n", " "), 180)
+            lines.append(
+                f"[{asset.asset_type}] {asset.title}：{content}"
+                + (f"（标签：{tags}）" if tags else "")
+            )
+        return " | ".join(lines)
+
+    def _style_asset_items(self, style_assets: list[StyleAsset], asset_type: str, *, limit: int) -> list[str]:
+        items: list[str] = []
+        for asset in style_assets:
+            if asset.asset_type != asset_type:
+                continue
+            content = (asset.content or "").strip()
+            if content:
+                items.append(self._limit(content.replace("\n", " "), 180))
+            if len(items) >= limit:
+                break
+        return items
 
     def _json_items(self, payload: Optional[dict]) -> str:
         return "；".join(str(item) for item in self._items_from_json(payload))

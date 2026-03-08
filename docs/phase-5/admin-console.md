@@ -50,11 +50,10 @@
 - 最新审稿结论
 - 正文 Markdown
 
-当前 `prompt_version` 仍是固定映射：
+当前 generation 的 `prompt_type` / `prompt_version` 已开始真实落库。
 
-- `glm-5` / `phase4-fallback-template` -> `phase4-v1`
-
-后续如果 Prompt 做版本化实验，再改成真实落库字段。
+- 新生成稿会记录当前写稿 Prompt 版本，例如 `phase4-v2`
+- 历史 generation 如果还没有落库字段，后台会回退到兼容映射
 
 ## 4. 后台操作流
 

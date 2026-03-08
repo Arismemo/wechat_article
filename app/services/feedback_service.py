@@ -82,7 +82,11 @@ class FeedbackService:
             raise ValueError("Task not found.")
 
         generation = self._resolve_generation(task_id, generation_id)
-        resolved_prompt_type, resolved_prompt_version = resolve_generation_prompt_metadata(generation.model_name)
+        resolved_prompt_type, resolved_prompt_version = resolve_generation_prompt_metadata(
+            generation.model_name,
+            stored_prompt_type=generation.prompt_type,
+            stored_prompt_version=generation.prompt_version,
+        )
         normalized_prompt_type = (prompt_type or resolved_prompt_type or DEFAULT_GENERATION_PROMPT_TYPE).strip()
         normalized_prompt_version = (prompt_version or resolved_prompt_version or "unknown").strip()
         normalized_snapshot_at = snapshot_at or datetime.now(timezone.utc)

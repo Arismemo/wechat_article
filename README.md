@@ -83,7 +83,7 @@
   - `GET /api/v1/feedback/style-assets`
   - `publication_metrics`、`prompt_experiments`、`style_assets` 落库
   - 手工录入 T+1 / T+3 / T+7 数据会自动回刷 Prompt 实验聚合
-  - 风格资产已支持手工沉淀，但还没有回灌到 Phase 4 生成链路
+  - `style_assets` 已接回 Phase 4 写稿 Prompt，新 generation 会落 `prompt_type/prompt_version`
   - 服务器已验证反馈导入、实验榜聚合和 `/admin/phase6`
 
 ## 开发约束

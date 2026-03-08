@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.enums import TaskStatus
 from app.core.progress import get_progress
-from app.core.prompt_versions import resolve_generation_prompt_version
+from app.core.prompt_versions import resolve_generation_prompt_metadata, resolve_generation_prompt_version
 from app.core.security import verify_bearer_token
 from app.db.session import get_db_session
 from app.repositories.article_analysis_repository import ArticleAnalysisRepository
@@ -183,6 +183,12 @@ def get_task_draft(task_id: str, session: Session = Depends(get_db_session)) -> 
             GenerationResponse(
                 generation_id=generation.id,
                 version_no=generation.version_no,
+                prompt_type=(generation.prompt_type or None),
+                prompt_version=resolve_generation_prompt_version(
+                    generation.model_name,
+                    prompt_type=generation.prompt_type or None,
+                    stored_prompt_version=generation.prompt_version,
+                ),
                 model_name=generation.model_name,
                 title=generation.title,
                 subtitle=generation.subtitle,
@@ -247,10 +253,17 @@ def get_task_workspace(task_id: str, session: Session = Depends(get_db_session))
     generation_rows: list[GenerationWorkspaceResponse] = []
     for generation in generations:
         review = review_repo.get_latest_by_generation_id(generation.id)
+        generation_prompt_type, generation_prompt_version = resolve_generation_prompt_metadata(
+            generation.model_name,
+            stored_prompt_type=generation.prompt_type,
+            stored_prompt_version=generation.prompt_version,
+        )
         generation_rows.append(
             GenerationWorkspaceResponse(
                 generation_id=generation.id,
                 version_no=generation.version_no,
+                prompt_type=generation_prompt_type,
+                prompt_version=generation_prompt_version,
                 model_name=generation.model_name,
                 title=generation.title,
                 subtitle=generation.subtitle,
@@ -264,7 +277,6 @@ def get_task_workspace(task_id: str, session: Session = Depends(get_db_session))
                 score_risk=float(generation.score_risk) if generation.score_risk is not None else None,
                 status=generation.status,
                 created_at=generation.created_at,
-                prompt_version=resolve_generation_prompt_version(generation.model_name),
                 review=(
                     ReviewReportResponse(
                         review_report_id=review.id,
