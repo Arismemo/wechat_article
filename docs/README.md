@@ -46,6 +46,8 @@
   - 阶段 5 后台工作台、人工审核与手动操作说明
 - `docs/phase-6/feedback-loop.md`
   - 阶段 6 手工反馈导入、Prompt 实验榜与风格资产沉淀说明
+- `docs/phase-6/deployment-log.md`
+  - 阶段 6 服务器部署与 smoke test 记录
 - `docs/research-wechat-fetch-and-browser-options-2026-03-07.md`
   - 微信公众号读取方案、Claude Code skill 和浏览器自动化方案调研
 - `docs/adr/0001-git-based-deploy.md`
