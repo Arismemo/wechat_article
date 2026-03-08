@@ -276,11 +276,12 @@ def phase2_console() -> str:
               if (Number.isNaN(date.getTime())) return String(value);
               return date.toLocaleString("zh-CN", { hour12: false });
             };
+            const apiUrl = (path) => new URL(path, window.location.origin).toString();
 
             const request = async (method, path, body) => {
               const token = tokenEl.value.trim();
               if (!token) throw new Error("缺少 Bearer Token");
-              const response = await fetch(path, {
+              const response = await fetch(apiUrl(path), {
                 method,
                 headers: {
                   "Authorization": `Bearer ${token}`,
@@ -663,6 +664,8 @@ def phase5_console() -> str:
             }
             .board {
               display: grid;
+              align-content: start;
+              grid-auto-rows: max-content;
               gap: 12px;
             }
             .filter-grid {
@@ -725,15 +728,23 @@ def phase5_console() -> str:
               border: 1px solid var(--line);
               border-radius: 18px;
               padding: 14px;
+              display: grid;
+              align-content: start;
+              gap: 8px;
+              min-width: 0;
+              position: relative;
+              isolation: isolate;
             }
             .task-card h3, .detail-card h3, .generation-card h3 {
               margin: 0 0 8px;
               font-size: 16px;
               line-height: 1.45;
+              overflow-wrap: anywhere;
             }
             .task-card .meta, .detail-card .meta {
               display: grid;
               gap: 4px;
+              overflow-wrap: anywhere;
             }
             .task-actions {
               display: flex;
@@ -774,6 +785,8 @@ def phase5_console() -> str:
             }
             .generation-list, .audit-list {
               display: grid;
+              align-content: start;
+              grid-auto-rows: max-content;
               gap: 12px;
             }
             .compare-toolbar {
@@ -900,6 +913,20 @@ def phase5_console() -> str:
               text-decoration: none;
               border-bottom: 1px solid rgba(18, 72, 63, 0.25);
             }
+            .fold {
+              border: 1px dashed var(--line);
+              border-radius: 16px;
+              padding: 12px 14px;
+              background: rgba(255, 253, 249, 0.7);
+            }
+            .fold summary {
+              cursor: pointer;
+              color: var(--muted);
+              font-size: 13px;
+            }
+            .fold .meta {
+              margin-top: 10px;
+            }
             @media (max-width: 1024px) {
               .layout {
                 grid-template-columns: 1fr;
@@ -918,7 +945,7 @@ def phase5_console() -> str:
             <section class="hero">
               <span class="eyebrow">PHASE 5 ADMIN CONSOLE</span>
               <h1>任务看板、人工审核与手动干预</h1>
-              <p>这个工作台把最近任务、源文与 Brief、生成稿版本、审稿风险、审计轨迹和手动操作放到一页里。目标是做到不翻日志，也能完成查看、重跑、重生成和推草稿。</p>
+              <p>看任务，做决定，推草稿。不翻日志，也能完成日常审核。</p>
             </section>
 
             <section class="layout">
@@ -961,20 +988,25 @@ def phase5_console() -> str:
                     <button id="push-draft" class="warn">推送微信草稿</button>
                     <button id="clear" class="danger">清空输出</button>
                   </div>
-                  <p class="hint">推荐 SOP：先加载工作台看最新状态和风险，再决定是回补 Phase3、重生成、人工放行 / 驳回，还是直接切换“允许推草稿 / 禁止推草稿”。`推送微信草稿` 只会推最新 accepted generation；人工审核备注会写入 audit log。</p>
+                  <p class="hint">先加载工作台，再决定：重跑、通过、驳回，或者推草稿。</p>
                 </section>
 
                 <section class="panel">
-                  <h2>人工审核 SOP</h2>
+                  <h2>最短操作</h2>
                   <div class="meta">
-                    <div>1. 先看任务状态、风险分和最近一次审稿结论，确认是 `review_passed`、`needs_regenerate` 还是 `needs_manual_review`。</div>
-                    <div>2. 再看源文摘要、Brief 新角度、最近两版生成稿，判断问题是研究输入不足，还是写稿结构和表达有偏差。</div>
-                    <div>3. 如果研究层明显缺信息，先入队 Phase3；如果 Brief 已够，但稿子不行，直接重跑 Phase4。</div>
-                    <div>4. 如果人工判断稿件可用，就执行“人工确认通过”；如果需要重写，就执行“人工驳回重写”。已推草稿的版本不允许再驳回。</div>
-                    <div>5. 如果内容还不想进入草稿箱，就先点“禁止推草稿”；确认放行后，再点“允许推草稿”。</div>
-                    <div>6. 只有在 latest generation 为 accepted、风险可接受且推草稿许可为 allowed/default 时，才推微信草稿箱。</div>
-                    <div>7. 最后核对审计轨迹，确认这次手动操作已经落日志，避免重复触发。</div>
+                    <div>1. 刷新最近任务，点一条卡片。</div>
+                    <div>2. 右边先看状态、最新一稿和风险。</div>
+                    <div>3. 可用就通过，不行就驳回或重跑。</div>
+                    <div>4. 最后再决定是否推草稿。</div>
                   </div>
+                  <details class="fold">
+                    <summary>展开完整规则</summary>
+                    <div class="meta">
+                      <div>研究层明显缺信息时，先入队 Phase3；Brief 已够但稿子不行时，直接重跑 Phase4。</div>
+                      <div>已推草稿的版本不允许再驳回；人工审核备注会写入 audit log。</div>
+                      <div>只有 latest generation 已 accepted 且推草稿许可允许时，才推微信草稿箱。</div>
+                    </div>
+                  </details>
                 </section>
 
                 <section class="panel">
@@ -1008,7 +1040,7 @@ def phase5_console() -> str:
                   <div class="actions" style="margin-top: 0;">
                     <button id="refresh-recent" class="secondary">刷新最近任务</button>
                   </div>
-                  <p class="hint">默认优先显示仍需要人或系统处理的任务。看板会按状态自动分组，方便先处理 `needs_regenerate`、`needs_manual_review`、`review_passed` 这类关键卡点。</p>
+                  <p class="hint">默认先把还没收口的任务放到前面。</p>
                   <div class="summary-strip" id="recent-summary"></div>
                   <div class="board" id="recent-list">
                     <div class="hint">等待加载最近任务...</div>
@@ -1136,10 +1168,11 @@ def phase5_console() -> str:
               if (!token) throw new Error("请先输入 Bearer Token");
               return token;
             };
+            const apiUrl = (path) => new URL(path, window.location.origin).toString();
 
             const request = async (method, path, body) => {
               saveDraft();
-              const response = await fetch(path, {
+              const response = await fetch(apiUrl(path), {
                 method,
                 headers: {
                   "Authorization": `Bearer ${requireToken()}`,
@@ -2048,7 +2081,7 @@ def phase6_console() -> str:
             <section class="hero">
               <span class="eyebrow">PHASE 6 FEEDBACK LOOP</span>
               <h1>Phase 6 反馈台</h1>
-              <p>这个页面处理发布后的手工反馈导入、自动同步、Prompt 实验榜和风格资产沉淀。即使暂时没有微信官方分析接口，也可以先接入任意 HTTP 数据源，把 T+1 / T+3 / T+7 快照自动回收到系统。</p>
+              <p>这里回收发布后的数据：导入反馈、自动同步、看实验榜、存风格资产。</p>
             </section>
 
             <section class="layout">
@@ -2098,7 +2131,7 @@ def phase6_console() -> str:
                     <button id="queue-feedback-sync" class="secondary">当前任务入队</button>
                     <button id="queue-recent-feedback-sync" class="secondary">扫描最近草稿并入队</button>
                   </div>
-                  <p class="hint">自动同步会按 `wechat_media_id` 调上游反馈 Provider 拉取可用快照，并复用当前的反馈落库逻辑。当前任务同步需要已存在成功草稿；批量扫描只会处理最近已推送草稿的任务。</p>
+                  <p class="hint">自动同步只处理已经成功入草稿的任务。</p>
                 </section>
 
                 <section class="panel">
@@ -2148,7 +2181,7 @@ def phase6_console() -> str:
                   <div class="actions">
                     <button id="import-feedback">导入反馈</button>
                   </div>
-                  <p class="hint">如果不填 Generation ID，服务端会优先取最新 accepted generation。相同 generation 的同一观察窗口会覆盖更新，不会重复累计样本。</p>
+                  <p class="hint">不填 Generation ID 时，默认取最新 accepted generation。</p>
                 </section>
 
                 <section class="panel">
@@ -2214,7 +2247,7 @@ def phase6_console() -> str:
 
                 <section class="panel">
                   <h2>Prompt 实验榜</h2>
-                  <p class="hint">当前按 `prompt_type + prompt_version + day_offset` 聚合。先用手工导入跑出样本，再决定是否做自动增长优化。</p>
+                  <p class="hint">按 prompt 版本和观察窗口聚合。</p>
                   <div class="list" id="experiment-list">
                     <div class="hint">等待加载实验榜...</div>
                   </div>
@@ -2222,7 +2255,7 @@ def phase6_console() -> str:
 
                 <section class="panel">
                   <h2>风格资产库</h2>
-                  <p class="hint">这里只做最小资产沉淀。先把经过验证的开头、标题方向、结构骨架录进来，后面再接回生成链路。</p>
+                  <p class="hint">只保留已经验证过、值得复用的写法。</p>
                   <div class="list" id="style-asset-list">
                     <div class="hint">等待加载风格资产...</div>
                   </div>

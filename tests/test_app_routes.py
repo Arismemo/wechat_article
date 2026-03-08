@@ -119,12 +119,14 @@ class AppRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("Phase 5 工作台", response.text)
         self.assertIn("任务看板、人工审核与手动干预", response.text)
+        self.assertIn("最短操作", response.text)
         self.assertIn("推送微信草稿", response.text)
         self.assertIn("版本差异视图", response.text)
         self.assertIn("人工确认通过", response.text)
         self.assertIn("人工驳回重写", response.text)
         self.assertIn("允许推草稿", response.text)
         self.assertIn("禁止推草稿", response.text)
+        self.assertIn("const apiUrl = (path) => new URL(path, window.location.origin).toString();", response.text)
 
     def test_admin_console_page_renders(self) -> None:
         app_module = reload(import_module("app.main"))
@@ -148,9 +150,11 @@ class AppRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("RUNTIME SETTINGS & STATUS", response.text)
         self.assertIn("运行参数设置", response.text)
-        self.assertIn("这里只允许修改可以热覆盖的运行参数", response.text)
+        self.assertIn("这里只改运行参数，不改密钥和基础设施。", response.text)
+        self.assertIn("不能改什么", response.text)
         self.assertIn("环境状态", response.text)
         self.assertIn("告警测试", response.text)
+        self.assertIn("const apiUrl = (path) => new URL(path, window.location.origin).toString();", response.text)
 
     def test_admin_portal_page_renders(self) -> None:
         app_module = reload(import_module("app.main"))

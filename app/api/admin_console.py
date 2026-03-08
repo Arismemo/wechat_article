@@ -2174,11 +2174,12 @@ def unified_console() -> str:
               activeOnlyEl.checked = (localStorage.getItem("phase7_console_active_only") || "true") !== "false";
               selectedTaskId = localStorage.getItem("phase7_console_task") || "";
             };
+            const apiUrl = (path) => new URL(path, window.location.origin).toString();
 
             const request = async (path) => {
               const token = tokenEl.value.trim();
               if (!token) throw new Error("请先输入 Bearer Token");
-              const response = await fetch(path, {
+              const response = await fetch(apiUrl(path), {
                 headers: {
                   Authorization: `Bearer ${token}`,
                 },
@@ -2737,6 +2738,20 @@ def settings_console() -> str:
               grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
               gap: 14px;
             }
+            .fold {
+              border: 1px dashed var(--line);
+              border-radius: 16px;
+              padding: 12px 14px;
+              background: rgba(255, 253, 248, 0.7);
+            }
+            .fold summary {
+              cursor: pointer;
+              color: var(--muted);
+              font-size: 13px;
+            }
+            .fold .list {
+              margin-top: 10px;
+            }
             .env-card {
               border: 1px solid var(--line);
               border-radius: 18px;
@@ -2829,7 +2844,7 @@ def settings_console() -> str:
             <section class="hero">
               <span class="eyebrow">RUNTIME SETTINGS & STATUS</span>
               <h1>运行参数设置</h1>
-              <p>这里只允许修改可以热覆盖的运行参数，例如写稿模型、审稿模型和自动反馈开关。数据库地址、第三方密钥、Bearer Token、微信 Secret 这类基础设施和敏感配置仍然留在 `.env`；Phase 7D 会在这里额外显示只读环境状态，并提供测试告警入口。</p>
+              <p>这里只改运行参数，不改密钥和基础设施。</p>
             </section>
 
             <section class="layout">
@@ -2856,13 +2871,16 @@ def settings_console() -> str:
                 </section>
 
                 <section class="panel">
-                  <h2>边界说明</h2>
-                  <ul class="list">
-                    <li>这里的值会优先覆盖环境变量，但仅限少量运行参数。</li>
-                    <li>密钥类值仍然只保留在服务器 `.env`，页面不显示也不支持改写。</li>
-                    <li>Phase 4 仍然受 `WECHAT_ENABLE_DRAFT_PUSH` 总开关约束。</li>
-                    <li>自动反馈切到 `http` 前，仍需在 `.env` 里配置 `FEEDBACK_SYNC_HTTP_URL` 与可选 `FEEDBACK_SYNC_API_KEY`。</li>
-                  </ul>
+                  <h2>不能改什么</h2>
+                  <details class="fold">
+                    <summary>展开说明</summary>
+                    <ul class="list">
+                      <li>这里只覆盖少量运行参数，不改数据库、Redis、域名或容器配置。</li>
+                      <li>密钥类值仍然只保留在服务器 `.env`，页面不显示也不支持改写。</li>
+                      <li>Phase 4 仍然受 `WECHAT_ENABLE_DRAFT_PUSH` 总开关约束。</li>
+                      <li>自动反馈切到 `http` 前，仍需在 `.env` 里配置 `FEEDBACK_SYNC_HTTP_URL` 与可选 `FEEDBACK_SYNC_API_KEY`。</li>
+                    </ul>
+                  </details>
                 </section>
 
                 <section class="panel">
@@ -2882,7 +2900,7 @@ def settings_console() -> str:
               <div class="stack">
                 <section class="panel">
                   <h2>当前设置</h2>
-                  <div class="hint" style="margin-bottom: 14px;">保存后新任务会读取最新运行参数；恢复默认会删除数据库覆盖值，重新回退到环境变量默认值。</div>
+                  <div class="hint" style="margin-bottom: 14px;">保存后新任务生效；恢复默认会回退到环境变量。</div>
                   <div id="categories" class="categories">
                     <div class="empty">请输入 Bearer Token 后点击“刷新设置”。</div>
                   </div>
@@ -2890,7 +2908,7 @@ def settings_console() -> str:
 
                 <section class="panel">
                   <h2>环境状态</h2>
-                  <div class="hint" style="margin-bottom: 14px;">这里是只读环境状态面板。密钥不会明文展示，只告诉你当前是否已配置；普通 URL 和基础参数会显示简化预览。</div>
+                  <div class="hint" style="margin-bottom: 14px;">这里只读显示，密钥不会明文展示。</div>
                   <div id="runtime-status" class="categories">
                     <div class="empty">请输入 Bearer Token 后点击“刷新设置”。</div>
                   </div>
@@ -2929,6 +2947,7 @@ def settings_console() -> str:
             const renderOutput = (value) => {
               outputEl.textContent = typeof value === "string" ? value : JSON.stringify(value, null, 2);
             };
+            const apiUrl = (path) => new URL(path, window.location.origin).toString();
 
             const escapeHtml = (value) =>
               String(value)
@@ -2964,7 +2983,7 @@ def settings_console() -> str:
                 Authorization: `Bearer ${token}`,
                 ...(options.headers || {}),
               };
-              const response = await fetch(path, { ...options, headers });
+              const response = await fetch(apiUrl(path), { ...options, headers });
               const text = await response.text();
               let body = null;
               try {
