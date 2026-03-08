@@ -1202,6 +1202,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             }};
 
             const loadSnapshot = async () => {{
+              const previousSelectedTaskId = state.selectedTaskId;
               const response = await fetch(appUrl("/admin/api/home-snapshot", {{
                 limit: 18,
                 selected_task_id: state.selectedTaskId,
@@ -1224,6 +1225,16 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                 !state.snapshot.tasks.some((item) => item.task_id === state.selectedTaskId)
               ) {{
                 state.selectedTaskId = state.snapshot.tasks[0]?.task_id || null;
+              }}
+              const visibleTasks = filteredTasks();
+              if (
+                visibleTasks.length &&
+                (!state.selectedTaskId || !visibleTasks.some((item) => item.task_id === state.selectedTaskId))
+              ) {{
+                state.selectedTaskId = visibleTasks[0].task_id;
+              }}
+              if (state.selectedTaskId && state.selectedTaskId !== previousSelectedTaskId) {{
+                return loadSnapshot();
               }}
               syncUrl();
               render();
