@@ -51,6 +51,8 @@
 - `publication_metrics`
 - `prompt_experiments`
 - `style_assets`
+- 后续追加：
+  - `20260308_0005_add_generation_prompt_version_columns`
 
 ## 服务器 smoke test
 
@@ -108,6 +110,41 @@
 Phase 6 第一版已经完成服务器收口，当前可用闭环是：
 
 `review_passed / draft_saved 任务 -> 手工导入 T+1/T+3/T+7 指标 -> Prompt 实验榜聚合 -> 风格资产沉淀`
+
+## 追加联调：phase4-v2 反馈回写
+
+在将 `style_assets` 接回 Phase 4 后，追加做了一轮 “新 prompt 版本 -> 反馈导入” 联调，用来确认 Phase 6 不会再把新 generation 记成旧版 `phase4-v1`。
+
+追加验收任务：
+
+- `task_id`: `f703c3ef-e358-48ab-936d-187418c584c5`
+- `generation_id`: `71c6bc73-a527-4e4a-be42-31b02b542008`
+
+追加验收结果：
+
+1. `GET /api/v1/tasks/{task_id}/workspace`
+   - 返回最新 generation：
+     - `prompt_type=phase4_write`
+     - `prompt_version=phase4-v2`
+2. `POST /internal/v1/tasks/{task_id}/import-feedback`
+   - 请求窗口：`T+1`
+   - 请求值：
+     - `read_count=1666`
+     - `like_count=101`
+     - `share_count=18`
+     - `comment_count=6`
+     - `click_rate=0.2031`
+   - 返回：
+     - `metric_id=917281bf-3b2e-4710-9c61-cedb0421f0cd`
+     - `prompt_type=phase4_write`
+     - `prompt_version=phase4-v2`
+3. `GET /api/v1/tasks/{task_id}/feedback`
+   - 返回该条 feedback 的 `prompt_version=phase4-v2`
+
+结论：
+
+- 新一轮 Phase 4 成稿已经能被 Phase 6 以真实 `phase4-v2` 版本回收
+- Prompt 实验榜后续可以开始对比 `phase4-v1` 与 `phase4-v2`
 
 ## 后续建议
 
