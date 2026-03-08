@@ -2870,7 +2870,7 @@ def settings_console() -> str:
               main { padding: 20px 14px 36px; }
               .panel { padding: 16px; border-radius: 20px; }
               .hero h1 { font-size: 30px; }
-              .setting-actions, .actions { flex-direction: column; }
+            .setting-actions, .actions { flex-direction: column; }
               button { width: 100%; }
             }
           </style>
@@ -2901,8 +2901,8 @@ def settings_console() -> str:
                     <textarea id="note" placeholder="例如：将写稿模型切到新版本做小流量验证"></textarea>
                   </div>
                   <div class="actions">
-                    <button id="refresh">刷新设置</button>
-                    <button id="clear-output" class="secondary">清空输出</button>
+                    <button id="refresh">刷新</button>
+                    <button id="clear-output" class="secondary">清空</button>
                   </div>
                 </section>
 
@@ -2920,16 +2920,18 @@ def settings_console() -> str:
                 </section>
 
                 <section class="panel">
-                  <h2>告警测试</h2>
-                  <div class="hint" id="alert-hint">请输入 Bearer Token 后刷新状态。若 `ALERT_WEBHOOK_URL` 未配置，这里会显示为不可用。</div>
-                  <div class="actions">
-                    <button id="send-alert">发送测试告警</button>
-                  </div>
-                </section>
-
-                <section class="panel">
-                  <h2>调试输出</h2>
-                  <pre id="output">等待请求。</pre>
+                  <h2>辅助工具</h2>
+                  <details class="fold">
+                    <summary>测试告警</summary>
+                    <div class="hint" id="alert-hint" style="margin-top: 10px;">先填 Bearer Token，再点“刷新”。若 `ALERT_WEBHOOK_URL` 未配置，这里会显示为不可用。</div>
+                    <div class="actions">
+                      <button id="send-alert">发送</button>
+                    </div>
+                  </details>
+                  <details class="fold">
+                    <summary>调试输出</summary>
+                    <pre id="output">等待请求。</pre>
+                  </details>
                 </section>
               </div>
 
@@ -2938,7 +2940,7 @@ def settings_console() -> str:
                   <h2>当前设置</h2>
                   <div class="hint" style="margin-bottom: 14px;">改完只影响新任务；恢复默认会回退到环境变量。</div>
                   <div id="categories" class="categories">
-                    <div class="empty">请输入 Bearer Token 后点击“刷新设置”。</div>
+                    <div class="empty">请输入 Bearer Token 后点击“刷新”。</div>
                   </div>
                 </section>
 
@@ -2946,7 +2948,7 @@ def settings_console() -> str:
                   <h2>环境状态</h2>
                   <div class="hint" style="margin-bottom: 14px;">这里只读显示，密钥不会明文展示。</div>
                   <div id="runtime-status" class="categories">
-                    <div class="empty">请输入 Bearer Token 后点击“刷新设置”。</div>
+                    <div class="empty">请输入 Bearer Token 后点击“刷新”。</div>
                   </div>
                 </section>
               </div>
@@ -3148,7 +3150,7 @@ def settings_console() -> str:
 
               const alerts = payload.alerts || {};
               if (alerts.enabled) {
-                alertHintEl.textContent = `告警已启用 · ${alerts.destination_preview || "Webhook 已配置"}。可以发送测试告警验证连通性。`;
+                alertHintEl.textContent = `告警已启用 · ${alerts.destination_preview || "Webhook 已配置"}。可以发一条测试消息。`;
               } else {
                 alertHintEl.textContent = alerts.note || "当前未配置 ALERT_WEBHOOK_URL，测试告警按钮会返回错误。";
               }
@@ -3211,7 +3213,7 @@ def settings_console() -> str:
 
             document.getElementById("send-alert").addEventListener("click", () => {
               saveDraft();
-              setStatus("发送测试告警中");
+              setStatus("发送测试");
               request("/api/v1/admin/alerts/test", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },

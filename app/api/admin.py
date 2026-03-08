@@ -1005,32 +1005,32 @@ def phase5_console() -> str:
                     <div class="action-block">
                       <h3>开始</h3>
                       <div class="action-grid">
-                        <button id="queue-url">提交链接并入队 Phase4</button>
-                        <button id="run-url">提交链接并同步执行 Phase4</button>
-                        <button id="load-workspace" class="secondary">加载工作台</button>
-                        <button id="clear" class="danger">清空输出</button>
+                        <button id="queue-url">链接入队</button>
+                        <button id="run-url">直接执行</button>
+                        <button id="load-workspace" class="secondary">加载详情</button>
+                        <button id="clear" class="danger">清空</button>
                       </div>
                     </div>
                     <div class="action-block">
                       <h3>继续任务</h3>
                       <div class="action-grid">
                         <button id="queue-phase3" class="secondary">入队 Phase3</button>
-                        <button id="run-phase4" class="secondary">同步执行 Phase4</button>
+                        <button id="run-phase4" class="secondary">执行 P4</button>
                         <button id="queue-phase4" class="secondary">入队 Phase4</button>
-                        <button id="push-draft" class="warn">推送微信草稿</button>
+                        <button id="push-draft" class="warn">推送草稿</button>
                       </div>
                     </div>
                     <div class="action-block">
                       <h3>人工处理</h3>
                       <div class="action-grid">
-                        <button id="approve-generation" class="secondary">人工确认通过</button>
+                        <button id="approve-generation" class="secondary">人工通过</button>
                         <button id="reject-generation" class="danger">人工驳回重写</button>
-                        <button id="allow-push" class="secondary">允许推草稿</button>
-                        <button id="block-push" class="danger">禁止推草稿</button>
+                        <button id="allow-push" class="secondary">允许推稿</button>
+                        <button id="block-push" class="danger">禁止推稿</button>
                       </div>
                     </div>
                   </div>
-                  <p class="hint">先加载工作台，再决定：重跑、通过、驳回，或者推草稿。</p>
+                  <p class="hint">先加载详情，再决定：重跑、通过、驳回，或者推稿。</p>
                 </section>
 
                 <section class="panel">
@@ -1718,7 +1718,7 @@ def phase5_console() -> str:
               try {
                 const taskId = taskEl.value.trim();
                 if (!taskId) throw new Error("请先输入 task_id");
-                setStatus("人工确认通过");
+                setStatus("人工通过");
                 const result = await request("POST", `/internal/v1/tasks/${taskId}/approve-latest-generation`, buildManualReviewPayload());
                 renderOutput(result);
                 await refreshRecent();
@@ -1748,7 +1748,7 @@ def phase5_console() -> str:
               try {
                 const taskId = taskEl.value.trim();
                 if (!taskId) throw new Error("请先输入 task_id");
-                setStatus("允许推草稿");
+                setStatus("允许推稿");
                 const result = await request("POST", `/internal/v1/tasks/${taskId}/allow-wechat-draft-push`, buildManualReviewPayload());
                 renderOutput(result);
                 await refreshRecent();
@@ -1849,7 +1849,7 @@ def phase5_console() -> str:
                   return;
                 }
                 if (action === "approve") {
-                  setStatus("人工确认通过");
+                  setStatus("人工通过");
                   const result = await request("POST", `/internal/v1/tasks/${taskId}/approve-latest-generation`, buildManualReviewPayload());
                   renderOutput(result);
                   await refreshRecent();
@@ -1865,7 +1865,7 @@ def phase5_console() -> str:
                   return;
                 }
                 if (action === "allow-push") {
-                  setStatus("允许推草稿");
+                  setStatus("允许推稿");
                   const result = await request("POST", `/internal/v1/tasks/${taskId}/allow-wechat-draft-push`, buildManualReviewPayload());
                   renderOutput(result);
                   await refreshRecent();
@@ -2178,10 +2178,10 @@ def phase6_console() -> str:
                     </div>
                   </div>
                   <div class="actions">
-                    <button id="query-feedback" class="secondary">查询任务反馈</button>
-                    <button id="refresh-experiments" class="secondary">刷新实验榜</button>
-                    <button id="refresh-assets" class="secondary">刷新风格资产</button>
-                    <button id="clear-output" class="danger">清空输出</button>
+                    <button id="query-feedback" class="secondary">查反馈</button>
+                    <button id="refresh-experiments" class="secondary">查实验</button>
+                    <button id="refresh-assets" class="secondary">查资产</button>
+                    <button id="clear-output" class="danger">清空</button>
                   </div>
                 </section>
 
@@ -2198,9 +2198,9 @@ def phase6_console() -> str:
                     </div>
                   </div>
                   <div class="actions">
-                    <button id="run-feedback-sync">同步当前任务</button>
-                    <button id="queue-feedback-sync" class="secondary">当前任务入队</button>
-                    <button id="queue-recent-feedback-sync" class="secondary">扫描最近草稿并入队</button>
+                    <button id="run-feedback-sync">立即同步</button>
+                    <button id="queue-feedback-sync" class="secondary">入队同步</button>
+                    <button id="queue-recent-feedback-sync" class="secondary">扫描入队</button>
                   </div>
                   <p class="hint">自动同步只处理已经成功入草稿的任务。</p>
                 </section>
@@ -2250,7 +2250,7 @@ def phase6_console() -> str:
                     <textarea id="feedback-notes" placeholder="例如：后台手工抄录 T+1 数据"></textarea>
                   </div>
                   <div class="actions">
-                    <button id="import-feedback">导入反馈</button>
+                    <button id="import-feedback">导入</button>
                   </div>
                   <p class="hint">不填 Generation ID 时，默认取最新 accepted generation。</p>
                 </section>
@@ -2264,7 +2264,7 @@ def phase6_console() -> str:
                       <textarea id="feedback-csv" placeholder="task_id,generation_id,day_offset,read_count,like_count,share_count,comment_count,click_rate,notes&#10;f703c3ef-e358-48ab-936d-187418c584c5,,1,1666,101,18,6,0.2031,第一批回填"></textarea>
                     </div>
                     <div class="actions">
-                      <button id="import-feedback-csv" class="secondary">批量导入 CSV</button>
+                      <button id="import-feedback-csv" class="secondary">导入 CSV</button>
                     </div>
                     <p class="hint tool-note">支持常用列；不带 `task_id` 时，会默认使用上面的当前 `task_id`。</p>
                   </details>
@@ -2297,7 +2297,7 @@ def phase6_console() -> str:
                       <textarea id="asset-notes" placeholder="可记录来源任务、适用题材、风险提醒"></textarea>
                     </div>
                     <div class="actions">
-                      <button id="create-asset">新建风格资产</button>
+                      <button id="create-asset">新建资产</button>
                     </div>
                     <p class="hint tool-note">只把已经验证过、会重复用到的写法沉淀下来。</p>
                   </details>
@@ -2578,7 +2578,7 @@ def phase6_console() -> str:
             document.getElementById("query-feedback").addEventListener("click", async () => {
               try {
                 saveDraft();
-                setStatus("查询任务反馈");
+                setStatus("查反馈");
                 const payload = await queryTaskFeedback();
                 renderOutput(payload);
                 setStatus("完成");
@@ -2591,7 +2591,7 @@ def phase6_console() -> str:
             document.getElementById("refresh-experiments").addEventListener("click", async () => {
               try {
                 saveDraft();
-                setStatus("刷新实验榜");
+                setStatus("查实验");
                 const items = await refreshExperiments();
                 renderOutput(items);
                 setStatus("完成");
@@ -2604,7 +2604,7 @@ def phase6_console() -> str:
             document.getElementById("refresh-assets").addEventListener("click", async () => {
               try {
                 saveDraft();
-                setStatus("刷新风格资产");
+                setStatus("查资产");
                 const items = await refreshStyleAssets();
                 renderOutput(items);
                 setStatus("完成");
