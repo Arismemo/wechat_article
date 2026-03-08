@@ -1,7 +1,7 @@
 # 网页端控制台规划
 
 更新时间：2026-03-08
-状态：Draft
+状态：Phase 7A Started
 
 ## 1. 结论
 
@@ -53,8 +53,9 @@
 第一阶段：
 
 - 新增统一控制台页：`/admin/console`
-- 把 Phase 5 看板嵌进控制台首页
-- 增加按时间、状态、来源筛选
+- 自动轮询 `/api/v1/tasks` 和当前选中任务的 `/workspace`
+- 增加按状态、来源、关键词、起始时间筛选
+- 通过快捷入口跳转到 `/admin/phase5` 和 `/admin/phase6`
 - 前端每 3 到 5 秒自动轮询 `/api/v1/tasks` 和 `/workspace`
 
 第二阶段：

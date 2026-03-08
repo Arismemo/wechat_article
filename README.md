@@ -18,6 +18,7 @@
 - Phase 4：写稿、审稿、自动修订、自动/手动推草稿
 - Phase 5：后台工作台、任务看板、版本 diff、人工审核、人工推草稿开关
 - Phase 6：手工/批量反馈导入、Prompt 实验榜、风格资产、自动反馈同步入口
+- Phase 7A：统一监控首页、自动轮询、历史筛选、任务聚合详情
 
 ## 仓库结构
 
@@ -43,6 +44,7 @@
 后台页：
 
 - `GET /admin/phase2`
+- `GET /admin/console`
 - `GET /admin/phase5`
 - `GET /admin/phase6`
 
@@ -164,6 +166,11 @@ bash scripts/deploy_prebuilt_from_local.sh
 
 ### 方式 2：后台工作台
 
+- `/admin/console`
+  - 统一任务监控首页
+  - 自动轮询任务列表和当前选中任务
+  - 支持按状态、来源、关键词、起始时间筛选历史任务
+  - 可直接查看聚合任务详情，再跳转到 Phase 5 / Phase 6
 - `/admin/phase5`
   - 查看最近任务、状态分组、待处理筛选、版本 diff、人工审核
 - `/admin/phase6`
@@ -227,4 +234,6 @@ bash scripts/deploy_prebuilt_from_local.sh
 - `docs/README.md`
 - `docs/mvp-closeout-2026-03-08.md`
 - `docs/phase-0/ios-shortcuts.md`
+- `docs/phase-7/console-monitoring.md`
+- `docs/web-console-plan.md`
 - `CHANGELOG.md`

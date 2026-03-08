@@ -80,6 +80,7 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("/api/v1/feedback/experiments", routes)
         self.assertIn("/api/v1/feedback/style-assets", routes)
         self.assertIn("/admin/phase2", routes)
+        self.assertIn("/admin/console", routes)
         self.assertIn("/admin/phase5", routes)
         self.assertIn("/admin/phase6", routes)
 
@@ -111,6 +112,18 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("允许推草稿", response.text)
         self.assertIn("禁止推草稿", response.text)
 
+    def test_admin_console_page_renders(self) -> None:
+        app_module = reload(import_module("app.main"))
+        client = TestClient(app_module.create_app())
+
+        response = client.get("/admin/console")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Phase 7A 统一控制台", response.text)
+        self.assertIn("统一任务监控首页", response.text)
+        self.assertIn("自动轮询任务列表和当前选中任务", response.text)
+        self.assertIn("打开 Phase 5 审核台", response.text)
+
     def test_admin_phase6_page_renders(self) -> None:
         app_module = reload(import_module("app.main"))
         client = TestClient(app_module.create_app())
@@ -140,6 +153,13 @@ class AppRouteTests(unittest.TestCase):
             authorized = client.get("/admin/phase5", headers={"Authorization": f"Basic {encoded}"})
             self.assertEqual(authorized.status_code, 200)
             self.assertIn("Phase 5 工作台", authorized.text)
+
+            console_unauthorized = client.get("/admin/console")
+            self.assertEqual(console_unauthorized.status_code, 401)
+
+            console_authorized = client.get("/admin/console", headers={"Authorization": f"Basic {encoded}"})
+            self.assertEqual(console_authorized.status_code, 200)
+            self.assertIn("统一任务监控首页", console_authorized.text)
 
             phase6_unauthorized = client.get("/admin/phase6")
             self.assertEqual(phase6_unauthorized.status_code, 401)

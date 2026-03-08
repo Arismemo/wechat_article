@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.core.enums import ACTIVE_TASK_STATUSES
@@ -26,12 +27,34 @@ class TaskRepository:
         )
         return self.session.scalar(statement)
 
-    def list_recent(self, limit: int = 10, *, active_only: bool = False, status_filter: Optional[str] = None) -> list[Task]:
+    def list_recent(
+        self,
+        limit: int = 10,
+        *,
+        active_only: bool = False,
+        status_filter: Optional[str] = None,
+        source_type: Optional[str] = None,
+        query: Optional[str] = None,
+        created_after: Optional[datetime] = None,
+    ) -> list[Task]:
         statement = select(Task)
         if active_only:
             statement = statement.where(Task.status.in_([status.value for status in ACTIVE_TASK_STATUSES]))
         if status_filter:
             statement = statement.where(Task.status == status_filter)
+        if source_type:
+            statement = statement.where(Task.source_type == source_type)
+        if query:
+            pattern = f"%{query.strip()}%"
+            statement = statement.where(
+                or_(
+                    Task.task_code.ilike(pattern),
+                    Task.source_url.ilike(pattern),
+                    Task.normalized_url.ilike(pattern),
+                )
+            )
+        if created_after:
+            statement = statement.where(Task.created_at >= created_after)
         statement = statement.order_by(Task.created_at.desc()).limit(limit)
         return list(self.session.scalars(statement))
 

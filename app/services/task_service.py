@@ -116,9 +116,25 @@ class TaskService:
         self.session.commit()
         return task
 
-    def list_recent(self, limit: int = 10, *, active_only: bool = False, status_filter: Optional[str] = None) -> list[TaskSummary]:
+    def list_recent(
+        self,
+        limit: int = 10,
+        *,
+        active_only: bool = False,
+        status_filter: Optional[str] = None,
+        source_type: Optional[str] = None,
+        query: Optional[str] = None,
+        created_after: Optional[datetime] = None,
+    ) -> list[TaskSummary]:
         items: list[TaskSummary] = []
-        for task in self.tasks.list_recent(limit, active_only=active_only, status_filter=status_filter):
+        for task in self.tasks.list_recent(
+            limit,
+            active_only=active_only,
+            status_filter=status_filter,
+            source_type=source_type,
+            query=query,
+            created_after=created_after,
+        ):
             source_article = self.source_articles.get_latest_by_task_id(task.id)
             content_brief = self.content_briefs.get_latest_by_task_id(task.id)
             generation = self.generations.get_latest_by_task_id(task.id)
