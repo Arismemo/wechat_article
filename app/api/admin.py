@@ -1989,6 +1989,8 @@ def phase6_console() -> str:
             }
             .list {
               display: grid;
+              align-content: start;
+              grid-auto-rows: max-content;
               gap: 12px;
             }
             .card {
@@ -1997,11 +1999,16 @@ def phase6_console() -> str:
               padding: 14px;
               background: #fffefb;
               display: grid;
+              align-content: start;
               gap: 8px;
+              min-width: 0;
+              position: relative;
+              isolation: isolate;
             }
             .card h3 {
               margin: 0;
               font-size: 16px;
+              overflow-wrap: anywhere;
             }
             .meta {
               display: grid;
@@ -2009,6 +2016,7 @@ def phase6_console() -> str:
               font-size: 13px;
               color: var(--muted);
               line-height: 1.6;
+              overflow-wrap: anywhere;
             }
             .pill-row {
               display: flex;
@@ -2023,6 +2031,7 @@ def phase6_console() -> str:
               background: #e4efe6;
               color: var(--ink);
               font-size: 12px;
+              overflow-wrap: anywhere;
             }
             @media (max-width: 980px) {
               .layout { grid-template-columns: 1fr; }
@@ -2268,6 +2277,7 @@ def phase6_console() -> str:
             const renderOutput = (value) => {
               outputEl.textContent = typeof value === "string" ? value : JSON.stringify(value, null, 2);
             };
+            const apiUrl = (path) => new URL(path, window.location.origin).toString();
 
             const loadDraft = () => {
               tokenEl.value = localStorage.getItem("phase6_console_token") || "";
@@ -2290,7 +2300,7 @@ def phase6_console() -> str:
             const request = async (method, path, body) => {
               const token = tokenEl.value.trim();
               if (!token) throw new Error("缺少 Bearer Token");
-              const response = await fetch(path, {
+              const response = await fetch(apiUrl(path), {
                 method,
                 headers: {
                   "Authorization": `Bearer ${token}`,

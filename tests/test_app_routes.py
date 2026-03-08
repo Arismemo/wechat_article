@@ -170,6 +170,7 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("更多信息", response.text)
         self.assertIn("清空", response.text)
         self.assertIn("这里只收微信公众号文章链接。", response.text)
+        self.assertIn("composer-actions", response.text)
         self.assertIn("alignSelectedTaskToVisibleTasks", response.text)
         self.assertIn("当前筛选下没有任务。换个筛选看看。", response.text)
 
@@ -187,6 +188,7 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("Prompt 实验榜", response.text)
         self.assertIn("风格资产库", response.text)
         self.assertIn("同步当前任务", response.text)
+        self.assertIn("const apiUrl = (path) => new URL(path, window.location.origin).toString();", response.text)
 
     def test_admin_pages_require_basic_auth_when_configured(self) -> None:
         with patch.dict(os.environ, {"ADMIN_USERNAME": "admin", "ADMIN_PASSWORD": "secret-pass"}, clear=False):

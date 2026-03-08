@@ -372,7 +372,11 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             }}
             .composer-row {{
               display: grid;
-              grid-template-columns: minmax(0, 1fr) 110px 130px;
+              grid-template-columns: 1fr;
+            }}
+            .composer-actions {{
+              display: grid;
+              grid-template-columns: 120px minmax(0, 1fr);
               gap: 10px;
             }}
             input, button {{
@@ -383,7 +387,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             input {{
               border: 1px solid var(--line);
               background: #fffdf9;
-              padding: 14px 18px;
+              padding: 18px 20px;
               color: var(--text);
             }}
             input:focus {{
@@ -535,6 +539,8 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             }}
             .task-list {{
               display: grid;
+              align-content: start;
+              grid-auto-rows: max-content;
               gap: 10px;
               max-height: 780px;
               overflow: auto;
@@ -542,11 +548,15 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             }}
             .task-card {{
               display: grid;
+              align-content: start;
               gap: 8px;
               padding: 14px 15px;
               border-radius: 20px;
               border: 1px solid var(--line);
               background: #fffdf9;
+              min-width: 0;
+              position: relative;
+              isolation: isolate;
               cursor: pointer;
               transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
             }}
@@ -562,12 +572,13 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             .task-title {{
               font-size: 16px;
               line-height: 1.45;
+              overflow-wrap: anywhere;
             }}
             .task-meta {{
               color: var(--muted);
               font-size: 12px;
               line-height: 1.6;
-              word-break: break-word;
+              overflow-wrap: anywhere;
             }}
             .progress-track {{
               width: 100%;
@@ -733,11 +744,11 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               .detail-column {{ position: static; }}
               .metrics {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
               .action-grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
-              .composer-row {{ grid-template-columns: 1fr; }}
             }}
             @media (max-width: 720px) {{
               main {{ padding: 18px 14px 32px; }}
               h1 {{ font-size: 32px; }}
+              .composer-actions {{ grid-template-columns: 1fr; }}
               .metrics {{ grid-template-columns: 1fr; }}
               .kv-grid {{ grid-template-columns: 1fr; }}
               .action-grid {{ grid-template-columns: 1fr; }}
@@ -772,6 +783,8 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                     <div class="composer">
                       <div class="composer-row">
                         <input id="ingest-url" type="url" placeholder="把微信文章链接贴在这里" autocomplete="off" />
+                      </div>
+                      <div class="composer-actions">
                         <button id="paste-button" class="secondary" type="button">粘贴</button>
                         <button id="ingest-button" type="button">开始处理</button>
                       </div>
