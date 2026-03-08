@@ -940,8 +940,20 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
 
             const filteredTasks = () => currentTasks().filter(matchesFilter);
 
+            const appUrl = (path, params = null) => {{
+              const url = new URL(path, window.location.origin);
+              if (params) {{
+                Object.entries(params).forEach(([key, value]) => {{
+                  if (value !== null && value !== undefined && value !== "") {{
+                    url.searchParams.set(key, String(value));
+                  }}
+                }});
+              }}
+              return url.toString();
+            }};
+
             const syncUrl = () => {{
-              const url = new URL(window.location.href);
+              const url = new URL(window.location.pathname + window.location.search, window.location.origin);
               if (state.selectedTaskId) {{
                 url.searchParams.set("task_id", state.selectedTaskId);
               }} else {{
@@ -1063,9 +1075,10 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             }};
 
             const loadSnapshot = async () => {{
-              const params = new URLSearchParams({{ limit: "18" }});
-              if (state.selectedTaskId) params.set("selected_task_id", state.selectedTaskId);
-              const response = await fetch(`/admin/api/home-snapshot?${{params.toString()}}`, {{
+              const response = await fetch(appUrl("/admin/api/home-snapshot", {{
+                limit: 18,
+                selected_task_id: state.selectedTaskId,
+              }}), {{
                 headers: {{ Accept: "application/json" }},
               }});
               if (!response.ok) {{
@@ -1119,7 +1132,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               }};
               try {{
                 setFlashMessage("正在处理…");
-                await apiPost(`/admin/api/tasks/${{taskId}}/${{action}}`);
+                await apiPost(appUrl(`/admin/api/tasks/${{taskId}}/${{action}}`));
                 state.selectedTaskId = taskId;
                 await loadSnapshot();
                 setFlashMessage(labels[action] || "完成了。", action === "push-draft" ? "done" : "");
@@ -1138,7 +1151,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               try {{
                 elements.ingestButton.disabled = true;
                 setFlashMessage("任务已提交，开始排队。");
-                const data = await apiPost("/admin/api/ingest", {{ url }});
+                const data = await apiPost(appUrl("/admin/api/ingest"), {{ url }});
                 state.selectedTaskId = data.task_id;
                 elements.ingestUrl.value = "";
                 await loadSnapshot();
