@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Optional
+
+from pydantic import Field
 
 from app.schemas.common import APIModel
 
@@ -83,3 +86,53 @@ class WechatPushResponse(APIModel):
     generation_id: Optional[str] = None
     wechat_media_id: Optional[str] = None
     reused_existing: bool = False
+
+
+class FeedbackImportRequest(APIModel):
+    generation_id: Optional[str] = None
+    day_offset: int = Field(ge=0)
+    snapshot_at: Optional[datetime] = None
+    prompt_type: Optional[str] = None
+    prompt_version: Optional[str] = None
+    wechat_media_id: Optional[str] = None
+    read_count: Optional[int] = Field(default=None, ge=0)
+    like_count: Optional[int] = Field(default=None, ge=0)
+    share_count: Optional[int] = Field(default=None, ge=0)
+    comment_count: Optional[int] = Field(default=None, ge=0)
+    click_rate: Optional[float] = Field(default=None, ge=0)
+    source_type: Optional[str] = None
+    imported_by: Optional[str] = None
+    notes: Optional[str] = None
+    raw_payload: Optional[dict] = None
+    operator: Optional[str] = None
+
+
+class FeedbackImportResponse(APIModel):
+    task_id: str
+    status: str
+    generation_id: str
+    metric_id: str
+    prompt_type: str
+    prompt_version: str
+    day_offset: int
+    sample_count: int
+
+
+class StyleAssetCreateRequest(APIModel):
+    asset_type: str
+    title: str
+    content: str
+    tags: list[str] = Field(default_factory=list)
+    status: Optional[str] = None
+    weight: Optional[float] = Field(default=None, gt=0)
+    source_task_id: Optional[str] = None
+    source_generation_id: Optional[str] = None
+    notes: Optional[str] = None
+    operator: Optional[str] = None
+
+
+class StyleAssetCreateResponse(APIModel):
+    style_asset_id: str
+    asset_type: str
+    title: str
+    status: str

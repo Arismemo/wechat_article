@@ -1820,3 +1820,665 @@ def phase5_console() -> str:
         </html>
         """
     )
+
+
+@router.get("/admin/phase6", response_class=HTMLResponse, tags=["admin"], dependencies=[Depends(verify_admin_basic_auth)])
+def phase6_console() -> str:
+    return dedent(
+        """\
+        <!DOCTYPE html>
+        <html lang="zh-CN">
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <title>Phase 6 反馈台</title>
+          <style>
+            :root {
+              --bg: #edf2ec;
+              --panel: rgba(250, 255, 248, 0.92);
+              --line: #bdd0be;
+              --text: #1e271d;
+              --muted: #5d6b5e;
+              --accent: #2b6f58;
+              --accent-dark: #1b4b3b;
+              --danger: #9b4130;
+              --ink: #163028;
+              --shadow: 0 18px 46px rgba(24, 42, 29, 0.1);
+            }
+            * { box-sizing: border-box; }
+            body {
+              margin: 0;
+              color: var(--text);
+              font-family: "PingFang SC", "Noto Serif SC", serif;
+              background:
+                radial-gradient(circle at top left, rgba(243, 250, 214, 0.55), transparent 24%),
+                radial-gradient(circle at right bottom, rgba(197, 234, 219, 0.45), transparent 28%),
+                linear-gradient(140deg, #e9eee7 0%, #f3f6f0 42%, #e7eee5 100%);
+              min-height: 100vh;
+            }
+            main {
+              max-width: 1280px;
+              margin: 0 auto;
+              padding: 32px 20px 48px;
+            }
+            .hero {
+              display: grid;
+              gap: 10px;
+              margin-bottom: 20px;
+            }
+            .eyebrow {
+              display: inline-flex;
+              width: fit-content;
+              padding: 6px 10px;
+              border-radius: 999px;
+              background: rgba(43, 111, 88, 0.12);
+              color: var(--accent-dark);
+              font-size: 12px;
+              letter-spacing: 0.08em;
+            }
+            .hero h1 {
+              margin: 0;
+              font-size: 40px;
+              line-height: 1.04;
+            }
+            .hero p {
+              margin: 0;
+              max-width: 860px;
+              color: var(--muted);
+              line-height: 1.75;
+            }
+            .layout {
+              display: grid;
+              grid-template-columns: 420px minmax(0, 1fr);
+              gap: 18px;
+              align-items: start;
+            }
+            .stack {
+              display: grid;
+              gap: 16px;
+            }
+            .panel {
+              background: var(--panel);
+              border: 1px solid var(--line);
+              border-radius: 24px;
+              padding: 20px;
+              box-shadow: var(--shadow);
+              backdrop-filter: blur(8px);
+            }
+            .panel h2 {
+              margin: 0 0 14px;
+              font-size: 18px;
+            }
+            .grid {
+              display: grid;
+              grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+              gap: 12px;
+            }
+            .grid.single {
+              grid-template-columns: 1fr;
+            }
+            label {
+              display: block;
+              margin-bottom: 6px;
+              color: var(--muted);
+              font-size: 13px;
+            }
+            input, textarea, button, select {
+              width: 100%;
+              font: inherit;
+              border-radius: 14px;
+            }
+            input, textarea, select {
+              padding: 12px 14px;
+              background: #fffefb;
+              color: var(--text);
+              border: 1px solid var(--line);
+            }
+            textarea {
+              min-height: 120px;
+              resize: vertical;
+            }
+            button {
+              border: none;
+              cursor: pointer;
+              padding: 12px 16px;
+              background: var(--accent);
+              color: #f7fdf8;
+              transition: transform 0.12s ease, background 0.12s ease;
+            }
+            button:hover { background: var(--accent-dark); transform: translateY(-1px); }
+            button.secondary { background: #d2e1d5; color: var(--ink); }
+            button.danger { background: var(--danger); color: #fff7f3; }
+            .actions {
+              display: flex;
+              flex-wrap: wrap;
+              gap: 10px;
+              margin-top: 14px;
+            }
+            .actions button {
+              width: auto;
+              min-width: 140px;
+            }
+            .status {
+              display: inline-block;
+              padding: 6px 10px;
+              border-radius: 999px;
+              background: rgba(43, 111, 88, 0.14);
+              color: var(--accent-dark);
+              font-size: 12px;
+              margin-bottom: 12px;
+            }
+            pre {
+              margin: 0;
+              min-height: 240px;
+              padding: 16px;
+              border-radius: 18px;
+              background: #163028;
+              color: #eef8f1;
+              white-space: pre-wrap;
+              word-break: break-word;
+              line-height: 1.65;
+              overflow: auto;
+            }
+            .hint {
+              margin: 0;
+              color: var(--muted);
+              font-size: 13px;
+              line-height: 1.7;
+            }
+            .list {
+              display: grid;
+              gap: 12px;
+            }
+            .card {
+              border: 1px solid var(--line);
+              border-radius: 18px;
+              padding: 14px;
+              background: #fffefb;
+              display: grid;
+              gap: 8px;
+            }
+            .card h3 {
+              margin: 0;
+              font-size: 16px;
+            }
+            .meta {
+              display: grid;
+              gap: 4px;
+              font-size: 13px;
+              color: var(--muted);
+              line-height: 1.6;
+            }
+            .pill-row {
+              display: flex;
+              flex-wrap: wrap;
+              gap: 8px;
+            }
+            .pill {
+              display: inline-flex;
+              align-items: center;
+              padding: 4px 10px;
+              border-radius: 999px;
+              background: #e4efe6;
+              color: var(--ink);
+              font-size: 12px;
+            }
+            @media (max-width: 980px) {
+              .layout { grid-template-columns: 1fr; }
+            }
+            @media (max-width: 720px) {
+              .hero h1 { font-size: 30px; }
+              .actions { flex-direction: column; }
+              .actions button { width: 100%; }
+            }
+          </style>
+        </head>
+        <body>
+          <main>
+            <section class="hero">
+              <span class="eyebrow">PHASE 6 FEEDBACK LOOP</span>
+              <h1>Phase 6 反馈台</h1>
+              <p>这个页面处理发布后的手工反馈导入、Prompt 实验榜和风格资产沉淀。当前实现以手工录入为主，不依赖微信分析接口也能开始回收效果数据。</p>
+            </section>
+
+            <section class="layout">
+              <div class="stack">
+                <section class="panel">
+                  <h2>认证与任务</h2>
+                  <div class="grid single">
+                    <div>
+                      <label for="token">Bearer Token</label>
+                      <input id="token" type="password" placeholder="输入 API_BEARER_TOKEN" />
+                    </div>
+                    <div>
+                      <label for="task-id">Task ID</label>
+                      <input id="task-id" type="text" placeholder="f703c3ef-..." />
+                    </div>
+                    <div>
+                      <label for="generation-id">Generation ID（可选）</label>
+                      <input id="generation-id" type="text" placeholder="默认取 latest accepted / latest" />
+                    </div>
+                    <div>
+                      <label for="operator">操作人</label>
+                      <input id="operator" type="text" value="admin-console" />
+                    </div>
+                  </div>
+                  <div class="actions">
+                    <button id="query-feedback" class="secondary">查询任务反馈</button>
+                    <button id="refresh-experiments" class="secondary">刷新实验榜</button>
+                    <button id="refresh-assets" class="secondary">刷新风格资产</button>
+                    <button id="clear-output" class="danger">清空输出</button>
+                  </div>
+                </section>
+
+                <section class="panel">
+                  <h2>导入反馈</h2>
+                  <div class="grid">
+                    <div>
+                      <label for="day-offset">观察窗口</label>
+                      <select id="day-offset">
+                        <option value="1">T+1</option>
+                        <option value="3">T+3</option>
+                        <option value="7">T+7</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label for="snapshot-at">快照时间（ISO，可选）</label>
+                      <input id="snapshot-at" type="text" placeholder="2026-03-08T10:00:00+08:00" />
+                    </div>
+                    <div>
+                      <label for="read-count">阅读数</label>
+                      <input id="read-count" type="number" min="0" placeholder="1200" />
+                    </div>
+                    <div>
+                      <label for="like-count">点赞数</label>
+                      <input id="like-count" type="number" min="0" placeholder="86" />
+                    </div>
+                    <div>
+                      <label for="share-count">转发数</label>
+                      <input id="share-count" type="number" min="0" placeholder="14" />
+                    </div>
+                    <div>
+                      <label for="comment-count">评论数</label>
+                      <input id="comment-count" type="number" min="0" placeholder="3" />
+                    </div>
+                    <div>
+                      <label for="click-rate">点击率（可选）</label>
+                      <input id="click-rate" type="number" min="0" step="0.0001" placeholder="0.1825" />
+                    </div>
+                    <div>
+                      <label for="media-id">media_id（可选）</label>
+                      <input id="media-id" type="text" placeholder="默认回填最近草稿 media_id" />
+                    </div>
+                  </div>
+                  <div style="margin-top: 12px;">
+                    <label for="feedback-notes">导入备注</label>
+                    <textarea id="feedback-notes" placeholder="例如：后台手工抄录 T+1 数据"></textarea>
+                  </div>
+                  <div class="actions">
+                    <button id="import-feedback">导入反馈</button>
+                  </div>
+                  <p class="hint">如果不填 Generation ID，服务端会优先取最新 accepted generation。相同 generation 的同一观察窗口会覆盖更新，不会重复累计样本。</p>
+                </section>
+
+                <section class="panel">
+                  <h2>新建风格资产</h2>
+                  <div class="grid">
+                    <div>
+                      <label for="asset-type">资产类型</label>
+                      <input id="asset-type" type="text" value="opening_hook" />
+                    </div>
+                    <div>
+                      <label for="asset-title">标题</label>
+                      <input id="asset-title" type="text" placeholder="反直觉开头模板" />
+                    </div>
+                    <div>
+                      <label for="asset-tags">标签（逗号分隔）</label>
+                      <input id="asset-tags" type="text" placeholder="技术科普,误区纠偏" />
+                    </div>
+                    <div>
+                      <label for="asset-weight">权重</label>
+                      <input id="asset-weight" type="number" min="0.1" step="0.1" value="1.0" />
+                    </div>
+                  </div>
+                  <div style="margin-top: 12px;">
+                    <label for="asset-content">资产内容</label>
+                    <textarea id="asset-content" placeholder="写下经过验证的标题模板、开头结构、段落骨架或转场句式"></textarea>
+                  </div>
+                  <div style="margin-top: 12px;">
+                    <label for="asset-notes">备注</label>
+                    <textarea id="asset-notes" placeholder="可记录来源任务、适用题材、风险提醒"></textarea>
+                  </div>
+                  <div class="actions">
+                    <button id="create-asset">新建风格资产</button>
+                  </div>
+                </section>
+              </div>
+
+              <div class="stack">
+                <section class="panel">
+                  <h2>输出</h2>
+                  <span class="status" id="status">空闲</span>
+                  <pre id="output">等待输入...</pre>
+                </section>
+
+                <section class="panel">
+                  <h2>任务反馈快照</h2>
+                  <p class="hint">按 task 查看已导入的反馈指标，确认当前 generation 在 T+1 / T+3 / T+7 的留痕是否完整。</p>
+                  <div class="list" id="task-feedback-list">
+                    <div class="hint">等待查询任务反馈...</div>
+                  </div>
+                </section>
+
+                <section class="panel">
+                  <h2>Prompt 实验榜</h2>
+                  <p class="hint">当前按 `prompt_type + prompt_version + day_offset` 聚合。先用手工导入跑出样本，再决定是否做自动增长优化。</p>
+                  <div class="list" id="experiment-list">
+                    <div class="hint">等待加载实验榜...</div>
+                  </div>
+                </section>
+
+                <section class="panel">
+                  <h2>风格资产库</h2>
+                  <p class="hint">这里只做最小资产沉淀。先把经过验证的开头、标题方向、结构骨架录进来，后面再接回生成链路。</p>
+                  <div class="list" id="style-asset-list">
+                    <div class="hint">等待加载风格资产...</div>
+                  </div>
+                </section>
+              </div>
+            </section>
+          </main>
+
+          <script>
+            const tokenEl = document.getElementById("token");
+            const taskIdEl = document.getElementById("task-id");
+            const generationIdEl = document.getElementById("generation-id");
+            const operatorEl = document.getElementById("operator");
+            const dayOffsetEl = document.getElementById("day-offset");
+            const snapshotAtEl = document.getElementById("snapshot-at");
+            const readCountEl = document.getElementById("read-count");
+            const likeCountEl = document.getElementById("like-count");
+            const shareCountEl = document.getElementById("share-count");
+            const commentCountEl = document.getElementById("comment-count");
+            const clickRateEl = document.getElementById("click-rate");
+            const mediaIdEl = document.getElementById("media-id");
+            const feedbackNotesEl = document.getElementById("feedback-notes");
+            const assetTypeEl = document.getElementById("asset-type");
+            const assetTitleEl = document.getElementById("asset-title");
+            const assetTagsEl = document.getElementById("asset-tags");
+            const assetWeightEl = document.getElementById("asset-weight");
+            const assetContentEl = document.getElementById("asset-content");
+            const assetNotesEl = document.getElementById("asset-notes");
+            const outputEl = document.getElementById("output");
+            const statusEl = document.getElementById("status");
+            const taskFeedbackListEl = document.getElementById("task-feedback-list");
+            const experimentListEl = document.getElementById("experiment-list");
+            const styleAssetListEl = document.getElementById("style-asset-list");
+
+            const escapeHtml = (value) => String(value ?? "")
+              .replaceAll("&", "&amp;")
+              .replaceAll("<", "&lt;")
+              .replaceAll(">", "&gt;")
+              .replaceAll('"', "&quot;");
+
+            const formatDate = (value) => {
+              if (!value) return "未知";
+              const date = new Date(value);
+              if (Number.isNaN(date.getTime())) return String(value);
+              return date.toLocaleString("zh-CN", { hour12: false });
+            };
+
+            const setStatus = (value) => { statusEl.textContent = value; };
+            const renderOutput = (value) => {
+              outputEl.textContent = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+            };
+
+            const loadDraft = () => {
+              tokenEl.value = localStorage.getItem("phase6_console_token") || "";
+              taskIdEl.value = localStorage.getItem("phase6_console_task_id") || "";
+              generationIdEl.value = localStorage.getItem("phase6_console_generation_id") || "";
+              operatorEl.value = localStorage.getItem("phase6_console_operator") || "admin-console";
+            };
+
+            const saveDraft = () => {
+              localStorage.setItem("phase6_console_token", tokenEl.value.trim());
+              localStorage.setItem("phase6_console_task_id", taskIdEl.value.trim());
+              localStorage.setItem("phase6_console_generation_id", generationIdEl.value.trim());
+              localStorage.setItem("phase6_console_operator", operatorEl.value.trim());
+            };
+
+            const request = async (method, path, body) => {
+              const token = tokenEl.value.trim();
+              if (!token) throw new Error("缺少 Bearer Token");
+              const response = await fetch(path, {
+                method,
+                headers: {
+                  "Authorization": `Bearer ${token}`,
+                  "Content-Type": "application/json"
+                },
+                body: body ? JSON.stringify(body) : undefined
+              });
+              const text = await response.text();
+              let payload = text;
+              try { payload = JSON.parse(text); } catch (_) {}
+              if (!response.ok) {
+                throw new Error(typeof payload === "string" ? payload : JSON.stringify(payload, null, 2));
+              }
+              return payload;
+            };
+
+            const parseNumber = (value) => {
+              const normalized = String(value ?? "").trim();
+              if (!normalized) return undefined;
+              const parsed = Number(normalized);
+              return Number.isFinite(parsed) ? parsed : undefined;
+            };
+
+            const buildFeedbackPayload = () => ({
+              generation_id: generationIdEl.value.trim() || undefined,
+              day_offset: Number(dayOffsetEl.value),
+              snapshot_at: snapshotAtEl.value.trim() || undefined,
+              wechat_media_id: mediaIdEl.value.trim() || undefined,
+              read_count: parseNumber(readCountEl.value),
+              like_count: parseNumber(likeCountEl.value),
+              share_count: parseNumber(shareCountEl.value),
+              comment_count: parseNumber(commentCountEl.value),
+              click_rate: parseNumber(clickRateEl.value),
+              notes: feedbackNotesEl.value.trim() || undefined,
+              imported_by: operatorEl.value.trim() || "admin-console",
+              operator: operatorEl.value.trim() || "admin-console"
+            });
+
+            const buildStyleAssetPayload = () => ({
+              asset_type: assetTypeEl.value.trim(),
+              title: assetTitleEl.value.trim(),
+              content: assetContentEl.value.trim(),
+              tags: assetTagsEl.value.split(",").map((item) => item.trim()).filter(Boolean),
+              weight: parseNumber(assetWeightEl.value),
+              notes: assetNotesEl.value.trim() || undefined,
+              source_task_id: taskIdEl.value.trim() || undefined,
+              source_generation_id: generationIdEl.value.trim() || undefined,
+              operator: operatorEl.value.trim() || "admin-console"
+            });
+
+            const renderTaskFeedback = (payload) => {
+              const items = payload?.metrics || [];
+              if (!items.length) {
+                taskFeedbackListEl.innerHTML = '<div class="hint">当前任务还没有反馈记录。</div>';
+                return;
+              }
+              taskFeedbackListEl.innerHTML = items.map((item) => `
+                <article class="card">
+                  <h3>${escapeHtml(`T+${item.day_offset} / ${item.prompt_version}`)}</h3>
+                  <div class="pill-row">
+                    <span class="pill">generation: ${escapeHtml(item.generation_id)}</span>
+                    <span class="pill">media_id: ${escapeHtml(item.wechat_media_id || "-")}</span>
+                  </div>
+                  <div class="meta">
+                    <div>快照时间: ${escapeHtml(formatDate(item.snapshot_at))}</div>
+                    <div>阅读 / 点赞 / 转发 / 评论: ${escapeHtml(item.read_count ?? "-")} / ${escapeHtml(item.like_count ?? "-")} / ${escapeHtml(item.share_count ?? "-")} / ${escapeHtml(item.comment_count ?? "-")}</div>
+                    <div>点击率: ${escapeHtml(item.click_rate ?? "-")}</div>
+                    <div>导入来源: ${escapeHtml(item.source_type)} / ${escapeHtml(item.imported_by)}</div>
+                    <div>备注: ${escapeHtml(item.notes || "-")}</div>
+                  </div>
+                </article>
+              `).join("");
+            };
+
+            const renderExperiments = (items) => {
+              if (!Array.isArray(items) || !items.length) {
+                experimentListEl.innerHTML = '<div class="hint">还没有实验样本。</div>';
+                return;
+              }
+              experimentListEl.innerHTML = items.map((item) => `
+                <article class="card">
+                  <h3>${escapeHtml(`${item.prompt_type} / ${item.prompt_version}`)}</h3>
+                  <div class="pill-row">
+                    <span class="pill">窗口 T+${escapeHtml(item.day_offset)}</span>
+                    <span class="pill">样本 ${escapeHtml(item.sample_count)}</span>
+                    <span class="pill">最高阅读 ${escapeHtml(item.best_read_count ?? "-")}</span>
+                  </div>
+                  <div class="meta">
+                    <div>平均阅读: ${escapeHtml(item.avg_read_count ?? "-")}</div>
+                    <div>平均点赞: ${escapeHtml(item.avg_like_count ?? "-")}</div>
+                    <div>平均转发: ${escapeHtml(item.avg_share_count ?? "-")}</div>
+                    <div>平均评论: ${escapeHtml(item.avg_comment_count ?? "-")}</div>
+                    <div>平均点击率: ${escapeHtml(item.avg_click_rate ?? "-")}</div>
+                    <div>最近快照: ${escapeHtml(formatDate(item.latest_metric_at))}</div>
+                    <div>最近任务: ${escapeHtml(item.last_task_id || "-")}</div>
+                  </div>
+                </article>
+              `).join("");
+            };
+
+            const renderStyleAssets = (items) => {
+              if (!Array.isArray(items) || !items.length) {
+                styleAssetListEl.innerHTML = '<div class="hint">还没有风格资产。</div>';
+                return;
+              }
+              styleAssetListEl.innerHTML = items.map((item) => `
+                <article class="card">
+                  <h3>${escapeHtml(item.title)}</h3>
+                  <div class="pill-row">
+                    <span class="pill">${escapeHtml(item.asset_type)}</span>
+                    <span class="pill">状态 ${escapeHtml(item.status)}</span>
+                    <span class="pill">权重 ${escapeHtml(item.weight)}</span>
+                  </div>
+                  <div class="meta">
+                    <div>标签: ${escapeHtml((item.tags || []).join(", ") || "-")}</div>
+                    <div>来源任务: ${escapeHtml(item.source_task_id || "-")}</div>
+                    <div>来源 generation: ${escapeHtml(item.source_generation_id || "-")}</div>
+                    <div>内容: ${escapeHtml(item.content)}</div>
+                    <div>备注: ${escapeHtml(item.notes || "-")}</div>
+                  </div>
+                </article>
+              `).join("");
+            };
+
+            const queryTaskFeedback = async () => {
+              const taskId = taskIdEl.value.trim();
+              if (!taskId) throw new Error("请先输入 task_id");
+              const payload = await request("GET", `/api/v1/tasks/${taskId}/feedback`);
+              renderTaskFeedback(payload);
+              return payload;
+            };
+
+            const refreshExperiments = async () => {
+              const items = await request("GET", "/api/v1/feedback/experiments?limit=12");
+              renderExperiments(items);
+              return items;
+            };
+
+            const refreshStyleAssets = async () => {
+              const items = await request("GET", "/api/v1/feedback/style-assets?limit=12");
+              renderStyleAssets(items);
+              return items;
+            };
+
+            document.getElementById("query-feedback").addEventListener("click", async () => {
+              try {
+                saveDraft();
+                setStatus("查询任务反馈");
+                const payload = await queryTaskFeedback();
+                renderOutput(payload);
+                setStatus("完成");
+              } catch (error) {
+                setStatus("失败");
+                renderOutput(error.message || String(error));
+              }
+            });
+
+            document.getElementById("refresh-experiments").addEventListener("click", async () => {
+              try {
+                saveDraft();
+                setStatus("刷新实验榜");
+                const items = await refreshExperiments();
+                renderOutput(items);
+                setStatus("完成");
+              } catch (error) {
+                setStatus("失败");
+                renderOutput(error.message || String(error));
+              }
+            });
+
+            document.getElementById("refresh-assets").addEventListener("click", async () => {
+              try {
+                saveDraft();
+                setStatus("刷新风格资产");
+                const items = await refreshStyleAssets();
+                renderOutput(items);
+                setStatus("完成");
+              } catch (error) {
+                setStatus("失败");
+                renderOutput(error.message || String(error));
+              }
+            });
+
+            document.getElementById("import-feedback").addEventListener("click", async () => {
+              try {
+                saveDraft();
+                const taskId = taskIdEl.value.trim();
+                if (!taskId) throw new Error("请先输入 task_id");
+                setStatus("导入反馈中");
+                const result = await request("POST", `/internal/v1/tasks/${taskId}/import-feedback`, buildFeedbackPayload());
+                renderOutput(result);
+                await queryTaskFeedback();
+                await refreshExperiments();
+                setStatus("导入完成");
+              } catch (error) {
+                setStatus("失败");
+                renderOutput(error.message || String(error));
+              }
+            });
+
+            document.getElementById("create-asset").addEventListener("click", async () => {
+              try {
+                saveDraft();
+                if (!assetTypeEl.value.trim() || !assetTitleEl.value.trim() || !assetContentEl.value.trim()) {
+                  throw new Error("请填写资产类型、标题和内容");
+                }
+                setStatus("创建风格资产");
+                const result = await request("POST", "/internal/v1/style-assets", buildStyleAssetPayload());
+                renderOutput(result);
+                await refreshStyleAssets();
+                setStatus("创建完成");
+              } catch (error) {
+                setStatus("失败");
+                renderOutput(error.message || String(error));
+              }
+            });
+
+            document.getElementById("clear-output").addEventListener("click", () => {
+              setStatus("空闲");
+              renderOutput("等待输入...");
+            });
+
+            loadDraft();
+            if (tokenEl.value.trim()) {
+              Promise.allSettled([refreshExperiments(), refreshStyleAssets()]).catch(() => {});
+            }
+          </script>
+        </body>
+        </html>
+        """
+    )

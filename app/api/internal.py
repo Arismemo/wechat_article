@@ -17,6 +17,8 @@ from app.services.wechat_push_policy_service import WechatPushBlockedError, Wech
 from app.services.wechat_draft_publish_service import WechatDraftPublishService
 from app.schemas.ingest import IngestLinkRequest
 from app.schemas.internal import (
+    FeedbackImportRequest,
+    FeedbackImportResponse,
     ManualReviewActionRequest,
     ManualReviewActionResponse,
     Phase2EnqueueResponse,
@@ -25,10 +27,13 @@ from app.schemas.internal import (
     Phase3RunResponse,
     Phase4EnqueueResponse,
     Phase4RunResponse,
+    StyleAssetCreateRequest,
+    StyleAssetCreateResponse,
     WechatPushPolicyActionRequest,
     WechatPushPolicyActionResponse,
     WechatPushResponse,
 )
+from app.services.feedback_service import FeedbackService
 
 router = APIRouter()
 
@@ -232,6 +237,84 @@ def ingest_and_enqueue_phase4(payload: IngestLinkRequest, session: Session = Dep
         status=task.status,
         enqueued=result.enqueued,
         queue_depth=result.queue_depth,
+    )
+
+
+@router.post(
+    "/tasks/{task_id}/import-feedback",
+    response_model=FeedbackImportResponse,
+    dependencies=[Depends(verify_bearer_token)],
+)
+def import_feedback(
+    task_id: str,
+    payload: FeedbackImportRequest,
+    session: Session = Depends(get_db_session),
+) -> FeedbackImportResponse:
+    try:
+        result = FeedbackService(session).import_publication_metric(
+            task_id,
+            generation_id=payload.generation_id,
+            day_offset=payload.day_offset,
+            snapshot_at=payload.snapshot_at,
+            prompt_type=payload.prompt_type,
+            prompt_version=payload.prompt_version,
+            wechat_media_id=payload.wechat_media_id,
+            read_count=payload.read_count,
+            like_count=payload.like_count,
+            share_count=payload.share_count,
+            comment_count=payload.comment_count,
+            click_rate=payload.click_rate,
+            source_type=payload.source_type,
+            imported_by=payload.imported_by,
+            notes=payload.notes,
+            raw_payload=payload.raw_payload,
+            operator=payload.operator,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+
+    return FeedbackImportResponse(
+        task_id=result.task_id,
+        status=result.status,
+        generation_id=result.generation_id,
+        metric_id=result.metric_id,
+        prompt_type=result.prompt_type,
+        prompt_version=result.prompt_version,
+        day_offset=result.day_offset,
+        sample_count=result.sample_count,
+    )
+
+
+@router.post("/style-assets", response_model=StyleAssetCreateResponse, dependencies=[Depends(verify_bearer_token)])
+def create_style_asset(
+    payload: StyleAssetCreateRequest,
+    session: Session = Depends(get_db_session),
+) -> StyleAssetCreateResponse:
+    try:
+        result = FeedbackService(session).create_style_asset(
+            asset_type=payload.asset_type,
+            title=payload.title,
+            content=payload.content,
+            tags=payload.tags,
+            status=payload.status,
+            weight=payload.weight,
+            source_task_id=payload.source_task_id,
+            source_generation_id=payload.source_generation_id,
+            notes=payload.notes,
+            operator=payload.operator,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+
+    return StyleAssetCreateResponse(
+        style_asset_id=result.style_asset_id,
+        asset_type=result.asset_type,
+        title=result.title,
+        status=result.status,
     )
 
 

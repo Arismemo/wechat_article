@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.enums import TaskStatus
 from app.core.progress import get_progress
+from app.core.prompt_versions import resolve_generation_prompt_version
 from app.core.security import verify_bearer_token
 from app.db.session import get_db_session
 from app.repositories.article_analysis_repository import ArticleAnalysisRepository
@@ -263,7 +264,7 @@ def get_task_workspace(task_id: str, session: Session = Depends(get_db_session))
                 score_risk=float(generation.score_risk) if generation.score_risk is not None else None,
                 status=generation.status,
                 created_at=generation.created_at,
-                prompt_version=_prompt_version_for_generation(generation.model_name),
+                prompt_version=resolve_generation_prompt_version(generation.model_name),
                 review=(
                     ReviewReportResponse(
                         review_report_id=review.id,
@@ -369,9 +370,3 @@ def get_task_workspace(task_id: str, session: Session = Depends(get_db_session))
             for log in audits
         ],
     )
-
-
-def _prompt_version_for_generation(model_name: str) -> str:
-    if model_name in {"glm-5", "phase4-fallback-template"}:
-        return "phase4-v1"
-    return "unknown"

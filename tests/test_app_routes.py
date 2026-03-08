@@ -64,13 +64,19 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("/internal/v1/tasks/{task_id}/allow-wechat-draft-push", routes)
         self.assertIn("/internal/v1/tasks/{task_id}/block-wechat-draft-push", routes)
         self.assertIn("/internal/v1/tasks/{task_id}/push-wechat-draft", routes)
+        self.assertIn("/internal/v1/tasks/{task_id}/import-feedback", routes)
+        self.assertIn("/internal/v1/style-assets", routes)
         self.assertIn("/api/v1/ingest/link", routes)
         self.assertIn("/api/v1/tasks/{task_id}", routes)
         self.assertIn("/api/v1/tasks/{task_id}/brief", routes)
         self.assertIn("/api/v1/tasks/{task_id}/draft", routes)
         self.assertIn("/api/v1/tasks/{task_id}/workspace", routes)
+        self.assertIn("/api/v1/tasks/{task_id}/feedback", routes)
+        self.assertIn("/api/v1/feedback/experiments", routes)
+        self.assertIn("/api/v1/feedback/style-assets", routes)
         self.assertIn("/admin/phase2", routes)
         self.assertIn("/admin/phase5", routes)
+        self.assertIn("/admin/phase6", routes)
 
     def test_admin_phase2_page_renders(self) -> None:
         app_module = reload(import_module("app.main"))
@@ -100,6 +106,18 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("允许推草稿", response.text)
         self.assertIn("禁止推草稿", response.text)
 
+    def test_admin_phase6_page_renders(self) -> None:
+        app_module = reload(import_module("app.main"))
+        client = TestClient(app_module.create_app())
+
+        response = client.get("/admin/phase6")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Phase 6 反馈台", response.text)
+        self.assertIn("导入反馈", response.text)
+        self.assertIn("Prompt 实验榜", response.text)
+        self.assertIn("风格资产库", response.text)
+
     def test_admin_pages_require_basic_auth_when_configured(self) -> None:
         with patch.dict(os.environ, {"ADMIN_USERNAME": "admin", "ADMIN_PASSWORD": "secret-pass"}, clear=False):
             get_settings.cache_clear()
@@ -114,6 +132,13 @@ class AppRouteTests(unittest.TestCase):
             authorized = client.get("/admin/phase5", headers={"Authorization": f"Basic {encoded}"})
             self.assertEqual(authorized.status_code, 200)
             self.assertIn("Phase 5 工作台", authorized.text)
+
+            phase6_unauthorized = client.get("/admin/phase6")
+            self.assertEqual(phase6_unauthorized.status_code, 401)
+
+            phase6_authorized = client.get("/admin/phase6", headers={"Authorization": f"Basic {encoded}"})
+            self.assertEqual(phase6_authorized.status_code, 200)
+            self.assertIn("Phase 6 反馈台", phase6_authorized.text)
 
             client.close()
             get_settings.cache_clear()

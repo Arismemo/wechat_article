@@ -16,6 +16,9 @@
   - 当前已支持按状态分组与“只看待处理任务”筛选、版本 diff、人工确认通过 / 驳回重写
   - 当前已支持“允许推草稿 / 禁止推草稿”人工开关，并已通过服务器烟测验证服务端强制拦截被禁止的推送
   - `/admin/*` 现已支持可选 Basic Auth 保护
+- 阶段 6 第一版已在本地完成：`手工反馈导入 -> Prompt 实验榜 -> 风格资产库`
+  - 当前不依赖微信分析接口，已支持从后台手工录入 T+1 / T+3 / T+7 数据
+  - 当前已支持 Phase 6 后台页：`GET /admin/phase6`
 
 ## 当前已完成范围
 
@@ -71,6 +74,16 @@
   - 人工确认通过 / 驳回重写，并写入审计日志
   - `workspace` 返回当前推草稿策略，后台支持人工允许 / 禁止推草稿
   - 一键回补 Phase 3、一键重跑 Phase 4、一键推草稿
+- 阶段 6 第一版已实现：
+  - `GET /admin/phase6`
+  - `POST /internal/v1/tasks/{task_id}/import-feedback`
+  - `POST /internal/v1/style-assets`
+  - `GET /api/v1/tasks/{task_id}/feedback`
+  - `GET /api/v1/feedback/experiments`
+  - `GET /api/v1/feedback/style-assets`
+  - `publication_metrics`、`prompt_experiments`、`style_assets` 落库
+  - 手工录入 T+1 / T+3 / T+7 数据会自动回刷 Prompt 实验聚合
+  - 风格资产已支持手工沉淀，但还没有回灌到 Phase 4 生成链路
 
 ## 开发约束
 

@@ -1,6 +1,6 @@
 # 项目文档索引
 
-更新时间：2026-03-07
+更新时间：2026-03-08
 
 ## 文档留存原则
 
@@ -44,6 +44,8 @@
   - 阶段 4 服务器部署与收口记录
 - `docs/phase-5/admin-console.md`
   - 阶段 5 后台工作台、人工审核与手动操作说明
+- `docs/phase-6/feedback-loop.md`
+  - 阶段 6 手工反馈导入、Prompt 实验榜与风格资产沉淀说明
 - `docs/research-wechat-fetch-and-browser-options-2026-03-07.md`
   - 微信公众号读取方案、Claude Code skill 和浏览器自动化方案调研
 - `docs/adr/0001-git-based-deploy.md`
@@ -51,6 +53,5 @@
 
 ## 后续建议文档
 
-- `docs/phase-6/feedback-loop.md`
 - `docs/adr/`
   - 用于记录关键技术决策
