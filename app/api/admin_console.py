@@ -1,14 +1,68 @@
 from __future__ import annotations
 
+import json
+from datetime import datetime
+from time import sleep
 from textwrap import dedent
+from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 
 from app.core.security import verify_admin_basic_auth
+from app.db.session import get_session_factory
+from app.services.admin_monitor_service import AdminMonitorFilters, AdminMonitorService
 
 
 router = APIRouter()
+
+
+@router.get(
+    "/admin/console/stream",
+    tags=["admin"],
+    dependencies=[Depends(verify_admin_basic_auth)],
+)
+def unified_console_stream(
+    limit: int = Query(default=36, ge=1, le=100),
+    active_only: bool = Query(default=False),
+    status_filter: Optional[str] = Query(default=None, alias="status"),
+    source_type: Optional[str] = Query(default=None),
+    query: Optional[str] = Query(default=None),
+    created_after: Optional[datetime] = Query(default=None),
+    selected_task_id: Optional[str] = Query(default=None),
+    poll_seconds: int = Query(default=5, ge=3, le=60),
+    once: bool = Query(default=False),
+):
+    session_factory = get_session_factory()
+
+    def event_stream():
+        while True:
+            with session_factory() as session:
+                snapshot = AdminMonitorService(session).build_snapshot(
+                    AdminMonitorFilters(
+                        limit=limit,
+                        active_only=active_only,
+                        status_filter=status_filter,
+                        source_type=source_type,
+                        query=query,
+                        created_after=created_after,
+                        selected_task_id=selected_task_id,
+                    )
+                )
+            payload = json.dumps(snapshot.model_dump(mode="json"), ensure_ascii=False)
+            yield f"event: snapshot\ndata: {payload}\n\n"
+            if once:
+                break
+            sleep(poll_seconds)
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get("/admin", response_class=HTMLResponse, tags=["admin"], dependencies=[Depends(verify_admin_basic_auth)])
@@ -217,7 +271,7 @@ def unified_console() -> str:
         <head>
           <meta charset="utf-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1" />
-          <title>Phase 7A 统一控制台</title>
+          <title>统一控制台</title>
           <style>
             :root {
               --bg: #efe8dd;
@@ -555,9 +609,9 @@ def unified_console() -> str:
         <body>
           <main>
             <section class="hero">
-              <span class="eyebrow">PHASE 7A UNIFIED CONSOLE</span>
+              <span class="eyebrow">UNIFIED OPERATIONS CONSOLE</span>
               <h1>统一任务监控首页</h1>
-              <p>这一页只负责监控和检索，不替代 Phase 5 审核台或 Phase 6 反馈台。目标是让你在一页内看到任务实时进度、状态分组、历史筛选和聚合详情，再决定是否跳到更深的后台页处理。</p>
+              <p>这一页只负责监控和检索，不替代 Phase 5 审核台或 Phase 6 反馈台。当前已接入 Phase 7C 的实时任务流和统计卡片，优先通过 SSE 持续推送最新状态，掉线时再回退到手动刷新或轮询。</p>
               <div class="hero-links">
                 <a href="/admin/phase5" target="_blank" rel="noreferrer">打开 Phase 5 审核台</a>
                 <a href="/admin/phase6" target="_blank" rel="noreferrer">打开 Phase 6 反馈台</a>
@@ -585,9 +639,10 @@ def unified_console() -> str:
                     </div>
                     <div class="check-row">
                       <input id="auto-refresh" type="checkbox" checked />
-                      <span>自动轮询任务列表和当前选中任务</span>
+                      <span>自动实时更新（优先 SSE，失败时回退轮询）</span>
                     </div>
                   </div>
+                  <div class="hint" id="live-hint" style="margin-top: 12px;">当前模式：等待连接</div>
                   <div class="actions">
                     <button id="refresh-now">立即刷新</button>
                     <button id="clear-selection" class="secondary">清空当前任务</button>
@@ -648,7 +703,7 @@ def unified_console() -> str:
                 <section class="panel">
                   <h2>任务总览</h2>
                   <div class="metrics" id="metrics">
-                    <div class="metric-card"><strong>总任务</strong><span>0</span></div>
+                    <div class="metric-card"><strong>当前筛选</strong><span>0</span></div>
                   </div>
                 </section>
 
@@ -684,6 +739,7 @@ def unified_console() -> str:
             const workspaceEl = document.getElementById("workspace");
             const statusEl = document.getElementById("status");
             const outputEl = document.getElementById("output");
+            const liveHintEl = document.getElementById("live-hint");
 
             const STATUS_LABELS = {
               queued: "待执行",
@@ -731,6 +787,7 @@ def unified_console() -> str:
             ];
             let selectedTaskId = "";
             let refreshTimer = null;
+            let monitorStream = null;
 
             const escapeHtml = (value) => {
               return String(value ?? "")
@@ -743,6 +800,10 @@ def unified_console() -> str:
 
             const setStatus = (text) => {
               statusEl.textContent = text;
+            };
+
+            const setLiveHint = (text) => {
+              liveHintEl.textContent = text;
             };
 
             const renderOutput = (value) => {
@@ -817,7 +878,7 @@ def unified_console() -> str:
               return body;
             };
 
-            const buildTaskQuery = () => {
+            const buildSnapshotQuery = ({ includeSelectedTask = true, includePollSeconds = false } = {}) => {
               const params = new URLSearchParams();
               params.set("limit", String(Math.min(Math.max(Number(limitEl.value) || 36, 1), 100)));
               if (activeOnlyEl.checked) {
@@ -835,23 +896,26 @@ def unified_console() -> str:
               if (createdAfterEl.value) {
                 params.set("created_after", new Date(createdAfterEl.value).toISOString());
               }
+              if (includeSelectedTask && selectedTaskId) {
+                params.set("selected_task_id", selectedTaskId);
+              }
+              if (includePollSeconds) {
+                params.set("poll_seconds", String(Math.min(Math.max(Number(pollSecondsEl.value) || 5, 3), 60)));
+              }
               return params.toString();
             };
 
-            const renderMetrics = (tasks) => {
-              const total = tasks.length;
-              const active = tasks.filter((item) => !String(item.status).endsWith("_failed") && item.status !== "draft_saved").length;
-              const manual = tasks.filter((item) => ["needs_manual_review", "needs_regenerate", "needs_manual_source"].includes(item.status)).length;
-              const draftSaved = tasks.filter((item) => item.status === "draft_saved").length;
-              const failed = tasks.filter((item) => String(item.status).endsWith("_failed")).length;
-              const updated = tasks.length ? formatDate(tasks[0].updated_at) : "暂无";
+            const renderMetrics = (summary) => {
               metricsEl.innerHTML = `
-                <div class="metric-card"><strong>当前列表</strong><span>${escapeHtml(total)}</span></div>
-                <div class="metric-card"><strong>待处理</strong><span>${escapeHtml(active)}</span></div>
-                <div class="metric-card"><strong>待人工</strong><span>${escapeHtml(manual)}</span></div>
-                <div class="metric-card"><strong>已入草稿</strong><span>${escapeHtml(draftSaved)}</span></div>
-                <div class="metric-card"><strong>失败任务</strong><span>${escapeHtml(failed)}</span></div>
-                <div class="metric-card"><strong>最近更新</strong><span style="font-size:16px; line-height:1.35;">${escapeHtml(updated)}</span></div>
+                <div class="metric-card"><strong>当前筛选</strong><span>${escapeHtml(summary.filtered_total)}</span></div>
+                <div class="metric-card"><strong>运行中</strong><span>${escapeHtml(summary.filtered_active)}</span></div>
+                <div class="metric-card"><strong>待人工</strong><span>${escapeHtml(summary.filtered_manual)}</span></div>
+                <div class="metric-card"><strong>待推草稿</strong><span>${escapeHtml(summary.filtered_review_passed)}</span></div>
+                <div class="metric-card"><strong>已入草稿</strong><span>${escapeHtml(summary.filtered_draft_saved)}</span></div>
+                <div class="metric-card"><strong>失败任务</strong><span>${escapeHtml(summary.filtered_failed)}</span></div>
+                <div class="metric-card"><strong>今日提交</strong><span>${escapeHtml(summary.today_submitted)}</span></div>
+                <div class="metric-card"><strong>今日入草稿</strong><span>${escapeHtml(summary.today_draft_saved)}</span></div>
+                <div class="metric-card"><strong>快照时间</strong><span style="font-size:16px; line-height:1.35;">${escapeHtml(formatDate(summary.generated_at))}</span></div>
               `;
             };
 
@@ -963,28 +1027,45 @@ def unified_console() -> str:
               `;
             };
 
+            const renderMonitorSnapshot = (snapshot, { updateOutput = true, source = "manual" } = {}) => {
+              renderMetrics(snapshot.summary);
+              renderBoard(snapshot.tasks || []);
+              if (snapshot.workspace) {
+                renderWorkspace(snapshot.workspace);
+              } else if (!selectedTaskId) {
+                workspaceEl.innerHTML = '<div class="hint">从看板点“查看详情”后，这里会显示聚合任务信息。</div>';
+              } else {
+                workspaceEl.innerHTML = '<div class="hint">当前选中任务不存在或已被清理。</div>';
+              }
+              if (updateOutput) {
+                renderOutput(snapshot);
+              }
+              if (source === "stream") {
+                setStatus(`实时中 · ${snapshot.tasks.length} 个任务`);
+              } else {
+                setStatus(`已刷新 · ${snapshot.tasks.length} 个任务`);
+              }
+            };
+
             const refreshAll = async () => {
               saveDraft();
               setStatus("刷新中");
-              const tasks = await request(`/api/v1/tasks?${buildTaskQuery()}`);
-              renderMetrics(tasks);
-              renderBoard(tasks);
-              if (selectedTaskId) {
-                const workspace = await request(`/api/v1/tasks/${selectedTaskId}/workspace`);
-                renderWorkspace(workspace);
-              }
-              renderOutput(tasks);
-              setStatus(`已刷新 · ${tasks.length} 个任务`);
+              const snapshot = await request(`/api/v1/admin/monitor/snapshot?${buildSnapshotQuery()}`);
+              renderMonitorSnapshot(snapshot, { updateOutput: true, source: "manual" });
             };
 
             const refreshWorkspace = async (taskId) => {
               selectedTaskId = taskId;
               saveDraft();
-              setStatus("加载详情中");
-              const workspace = await request(`/api/v1/tasks/${taskId}/workspace`);
-              renderWorkspace(workspace);
-              renderOutput(workspace);
-              setStatus(`已加载 · ${workspace.status}`);
+              await refreshAll();
+              restartRealtime();
+            };
+
+            const closeStream = () => {
+              if (monitorStream) {
+                monitorStream.close();
+                monitorStream = null;
+              }
             };
 
             const restartTimer = () => {
@@ -1000,6 +1081,46 @@ def unified_console() -> str:
                   renderOutput(error.message || String(error));
                 });
               }, seconds * 1000);
+              setLiveHint(`当前模式：轮询 · 每 ${seconds} 秒`);
+            };
+
+            const restartRealtime = () => {
+              closeStream();
+              if (refreshTimer) {
+                clearInterval(refreshTimer);
+                refreshTimer = null;
+              }
+              if (!tokenEl.value.trim()) {
+                setLiveHint("当前模式：等待 Bearer Token");
+                return;
+              }
+              if (!autoRefreshEl.checked) {
+                setLiveHint("当前模式：自动更新已关闭");
+                return;
+              }
+              if (!window.EventSource) {
+                setLiveHint("当前模式：浏览器不支持 SSE，已回退轮询");
+                restartTimer();
+                return;
+              }
+              const streamUrl = `/admin/console/stream?${buildSnapshotQuery({ includePollSeconds: true })}`;
+              monitorStream = new EventSource(streamUrl);
+              setLiveHint("当前模式：实时流连接中");
+              monitorStream.addEventListener("snapshot", (event) => {
+                try {
+                  const snapshot = JSON.parse(event.data);
+                  renderMonitorSnapshot(snapshot, { updateOutput: true, source: "stream" });
+                  setLiveHint(`当前模式：SSE 实时推送 · ${formatDate(snapshot.summary.generated_at)}`);
+                } catch (error) {
+                  setStatus("实时流解析失败");
+                  renderOutput(error.message || String(error));
+                }
+              });
+              monitorStream.onerror = () => {
+                closeStream();
+                setLiveHint("当前模式：SSE 中断，已回退轮询");
+                restartTimer();
+              };
             };
 
             document.getElementById("refresh-now").addEventListener("click", async () => {
@@ -1016,13 +1137,14 @@ def unified_console() -> str:
               saveDraft();
               workspaceEl.innerHTML = '<div class="hint">当前任务已清空。</div>';
               setStatus("空闲");
+              restartRealtime();
             });
 
             [tokenEl, pollSecondsEl, limitEl, autoRefreshEl, statusFilterEl, sourceFilterEl, queryFilterEl, createdAfterEl, activeOnlyEl].forEach((element) => {
               const eventName = element === queryFilterEl ? "input" : "change";
               element.addEventListener(eventName, () => {
                 saveDraft();
-                restartTimer();
+                restartRealtime();
               });
             });
 
@@ -1040,7 +1162,7 @@ def unified_console() -> str:
             });
 
             loadDraft();
-            restartTimer();
+            restartRealtime();
             if (tokenEl.value.trim()) {
               refreshAll().catch((error) => {
                 setStatus("失败");

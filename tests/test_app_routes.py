@@ -79,11 +79,13 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("/api/v1/tasks/{task_id}/feedback", routes)
         self.assertIn("/api/v1/feedback/experiments", routes)
         self.assertIn("/api/v1/feedback/style-assets", routes)
+        self.assertIn("/api/v1/admin/monitor/snapshot", routes)
         self.assertIn("/api/v1/admin/settings", routes)
         self.assertIn("/api/v1/admin/settings/{key}", routes)
         self.assertIn("/admin", routes)
         self.assertIn("/admin/phase2", routes)
         self.assertIn("/admin/console", routes)
+        self.assertIn("/admin/console/stream", routes)
         self.assertIn("/admin/settings", routes)
         self.assertIn("/admin/phase5", routes)
         self.assertIn("/admin/phase6", routes)
@@ -123,9 +125,9 @@ class AppRouteTests(unittest.TestCase):
         response = client.get("/admin/console")
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn("Phase 7A 统一控制台", response.text)
+        self.assertIn("统一控制台", response.text)
         self.assertIn("统一任务监控首页", response.text)
-        self.assertIn("自动轮询任务列表和当前选中任务", response.text)
+        self.assertIn("自动实时更新（优先 SSE，失败时回退轮询）", response.text)
         self.assertIn("打开 Phase 5 审核台", response.text)
 
     def test_admin_settings_page_renders(self) -> None:

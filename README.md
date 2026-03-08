@@ -3,7 +3,7 @@
 微信公众号选题重构与草稿生产系统。
 
 当前正式版本：`v1.0.0`  
-状态：`MVP Closed · main 已进入 Phase 7B`
+状态：`MVP Closed · main 已进入 Phase 7C`
 
 ## 系统能做什么
 
@@ -20,6 +20,7 @@
 - Phase 6：手工/批量反馈导入、Prompt 实验榜、风格资产、自动反馈同步入口
 - Phase 7A：统一监控首页、自动轮询、历史筛选、任务聚合详情
 - Phase 7B：网页运行参数设置、`system_settings` 覆盖层、配置审计日志
+- Phase 7C：统一控制台实时流、统计卡片、SSE 监控快照接口
 
 ## 仓库结构
 
@@ -41,6 +42,7 @@
 - `GET /api/v1/tasks/{task_id}/draft`
 - `GET /api/v1/tasks/{task_id}/feedback`
 - `GET /api/v1/tasks/{task_id}/workspace`
+- `GET /api/v1/admin/monitor/snapshot`
 - `GET /api/v1/admin/settings`
 
 后台页：
@@ -48,6 +50,7 @@
 - `GET /admin`
 - `GET /admin/phase2`
 - `GET /admin/console`
+- `GET /admin/console/stream`
 - `GET /admin/settings`
 - `GET /admin/phase5`
 - `GET /admin/phase6`
@@ -175,7 +178,8 @@ bash scripts/deploy_prebuilt_from_local.sh
   - 内部切换监控首页、审核台、反馈台、设置
 - `/admin/console`
   - 统一任务监控首页
-  - 自动轮询任务列表和当前选中任务
+  - 优先通过 SSE 实时推送任务快照，失败时回退轮询
+  - 展示当前筛选、运行中、待人工、待推草稿、已入草稿、失败任务、今日提交、今日入草稿等统计卡片
   - 支持按状态、来源、关键词、起始时间筛选历史任务
   - 可直接查看聚合任务详情，再跳转到 Phase 5 / Phase 6
 - `/admin/settings`
@@ -194,6 +198,8 @@ Phase 7B 只开放“可热修改的运行参数”，当前读取顺序为：
 
 1. `system_settings`
 2. `.env`
+
+Phase 7C 的监控快照接口与统一控制台不会直接暴露密钥明文；实时流仍然通过后台 Basic Auth 保护，监控数据接口则继续要求 `API_BEARER_TOKEN`。
 
 也就是说，网页设置不会直接重写 `.env`。当前仍然只允许通过环境变量管理的值包括：
 

@@ -1,0 +1,29 @@
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Optional
+
+from pydantic import Field
+
+from app.schemas.common import APIModel
+from app.schemas.tasks import TaskSummaryResponse, TaskWorkspaceResponse
+
+
+class AdminMonitorSummaryResponse(APIModel):
+    filtered_total: int
+    filtered_active: int
+    filtered_manual: int
+    filtered_review_passed: int
+    filtered_draft_saved: int
+    filtered_failed: int
+    today_submitted: int
+    today_draft_saved: int
+    status_counts: dict[str, int] = Field(default_factory=dict)
+    selected_task_id: Optional[str] = None
+    generated_at: datetime
+
+
+class AdminMonitorSnapshotResponse(APIModel):
+    summary: AdminMonitorSummaryResponse
+    tasks: list[TaskSummaryResponse]
+    workspace: Optional[TaskWorkspaceResponse] = None
