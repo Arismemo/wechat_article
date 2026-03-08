@@ -71,6 +71,7 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("/internal/v1/feedback/enqueue-recent-sync", routes)
         self.assertIn("/internal/v1/style-assets", routes)
         self.assertIn("/api/v1/ingest/link", routes)
+        self.assertIn("/api/v1/ingest/shortcut", routes)
         self.assertIn("/api/v1/tasks/{task_id}", routes)
         self.assertIn("/api/v1/tasks/{task_id}/brief", routes)
         self.assertIn("/api/v1/tasks/{task_id}/draft", routes)

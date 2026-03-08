@@ -18,6 +18,7 @@ class Settings(BaseSettings):
 
     api_bearer_token: str = Field(alias="API_BEARER_TOKEN")
     api_hmac_secret: Optional[str] = Field(default=None, alias="API_HMAC_SECRET")
+    ingest_shortcut_shared_key: Optional[str] = Field(default=None, alias="INGEST_SHORTCUT_SHARED_KEY")
     admin_username: Optional[str] = Field(default=None, alias="ADMIN_USERNAME")
     admin_password: Optional[str] = Field(default=None, alias="ADMIN_PASSWORD")
 

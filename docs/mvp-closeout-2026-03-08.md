@@ -16,6 +16,10 @@
 - 公开入口 `POST /api/v1/ingest/link` 已支持 `dispatch_mode`
   - `source=ios-shortcuts` / `ios-share-sheet` 且 `dispatch_mode=auto` 时，默认直接进入 Phase 4 异步队列
   - 后台和调试入口可显式使用 `dispatch_mode=ingest_only` 保持“只建任务”
+- 新增快捷指令专用入口：
+  - `GET /api/v1/ingest/shortcut`
+  - 支持 `INGEST_SHORTCUT_SHARED_KEY`
+  - 手机端不再需要手动配置 Bearer Header 和 JSON Body
 - 新增快捷指令接入文档：
   - `docs/phase-0/ios-shortcuts.md`
 - 服务器已打开以下运行时开关：
@@ -27,7 +31,7 @@
 
 ### 3.1 请求
 
-- 入口：`POST /api/v1/ingest/link`
+- 入口：`GET /api/v1/ingest/shortcut`
 - 来源：`source=ios-shortcuts`
 - 触发：`trigger=back-tap`
 - 文章：

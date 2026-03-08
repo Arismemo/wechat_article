@@ -10,7 +10,7 @@ def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(
         title="wechat_artical",
-        version="0.1.0",
+        version="1.0.0",
         docs_url="/docs" if settings.app_env != "prod" else None,
         redoc_url="/redoc" if settings.app_env != "prod" else None,
     )

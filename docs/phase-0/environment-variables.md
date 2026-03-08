@@ -1,6 +1,6 @@
 # 阶段 0 环境变量清单
 
-更新时间：2026-03-07
+更新时间：2026-03-08
 
 ## 1. 配置原则
 
@@ -24,6 +24,7 @@
 | 变量名 | 必填 | 说明 |
 | --- | --- | --- |
 | `API_BEARER_TOKEN` | 是 | 快捷指令调用接入 API 的 Bearer Token |
+| `INGEST_SHORTCUT_SHARED_KEY` | 否 | iPhone 快捷指令专用共享密钥；配置后 `GET /api/v1/ingest/shortcut` 将优先使用它，而不是复用总 Bearer Token |
 | `API_HMAC_SECRET` | 否 | 如果启用 HMAC 签名则必填 |
 | `ADMIN_USERNAME` | 否 | 后台页 Basic Auth 用户名；配置后 `/admin/*` 将要求浏览器先登录 |
 | `ADMIN_PASSWORD` | 否 | 后台页 Basic Auth 密码；建议仅在服务器环境注入 |

@@ -1,6 +1,6 @@
 # ADR-0001：从文件拷贝切换到 Git 部署
 
-更新时间：2026-03-07
+更新时间：2026-03-08
 状态：Accepted
 
 ## 背景
@@ -35,9 +35,16 @@
 - Dockerfile 已拆分依赖层与代码层，`requirements.runtime.txt` 与 Playwright 浏览器层可在代码变更后继续复用缓存
 - 新增 `scripts/deploy_prebuilt_from_local.sh`，用于服务器冷构建过慢时的本地预构建兜底
 
-待完成：
+当前正式路径：
 
-- 将服务器正式部署路径完全切到“纯 Git 拉取 + 远端构建缓存命中”；冷启动期间允许使用预构建镜像兜底
+- GitHub 仍是唯一源码基线
+- 服务器工作树仍坚持 `git pull --ff-only`
+- 由于服务器下载 Chromium 过慢，当前正式镜像发布路径改为：
+  - 本地预构建 `linux/amd64` 镜像
+  - `docker save | ssh ... docker load`
+  - 服务器执行 migration
+  - `docker compose up -d --no-build --force-recreate`
+- 这不是回退到“文件覆盖式同步”，因为镜像和源码版本都仍由 Git 提交固定
 
 ## 追加记录
 
@@ -70,5 +77,9 @@
 
 ## 影响
 
-- 后续部署默认路径应从“文件同步”转为“Git 拉取 + 容器重建 + migration”
+- 后续部署默认路径已从“文件同步”切为“Git 拉取 + 预构建镜像重建 + migration”
 - 服务器上不再接受任意目录覆盖式同步，降低误覆盖风险
+- 版本固定时，应同时固定：
+  - Git commit
+  - Git tag
+  - 预构建镜像 tag

@@ -54,6 +54,8 @@
   - 微信公众号读取方案、Claude Code skill 和浏览器自动化方案调研
 - `docs/mvp-closeout-2026-03-08.md`
   - MVP 主链路收口结论与真实验收记录
+- `docs/web-console-plan.md`
+  - 网页端控制台现状、缺口与下一阶段实现建议
 - `docs/adr/0001-git-based-deploy.md`
   - 从文件拷贝切换到 Git 部署的技术决策
 

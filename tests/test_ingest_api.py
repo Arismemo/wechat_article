@@ -131,6 +131,48 @@ class IngestApiTests(unittest.TestCase):
         self.assertIsNone(second.json()["queue_depth"])
         enqueue.assert_called_once()
 
+    def test_ingest_shortcut_get_endpoint_accepts_query_key(self) -> None:
+        with patch(
+            "app.api.ingest.Phase4QueueService.enqueue",
+            return_value=Phase4EnqueueResult(task_id="unused", enqueued=True, queue_depth=1),
+        ) as enqueue:
+            response = self.client.get(
+                "/api/v1/ingest/shortcut",
+                params={
+                    "url": "https://mp.weixin.qq.com/s/shortcut-trigger",
+                    "key": "test-token",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["dispatch_mode"], "phase4_enqueue")
+        self.assertTrue(body["enqueued"])
+        enqueue.assert_called_once()
+
+    def test_ingest_shortcut_get_endpoint_rejects_invalid_key(self) -> None:
+        response = self.client.get(
+            "/api/v1/ingest/shortcut",
+            params={
+                "url": "https://mp.weixin.qq.com/s/shortcut-trigger",
+                "key": "wrong-token",
+            },
+        )
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json()["detail"], "Invalid shortcut key.")
+
+    def test_ingest_shortcut_get_endpoint_rejects_invalid_url_value(self) -> None:
+        response = self.client.get(
+            "/api/v1/ingest/shortcut",
+            params={
+                "url": "文章链接",
+                "key": "test-token",
+            },
+        )
+
+        self.assertEqual(response.status_code, 422)
+
 
 if __name__ == "__main__":
     unittest.main()

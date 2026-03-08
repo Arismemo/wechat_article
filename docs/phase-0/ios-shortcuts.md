@@ -7,7 +7,7 @@
 
 首版目标链路固定为：
 
-`复制文章链接 -> 双击背面触发快捷指令 -> POST /api/v1/ingest/link -> Phase 4 异步队列 -> 审稿通过后自动入微信草稿箱`
+`复制文章链接 -> 双击背面触发快捷指令 -> GET /api/v1/ingest/shortcut -> Phase 4 异步队列 -> 审稿通过后自动入微信草稿箱`
 
 要让这条链路真正一键到底，服务器环境需同时满足：
 
@@ -19,26 +19,30 @@
 
 ## 2. 快捷指令请求约定
 
-快捷指令默认调用：
+快捷指令推荐直接调用：
 
-- `POST /api/v1/ingest/link`
+- `GET /api/v1/ingest/shortcut`
 
-请求头：
+最简触发链接模板：
 
-- `Authorization: Bearer <API_BEARER_TOKEN>`
-- `Content-Type: application/json`
-
-请求体示例：
-
-```json
-{
-  "url": "https://mp.weixin.qq.com/s/xxxxxxxxxxxx",
-  "source": "ios-shortcuts",
-  "device_id": "iphone-15-pro",
-  "trigger": "back-tap",
-  "dispatch_mode": "auto"
-}
+```text
+https://auto.709970.xyz/api/v1/ingest/shortcut?key=<INGEST_SHORTCUT_SHARED_KEY>&url=<文章链接>
 ```
+
+推荐完整模板：
+
+```text
+https://auto.709970.xyz/api/v1/ingest/shortcut?key=<INGEST_SHORTCUT_SHARED_KEY>&url=<文章链接>&source=ios-shortcuts&device_id=iphone-shortcuts&trigger=back-tap&dispatch_mode=auto
+```
+
+说明：
+
+- `INGEST_SHORTCUT_SHARED_KEY`
+  - 若服务器配置了这个变量，快捷指令应使用它
+  - 若未配置，服务端会回退使用 `API_BEARER_TOKEN`
+- `文章链接`
+  - 建议在快捷指令里先做 URL Encode，再拼到最终 URL 中
+- 这个 `GET` 入口的目的就是简化手机端配置，不再要求快捷指令手动设置 Bearer Header 和 JSON Body
 
 字段约定：
 
@@ -80,10 +84,11 @@
 
 1. 从剪贴板读取文本
 2. 如果不是 `http://` 或 `https://` 开头则直接提示失败
-3. 构造上面的 JSON 请求体
-4. 调用 `POST /api/v1/ingest/link`
-5. 从返回值中读取 `task_id`
-6. 弹出通知：
+3. 对剪贴板里的文章链接做 URL Encode
+4. 拼接最终触发 URL
+5. 调用 `GET /api/v1/ingest/shortcut`
+6. 从返回值中读取 `task_id`
+7. 弹出通知：
    - 成功：`任务已提交：<task_id>`
    - 如果 `deduped=true`：`任务已存在，复用已有任务：<task_id>`
 
@@ -92,7 +97,7 @@
 ## 5. 排查要点
 
 - 返回 `401`
-  - 检查 `Authorization` 是否带了正确 Bearer Token
+  - 检查 `key` 是否与 `INGEST_SHORTCUT_SHARED_KEY` 一致
 - 返回 `200` 但 `dispatch_mode=ingest_only`
   - 检查 `source` 是否为 `ios-shortcuts` 或 `ios-share-sheet`
   - 检查 `INGEST_SHORTCUT_AUTO_ENQUEUE_PHASE4` 是否仍为 `true`
