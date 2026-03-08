@@ -22,6 +22,7 @@ Phase 6 第一刀先不接微信官方分析接口，先把“手工反馈导入
   - `GET /api/v1/feedback/style-assets`
 - 新增写入接口：
   - `POST /internal/v1/tasks/{task_id}/import-feedback`
+  - `POST /internal/v1/feedback/import-csv`
   - `POST /internal/v1/style-assets`
 - 新增后台页：
   - `GET /admin/phase6`
@@ -69,7 +70,7 @@ Phase 6 第一刀先不接微信官方分析接口，先把“手工反馈导入
 
 ### style_assets
 
-用于沉淀已验证的标题方向、开头结构、段落骨架、转场句式等资产。当前先支持手工创建和列表查询，还没有接回 Phase 4 生成链路。
+用于沉淀已验证的标题方向、开头结构、段落骨架、转场句式等资产。当前已经支持接回 Phase 4 写稿 Prompt。
 
 关键字段：
 
@@ -97,6 +98,30 @@ Phase 6 第一刀先不接微信官方分析接口，先把“手工反馈导入
 5. 回算并更新 `prompt_experiments`
 6. 写入任务级审计日志：`phase6.feedback.imported`
 
+### CSV 批量导入反馈
+
+调用 `POST /internal/v1/feedback/import-csv` 时：
+
+1. 以 `csv.DictReader` 解析文本
+2. 支持列：
+   - `task_id`
+   - `generation_id`
+   - `day_offset`
+   - `snapshot_at`
+   - `wechat_media_id`
+   - `read_count`
+   - `like_count`
+   - `share_count`
+   - `comment_count`
+   - `click_rate`
+   - `prompt_type`
+   - `prompt_version`
+   - `source_type`
+   - `imported_by`
+   - `notes`
+3. 如果请求里提供了 `default_task_id`，CSV 可省略 `task_id`
+4. 全量导入采用单事务；任何一行非法会整批回滚并返回 `400`
+
 ### 新建风格资产
 
 调用 `POST /internal/v1/style-assets` 时：
@@ -110,6 +135,7 @@ Phase 6 第一刀先不接微信官方分析接口，先把“手工反馈导入
 `/admin/phase6` 当前提供三块能力：
 
 - 手工录入 T+1 / T+3 / T+7 指标
+- 批量粘贴 CSV 回填多条反馈
 - 查看任务反馈快照
 - 查看 Prompt 实验榜
 - 创建与浏览风格资产
@@ -128,6 +154,8 @@ Phase 6 第一刀先不接微信官方分析接口，先把“手工反馈导入
 - Phase 6 路由注册
 - `/admin/phase6` 页面渲染与 Basic Auth
 - 手工导入反馈
+- CSV 批量导入反馈
+- CSV 非法行返回 `400`
 - 同观察窗口重复导入覆盖更新
 - Prompt 实验聚合
 - 风格资产创建与查询
@@ -136,7 +164,7 @@ Phase 6 第一刀先不接微信官方分析接口，先把“手工反馈导入
 
 - 微信官方分析接口对接
 - 自动反馈 worker
-- 将 `style_assets` 真正接回 Phase 4 生成 Prompt
+- Excel 文件上传与解析
 - Prompt 版本进一步接入 `prompt_versions` 表，而不只是 generation 上的字符串字段
 - 增长优化器与自动策略推荐
 
@@ -145,6 +173,6 @@ Phase 6 第一刀先不接微信官方分析接口，先把“手工反馈导入
 1. 先在服务器部署这版 Phase 6，并用真实任务录一组 T+1 数据。
 2. 再决定数据入口路线：
    - 微信分析接口
-   - 后台 CSV / Excel 导入
-   - 继续手工录入
-3. 等样本量足够后，再把 `style_assets` 和 `prompt_experiments` 接回生成链路。
+   - 后台 Excel 导入
+   - 继续手工 / CSV 粘贴录入
+3. 等样本量足够后，再把 `prompt_experiments` 真正接回生成链路。

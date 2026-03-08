@@ -2122,6 +2122,18 @@ def phase6_console() -> str:
                 </section>
 
                 <section class="panel">
+                  <h2>批量导入 CSV</h2>
+                  <div style="margin-top: 12px;">
+                    <label for="feedback-csv">CSV 内容</label>
+                    <textarea id="feedback-csv" placeholder="task_id,generation_id,day_offset,read_count,like_count,share_count,comment_count,click_rate,notes&#10;f703c3ef-e358-48ab-936d-187418c584c5,,1,1666,101,18,6,0.2031,第一批回填"></textarea>
+                  </div>
+                  <div class="actions">
+                    <button id="import-feedback-csv" class="secondary">批量导入 CSV</button>
+                  </div>
+                  <p class="hint">支持列：`task_id,generation_id,day_offset,snapshot_at,wechat_media_id,read_count,like_count,share_count,comment_count,click_rate,prompt_type,prompt_version,source_type,imported_by,notes`。如果不带 `task_id`，会默认使用上面的当前 `task_id`。</p>
+                </section>
+
+                <section class="panel">
                   <h2>新建风格资产</h2>
                   <div class="grid">
                     <div>
@@ -2203,6 +2215,7 @@ def phase6_console() -> str:
             const clickRateEl = document.getElementById("click-rate");
             const mediaIdEl = document.getElementById("media-id");
             const feedbackNotesEl = document.getElementById("feedback-notes");
+            const feedbackCsvEl = document.getElementById("feedback-csv");
             const assetTypeEl = document.getElementById("asset-type");
             const assetTitleEl = document.getElementById("asset-title");
             const assetTagsEl = document.getElementById("asset-tags");
@@ -2298,6 +2311,13 @@ def phase6_console() -> str:
               notes: assetNotesEl.value.trim() || undefined,
               source_task_id: taskIdEl.value.trim() || undefined,
               source_generation_id: generationIdEl.value.trim() || undefined,
+              operator: operatorEl.value.trim() || "admin-console"
+            });
+
+            const buildFeedbackCsvPayload = () => ({
+              csv_text: feedbackCsvEl.value,
+              default_task_id: taskIdEl.value.trim() || undefined,
+              imported_by: operatorEl.value.trim() || "admin-console",
               operator: operatorEl.value.trim() || "admin-console"
             });
 
@@ -2445,6 +2465,24 @@ def phase6_console() -> str:
                 await queryTaskFeedback();
                 await refreshExperiments();
                 setStatus("导入完成");
+              } catch (error) {
+                setStatus("失败");
+                renderOutput(error.message || String(error));
+              }
+            });
+
+            document.getElementById("import-feedback-csv").addEventListener("click", async () => {
+              try {
+                saveDraft();
+                if (!feedbackCsvEl.value.trim()) throw new Error("请先粘贴 CSV 内容");
+                setStatus("批量导入中");
+                const result = await request("POST", "/internal/v1/feedback/import-csv", buildFeedbackCsvPayload());
+                renderOutput(result);
+                if (taskIdEl.value.trim()) {
+                  await queryTaskFeedback();
+                }
+                await refreshExperiments();
+                setStatus(`批量导入完成 (${result.imported_count})`);
               } catch (error) {
                 setStatus("失败");
                 renderOutput(error.message || String(error));

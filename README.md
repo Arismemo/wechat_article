@@ -77,12 +77,13 @@
 - 阶段 6 第一版已实现：
   - `GET /admin/phase6`
   - `POST /internal/v1/tasks/{task_id}/import-feedback`
+  - `POST /internal/v1/feedback/import-csv`
   - `POST /internal/v1/style-assets`
   - `GET /api/v1/tasks/{task_id}/feedback`
   - `GET /api/v1/feedback/experiments`
   - `GET /api/v1/feedback/style-assets`
   - `publication_metrics`、`prompt_experiments`、`style_assets` 落库
-  - 手工录入 T+1 / T+3 / T+7 数据会自动回刷 Prompt 实验聚合
+  - 手工录入或批量 CSV 回填 T+1 / T+3 / T+7 数据会自动回刷 Prompt 实验聚合
   - `style_assets` 已接回 Phase 4 写稿 Prompt，新 generation 会落 `prompt_type/prompt_version`
   - 服务器已验证反馈导入、实验榜聚合和 `/admin/phase6`
 

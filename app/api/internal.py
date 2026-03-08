@@ -17,6 +17,9 @@ from app.services.wechat_push_policy_service import WechatPushBlockedError, Wech
 from app.services.wechat_draft_publish_service import WechatDraftPublishService
 from app.schemas.ingest import IngestLinkRequest
 from app.schemas.internal import (
+    FeedbackCsvImportRequest,
+    FeedbackCsvImportResponse,
+    FeedbackCsvImportRowResponse,
     FeedbackImportRequest,
     FeedbackImportResponse,
     ManualReviewActionRequest,
@@ -284,6 +287,47 @@ def import_feedback(
         prompt_version=result.prompt_version,
         day_offset=result.day_offset,
         sample_count=result.sample_count,
+    )
+
+
+@router.post(
+    "/feedback/import-csv",
+    response_model=FeedbackCsvImportResponse,
+    dependencies=[Depends(verify_bearer_token)],
+)
+def import_feedback_csv(
+    payload: FeedbackCsvImportRequest,
+    session: Session = Depends(get_db_session),
+) -> FeedbackCsvImportResponse:
+    try:
+        result = FeedbackService(session).import_publication_metrics_csv(
+            payload.csv_text,
+            default_task_id=payload.default_task_id,
+            source_type=payload.source_type,
+            imported_by=payload.imported_by,
+            operator=payload.operator,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+
+    return FeedbackCsvImportResponse(
+        imported_count=result.imported_count,
+        results=[
+            FeedbackCsvImportRowResponse(
+                row_no=item.row_no,
+                task_id=item.task_id,
+                status=item.status,
+                generation_id=item.generation_id,
+                metric_id=item.metric_id,
+                prompt_type=item.prompt_type,
+                prompt_version=item.prompt_version,
+                day_offset=item.day_offset,
+                sample_count=item.sample_count,
+            )
+            for item in result.results
+        ],
     )
 
 

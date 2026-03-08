@@ -118,6 +118,31 @@ class FeedbackImportResponse(APIModel):
     sample_count: int
 
 
+class FeedbackCsvImportRequest(APIModel):
+    csv_text: str
+    default_task_id: Optional[str] = None
+    source_type: Optional[str] = None
+    imported_by: Optional[str] = None
+    operator: Optional[str] = None
+
+
+class FeedbackCsvImportRowResponse(APIModel):
+    row_no: int
+    task_id: str
+    status: str
+    generation_id: str
+    metric_id: str
+    prompt_type: str
+    prompt_version: str
+    day_offset: int
+    sample_count: int
+
+
+class FeedbackCsvImportResponse(APIModel):
+    imported_count: int
+    results: list[FeedbackCsvImportRowResponse]
+
+
 class StyleAssetCreateRequest(APIModel):
     asset_type: str
     title: str

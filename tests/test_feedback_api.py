@@ -213,6 +213,63 @@ class FeedbackApiTests(unittest.TestCase):
         self.assertEqual(list_body[0]["weight"], 1.5)
         self.assertEqual(list_body[0]["tags"], ["技术科普", "误区纠偏"])
 
+    def test_import_feedback_csv_uses_default_task_id_and_rolls_up_results(self) -> None:
+        response = self.client.post(
+            "/internal/v1/feedback/import-csv",
+            headers={"Authorization": "Bearer test-token"},
+            json={
+                "default_task_id": self.task_id,
+                "imported_by": "ops-batch",
+                "operator": "ops-batch",
+                "csv_text": (
+                    "generation_id,day_offset,read_count,like_count,share_count,comment_count,click_rate,notes\n"
+                    f"{self.generation_id},1,1800,120,21,8,0.221,第一批回填\n"
+                    f"{self.generation_id},3,2400,165,33,13,0.265,T+3 回填\n"
+                ),
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["imported_count"], 2)
+        self.assertEqual(body["results"][0]["row_no"], 2)
+        self.assertEqual(body["results"][0]["prompt_version"], "phase4-v2")
+        self.assertEqual(body["results"][1]["day_offset"], 3)
+
+        feedback = self.client.get(
+            f"/api/v1/tasks/{self.task_id}/feedback",
+            headers={"Authorization": "Bearer test-token"},
+        )
+        self.assertEqual(feedback.status_code, 200)
+        metrics = feedback.json()["metrics"]
+        self.assertEqual(len(metrics), 2)
+        self.assertEqual({item["day_offset"] for item in metrics}, {1, 3})
+
+        experiments = self.client.get(
+            "/api/v1/feedback/experiments?limit=5",
+            headers={"Authorization": "Bearer test-token"},
+        )
+        self.assertEqual(experiments.status_code, 200)
+        experiment_rows = experiments.json()
+        self.assertEqual(len(experiment_rows), 2)
+        self.assertEqual({item["day_offset"] for item in experiment_rows}, {1, 3})
+
+    def test_import_feedback_csv_returns_400_for_invalid_row(self) -> None:
+        response = self.client.post(
+            "/internal/v1/feedback/import-csv",
+            headers={"Authorization": "Bearer test-token"},
+            json={
+                "default_task_id": self.task_id,
+                "csv_text": (
+                    "generation_id,day_offset,read_count\n"
+                    f"{self.generation_id},oops,1800\n"
+                ),
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Row 2", response.json()["detail"])
+
 
 if __name__ == "__main__":
     unittest.main()

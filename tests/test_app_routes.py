@@ -65,6 +65,7 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("/internal/v1/tasks/{task_id}/block-wechat-draft-push", routes)
         self.assertIn("/internal/v1/tasks/{task_id}/push-wechat-draft", routes)
         self.assertIn("/internal/v1/tasks/{task_id}/import-feedback", routes)
+        self.assertIn("/internal/v1/feedback/import-csv", routes)
         self.assertIn("/internal/v1/style-assets", routes)
         self.assertIn("/api/v1/ingest/link", routes)
         self.assertIn("/api/v1/tasks/{task_id}", routes)
@@ -115,6 +116,7 @@ class AppRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("Phase 6 反馈台", response.text)
         self.assertIn("导入反馈", response.text)
+        self.assertIn("批量导入 CSV", response.text)
         self.assertIn("Prompt 实验榜", response.text)
         self.assertIn("风格资产库", response.text)
 
