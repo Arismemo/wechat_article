@@ -2,13 +2,204 @@ from __future__ import annotations
 
 from textwrap import dedent
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import HTMLResponse
 
 from app.core.security import verify_admin_basic_auth
 
 
 router = APIRouter()
+
+
+@router.get("/admin", response_class=HTMLResponse, tags=["admin"], dependencies=[Depends(verify_admin_basic_auth)])
+def unified_admin_portal(view: str = Query(default="monitor")) -> str:
+    initial_view = view if view in {"monitor", "review", "feedback"} else "monitor"
+    return dedent(
+        f"""\
+        <!DOCTYPE html>
+        <html lang="zh-CN">
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <title>统一后台入口</title>
+          <style>
+            :root {{
+              --bg: #f0e9de;
+              --panel: rgba(255, 251, 246, 0.94);
+              --line: #d4c2ad;
+              --text: #221a11;
+              --muted: #6d6256;
+              --accent: #255d52;
+              --accent-dark: #173f38;
+              --shadow: 0 18px 48px rgba(55, 40, 21, 0.1);
+            }}
+            * {{ box-sizing: border-box; }}
+            body {{
+              margin: 0;
+              min-height: 100vh;
+              color: var(--text);
+              font-family: "PingFang SC", "Noto Serif SC", serif;
+              background:
+                radial-gradient(circle at top left, rgba(255, 229, 175, 0.45), transparent 26%),
+                radial-gradient(circle at bottom right, rgba(178, 222, 208, 0.38), transparent 28%),
+                linear-gradient(140deg, #efe8dd 0%, #f6f2ea 44%, #ebe1d2 100%);
+            }}
+            main {{
+              max-width: 1480px;
+              margin: 0 auto;
+              padding: 24px 18px 28px;
+              display: grid;
+              gap: 16px;
+            }}
+            .hero {{
+              display: grid;
+              gap: 10px;
+            }}
+            .eyebrow {{
+              display: inline-flex;
+              width: fit-content;
+              padding: 6px 10px;
+              border-radius: 999px;
+              background: rgba(37, 93, 82, 0.12);
+              color: var(--accent-dark);
+              font-size: 12px;
+              letter-spacing: 0.08em;
+            }}
+            h1 {{
+              margin: 0;
+              font-size: 38px;
+              line-height: 1.05;
+            }}
+            .hero p {{
+              margin: 0;
+              max-width: 920px;
+              color: var(--muted);
+              line-height: 1.72;
+            }}
+            .panel {{
+              background: var(--panel);
+              border: 1px solid var(--line);
+              border-radius: 22px;
+              padding: 16px;
+              box-shadow: var(--shadow);
+              backdrop-filter: blur(8px);
+            }}
+            .tabs {{
+              display: flex;
+              flex-wrap: wrap;
+              gap: 10px;
+              margin-bottom: 10px;
+            }}
+            .tab {{
+              border: none;
+              border-radius: 999px;
+              padding: 10px 16px;
+              font: inherit;
+              cursor: pointer;
+              background: #e6d7bf;
+              color: #2c241a;
+            }}
+            .tab.active {{
+              background: var(--accent);
+              color: #f8fbf7;
+            }}
+            .meta {{
+              display: flex;
+              flex-wrap: wrap;
+              gap: 10px;
+              color: var(--muted);
+              font-size: 13px;
+              line-height: 1.7;
+            }}
+            .meta a {{
+              color: var(--accent-dark);
+              text-decoration: none;
+              border-bottom: 1px solid rgba(23, 63, 56, 0.25);
+            }}
+            iframe {{
+              width: 100%;
+              min-height: calc(100vh - 260px);
+              border: 1px solid var(--line);
+              border-radius: 18px;
+              background: #fffdf9;
+            }}
+            @media (max-width: 720px) {{
+              h1 {{ font-size: 30px; }}
+              iframe {{ min-height: calc(100vh - 220px); }}
+            }}
+          </style>
+        </head>
+        <body>
+          <main>
+            <section class="hero">
+              <span class="eyebrow">UNIFIED ADMIN ENTRY</span>
+              <h1>统一后台入口</h1>
+              <p>以后只需要记一个链接：`/admin`。监控、审核、反馈仍然分成三个视图，但统一放在这个入口里切换。旧链接继续保留兼容，不需要立刻删除。</p>
+            </section>
+
+            <section class="panel">
+              <div class="tabs">
+                <button class="tab" data-view="monitor">监控首页</button>
+                <button class="tab" data-view="review">审核台</button>
+                <button class="tab" data-view="feedback">反馈台</button>
+              </div>
+              <div class="meta">
+                <span id="view-desc">当前视图：监控首页</span>
+                <a id="open-direct" href="/admin/console" target="_blank" rel="noreferrer">新窗口打开当前视图</a>
+              </div>
+              <iframe id="frame" title="统一后台视图" src="/admin/console"></iframe>
+            </section>
+          </main>
+
+          <script>
+            const VIEWS = {{
+              monitor: {{
+                label: "监控首页",
+                desc: "任务进度、自动轮询、历史筛选和聚合详情",
+                src: "/admin/console",
+              }},
+              review: {{
+                label: "审核台",
+                desc: "人工通过 / 驳回、推草稿开关和手动推稿",
+                src: "/admin/phase5",
+              }},
+              feedback: {{
+                label: "反馈台",
+                desc: "反馈导入、Prompt 实验榜和风格资产",
+                src: "/admin/phase6",
+              }},
+            }};
+
+            const frameEl = document.getElementById("frame");
+            const descEl = document.getElementById("view-desc");
+            const openDirectEl = document.getElementById("open-direct");
+            const buttons = Array.from(document.querySelectorAll(".tab"));
+            let currentView = "{initial_view}";
+
+            const renderView = (view) => {{
+              const config = VIEWS[view] || VIEWS.monitor;
+              currentView = view in VIEWS ? view : "monitor";
+              frameEl.src = config.src;
+              descEl.textContent = `当前视图：${{config.label}} · ${{config.desc}}`;
+              openDirectEl.href = config.src;
+              buttons.forEach((button) => {{
+                button.classList.toggle("active", button.dataset.view === currentView);
+              }});
+              const url = new URL(window.location.href);
+              url.searchParams.set("view", currentView);
+              window.history.replaceState({{}}, "", url);
+            }};
+
+            buttons.forEach((button) => {{
+              button.addEventListener("click", () => renderView(button.dataset.view));
+            }});
+
+            renderView(currentView);
+          </script>
+        </body>
+        </html>
+        """
+    )
 
 
 @router.get("/admin/console", response_class=HTMLResponse, tags=["admin"], dependencies=[Depends(verify_admin_basic_auth)])

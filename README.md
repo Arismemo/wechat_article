@@ -43,6 +43,7 @@
 
 后台页：
 
+- `GET /admin`
 - `GET /admin/phase2`
 - `GET /admin/console`
 - `GET /admin/phase5`
@@ -166,6 +167,9 @@ bash scripts/deploy_prebuilt_from_local.sh
 
 ### 方式 2：后台工作台
 
+- `/admin`
+  - 单一入口
+  - 内部切换监控首页、审核台、反馈台
 - `/admin/console`
   - 统一任务监控首页
   - 自动轮询任务列表和当前选中任务

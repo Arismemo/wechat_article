@@ -79,6 +79,7 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("/api/v1/tasks/{task_id}/feedback", routes)
         self.assertIn("/api/v1/feedback/experiments", routes)
         self.assertIn("/api/v1/feedback/style-assets", routes)
+        self.assertIn("/admin", routes)
         self.assertIn("/admin/phase2", routes)
         self.assertIn("/admin/console", routes)
         self.assertIn("/admin/phase5", routes)
@@ -124,6 +125,18 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("自动轮询任务列表和当前选中任务", response.text)
         self.assertIn("打开 Phase 5 审核台", response.text)
 
+    def test_admin_portal_page_renders(self) -> None:
+        app_module = reload(import_module("app.main"))
+        client = TestClient(app_module.create_app())
+
+        response = client.get("/admin")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("统一后台入口", response.text)
+        self.assertIn("监控首页", response.text)
+        self.assertIn("审核台", response.text)
+        self.assertIn("反馈台", response.text)
+
     def test_admin_phase6_page_renders(self) -> None:
         app_module = reload(import_module("app.main"))
         client = TestClient(app_module.create_app())
@@ -160,6 +173,13 @@ class AppRouteTests(unittest.TestCase):
             console_authorized = client.get("/admin/console", headers={"Authorization": f"Basic {encoded}"})
             self.assertEqual(console_authorized.status_code, 200)
             self.assertIn("统一任务监控首页", console_authorized.text)
+
+            portal_unauthorized = client.get("/admin")
+            self.assertEqual(portal_unauthorized.status_code, 401)
+
+            portal_authorized = client.get("/admin", headers={"Authorization": f"Basic {encoded}"})
+            self.assertEqual(portal_authorized.status_code, 200)
+            self.assertIn("统一后台入口", portal_authorized.text)
 
             phase6_unauthorized = client.get("/admin/phase6")
             self.assertEqual(phase6_unauthorized.status_code, 401)
