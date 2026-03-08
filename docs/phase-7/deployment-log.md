@@ -1,7 +1,7 @@
 # Phase 7 统一控制台部署记录
 
 更新时间：2026-03-08
-状态：Phase 7D Completed
+状态：Phase 7E Completed
 
 ## 1. Phase 7C 发布目标
 
@@ -180,10 +180,104 @@ Phase 7 当前已具备：
 - `/admin/phase6`
   - 反馈台
 
-## 13. 后续建议
+## 13. Phase 7E 发布目标
 
-下一刀建议进入 Phase 7E：
+在 Phase 7D 的基础上继续补：
 
-- 队列深度与 worker 观测面板
+- 队列深度观测
+- processing / pending 观测
+- worker 心跳
+- worker stale / offline 判断
+
+## 14. Phase 7E 本次提交
+
+- Git commit：`20d838c`
+- 标题：`Start phase 7E queue observability`
+
+## 15. Phase 7E 本地验证
+
+- `pytest -q`
+  - 结果：`68 passed`
+- `PYTHONPYCACHEPREFIX=/tmp/pycache python3 -m compileall app tests`
+  - 结果：通过
+
+新增验证重点：
+
+- `queue_observability_service`
+- `/api/v1/admin/monitor/snapshot` 的 `operations`
+- `/admin/console` 页面里的队列与 worker 面板
+
+## 16. Phase 7E 服务器发布方式
+
+本次直接采用热同步兜底：
+
+1. `bash scripts/sync_to_server.sh`
+2. 将远端 `app/` 和 `scripts/` 直接 `docker cp` 到：
+   - `wechat_artical_api`
+   - `wechat_artical_phase2_worker`
+   - `wechat_artical_phase3_worker`
+   - `wechat_artical_phase4_worker`
+   - `wechat_artical_feedback_worker`
+3. 重启 `api` 和四个 worker
+
+说明：
+
+- 本次无 schema 变更
+- 不需要执行 migration
+- Phase 7E 的 worker 心跳依赖脚本重启，所以这次不是只动 `api`
+
+## 17. Phase 7E 服务器验收
+
+实际 smoke test：
+
+- `GET https://auto.709970.xyz/healthz`
+  - 返回：`{"status":"ok"}`
+- `GET https://auto.709970.xyz/api/v1/admin/monitor/snapshot?limit=3`
+  - 返回 `operations.available=true`
+  - 返回 4 条 worker：
+    - `phase2`
+    - `phase3`
+    - `phase4`
+    - `feedback`
+  - 每条都带：
+    - `queue_depth`
+    - `processing_depth`
+    - `pending_count`
+    - `last_seen_at`
+    - `healthy`
+    - `status`
+- `GET https://auto.709970.xyz/admin/console`
+  - 页面已包含：
+    - `队列与 Worker 观测`
+    - `worker 超过阈值未上报时，会标为 stale 或 offline`
+- `redis-cli keys "*:worker:heartbeat"`
+  - 当前已看到：
+    - `phase2:worker:heartbeat`
+    - `phase3:worker:heartbeat`
+    - `phase4:worker:heartbeat`
+    - `feedback:worker:heartbeat`
+
+## 18. 当前结果
+
+Phase 7 当前已具备：
+
+- `/admin/console`
+  - 实时监控
+  - SSE 推送
+  - 成功率与异常卡片
+  - 队列深度与 worker 心跳观测
+- `/admin/settings`
+  - 运行参数网页配置
+  - `.env` 只读环境状态面板
+  - 测试告警入口
+- `/admin/phase5`
+  - 审核台
+- `/admin/phase6`
+  - 反馈台
+
+## 19. 后续建议
+
+下一刀建议进入 Phase 7F：
+
 - 告警分级、去重和静默
 - 趋势图与时间序列统计
