@@ -318,26 +318,10 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               color: var(--muted);
               line-height: 1.7;
             }}
-            .steps {{
-              display: grid;
-              grid-template-columns: repeat(3, minmax(0, 1fr));
-              gap: 12px;
-            }}
-            .step {{
-              display: grid;
-              gap: 8px;
-              padding: 14px 16px;
-              border-radius: 20px;
-              background: var(--paper-soft);
-              border: 1px solid var(--line);
-            }}
-            .step strong {{
-              font-size: 14px;
-            }}
-            .step span {{
+            .hero-note {{
+              margin: 0;
               color: var(--muted);
               font-size: 13px;
-              line-height: 1.6;
             }}
             .panel {{
               background: var(--paper);
@@ -356,6 +340,10 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             .stack {{
               display: grid;
               gap: 18px;
+            }}
+            .detail-column {{
+              position: sticky;
+              top: 18px;
             }}
             .panel-head {{
               display: flex;
@@ -494,6 +482,15 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               flex-wrap: wrap;
               gap: 8px;
             }}
+            .search-row {{
+              display: grid;
+              grid-template-columns: minmax(0, 1fr) auto;
+              gap: 8px;
+              align-items: center;
+            }}
+            .search-row button {{
+              width: auto;
+            }}
             .pill {{
               padding: 9px 14px;
               border-radius: 999px;
@@ -512,6 +509,23 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               font-size: 13px;
               background: #efe3ce;
               color: #342a20;
+            }}
+            .advanced-shell {{
+              border-radius: 18px;
+              border: 1px dashed rgba(65, 48, 27, 0.16);
+              padding: 10px 12px;
+              background: rgba(255, 253, 249, 0.56);
+            }}
+            .advanced-shell summary {{
+              cursor: pointer;
+              color: var(--muted);
+              font-size: 13px;
+            }}
+            .advanced-shell[open] {{
+              background: rgba(255, 253, 249, 0.92);
+            }}
+            .advanced-shell[open] .advanced-links {{
+              margin-top: 10px;
             }}
             .advanced-links a {{
               color: var(--accent-strong);
@@ -553,7 +567,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               color: var(--muted);
               font-size: 12px;
               line-height: 1.6;
-              word-break: break-all;
+              word-break: break-word;
             }}
             .progress-track {{
               width: 100%;
@@ -680,6 +694,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             }}
             @media (max-width: 1080px) {{
               .layout {{ grid-template-columns: 1fr; }}
+              .detail-column {{ position: static; }}
               .metrics {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
               .action-grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
               .composer-row {{ grid-template-columns: 1fr; }}
@@ -687,7 +702,6 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             @media (max-width: 720px) {{
               main {{ padding: 18px 14px 32px; }}
               h1 {{ font-size: 32px; }}
-              .steps {{ grid-template-columns: 1fr; }}
               .metrics {{ grid-template-columns: 1fr; }}
               .kv-grid {{ grid-template-columns: 1fr; }}
               .action-grid {{ grid-template-columns: 1fr; }}
@@ -709,20 +723,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                     <span class="mini" id="flash-message">准备好了。</span>
                   </div>
                 </div>
-                <div class="steps">
-                  <div class="step">
-                    <strong>1. 贴链接</strong>
-                    <span>把微信文章链接贴进来，点一次“开始处理”。</span>
-                  </div>
-                  <div class="step">
-                    <strong>2. 看进度</strong>
-                    <span>左边会自动刷新。处理中、卡住、完成，一眼就能看见。</span>
-                  </div>
-                  <div class="step">
-                    <strong>3. 做动作</strong>
-                    <span>需要你决定时，只会剩下几个按钮：重写、通过、推草稿。</span>
-                  </div>
-                </div>
+                <p class="hero-note">左边看任务，右边看下一步。网页端是主入口，手机快捷指令只是附加入口。</p>
               </section>
 
               <div class="layout">
@@ -730,7 +731,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                   <section class="panel">
                     <div class="panel-head">
                       <h2>开始一个任务</h2>
-                      <span class="mini">手机快捷指令只是附加入口</span>
+                      <span class="mini">从这里开始</span>
                     </div>
                     <div class="composer">
                       <div class="composer-row">
@@ -738,7 +739,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                         <button id="paste-button" class="secondary" type="button">粘贴</button>
                         <button id="ingest-button" type="button">开始处理</button>
                       </div>
-                      <div class="footer-note">默认直接走完整流程。处理通过后会自动进入微信草稿箱。</div>
+                      <div class="footer-note">默认会一路跑到微信草稿箱。</div>
                     </div>
                   </section>
 
@@ -758,13 +759,19 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                         <button class="pill" data-filter="done" data-label="已进草稿" type="button">已进草稿</button>
                         <button class="pill" data-filter="failed" data-label="失败" type="button">失败</button>
                       </div>
-                      <input id="task-search" type="search" placeholder="搜标题、链接或任务号" autocomplete="off" />
-                      <div class="advanced-links">
-                        <a href="/admin/settings" target="_blank" rel="noreferrer">设置</a>
-                        <a href="/admin/console" target="_blank" rel="noreferrer">监控详情</a>
-                        <a href="/admin/phase5" target="_blank" rel="noreferrer">审核台</a>
-                        <a href="/admin/phase6" target="_blank" rel="noreferrer">反馈台</a>
+                      <div class="search-row">
+                        <input id="task-search" type="search" placeholder="搜标题、链接或任务号" autocomplete="off" />
+                        <button id="clear-search-button" class="tiny-button ghost" type="button">清空</button>
                       </div>
+                      <details class="advanced-shell">
+                        <summary>更多工具</summary>
+                        <div class="advanced-links">
+                          <a href="/admin/settings" target="_blank" rel="noreferrer">设置</a>
+                          <a href="/admin/console" target="_blank" rel="noreferrer">监控详情</a>
+                          <a href="/admin/phase5" target="_blank" rel="noreferrer">审核台</a>
+                          <a href="/admin/phase6" target="_blank" rel="noreferrer">反馈台</a>
+                        </div>
+                      </details>
                     </div>
                     <div class="task-list" id="task-list">
                       <div class="empty">还没有任务。</div>
@@ -772,10 +779,10 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                   </section>
                 </section>
 
-                <section class="stack">
+                <section class="stack detail-column">
                   <section class="panel">
                     <div class="panel-head">
-                      <h2>今天怎么样</h2>
+                      <h2>现在</h2>
                       <span class="mini" id="generated-at">刚刚更新</span>
                     </div>
                     <div class="metrics">
@@ -871,6 +878,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               pasteButton: document.getElementById("paste-button"),
               refreshButton: document.getElementById("refresh-button"),
               taskSearch: document.getElementById("task-search"),
+              clearSearchButton: document.getElementById("clear-search-button"),
               taskCount: document.getElementById("task-count"),
               taskList: document.getElementById("task-list"),
               selectedTaskCode: document.getElementById("selected-task-code"),
@@ -914,6 +922,25 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             const shorten = (value, limit = 220) => {{
               if (!value) return "";
               return value.length > limit ? `${{value.slice(0, limit)}}…` : value;
+            }};
+
+            const compactUrl = (value, limit = 54) => {{
+              if (!value) return "";
+              try {{
+                const parsed = new URL(value);
+                const searchSuffix = parsed.search ? "…" : "";
+                return shorten(`${{parsed.hostname}}${{parsed.pathname}}${{searchSuffix}}`, limit);
+              }} catch (_error) {{
+                return shorten(value, limit);
+              }}
+            }};
+
+            const isWechatArticleUrl = (value) => {{
+              try {{
+                return new URL(value).hostname === "mp.weixin.qq.com";
+              }} catch (_error) {{
+                return false;
+              }}
             }};
 
             const setFlashMessage = (message, tone = "") => {{
@@ -1072,16 +1099,16 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               const tasks = filteredTasks();
               elements.taskCount.textContent = `${{tasks.length}} 个`;
               if (!tasks.length) {{
-                const emptyText = state.filter === "all"
-                  ? "这里还没有任务。"
-                  : "当前筛选下没有任务。可以点“全部”看看。";
+                const emptyText = state.search
+                  ? "没有找到。点“清空”试试。"
+                  : (state.filter === "all" ? "这里还没有任务。" : "当前筛选下没有任务。可以点“全部”看看。");
                 elements.taskList.innerHTML = `<div class="empty">${{emptyText}}</div>`;
                 return;
               }}
               elements.taskList.innerHTML = tasks.map((task) => {{
                 const selected = task.task_id === state.selectedTaskId ? "selected" : "";
                 const title = escapeHtml(task.title || task.source_url || "未命名任务");
-                const meta = escapeHtml(task.source_url || task.task_code);
+                const meta = escapeHtml(compactUrl(task.source_url || "", 60) || task.task_code);
                 return `
                   <article class="task-card ${{selected}}" data-task-id="${{task.task_id}}">
                     <div class="status-line">
@@ -1114,6 +1141,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               const latestGeneration = workspace?.generations?.[0] || null;
               const rawSourceUrl = task.source_url || "";
               const sourceUrl = escapeHtml(rawSourceUrl);
+              const sourceLabel = escapeHtml(compactUrl(rawSourceUrl, 80));
               const title = escapeHtml(task.title || workspace?.source_article?.title || "未命名任务");
               const hint = escapeHtml(nextStepText(task));
               const digest = escapeHtml(latestGeneration?.digest || "");
@@ -1167,6 +1195,9 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                 rawSourceUrl ? `<button type="button" id="copy-source-url" class="tiny-button">复制原文链接</button>` : "",
               ].filter(Boolean).join("");
               const visibleError = escapeHtml(shorten(task.error || "", 280));
+              const sourceLink = rawSourceUrl
+                ? `<a href="${{sourceUrl}}" title="${{sourceUrl}}" target="_blank" rel="noreferrer">${{sourceLabel}}</a>`
+                : "";
               elements.taskDetail.innerHTML = `
                 <div class="summary-block">
                   <div class="summary-title">
@@ -1175,7 +1206,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                       <span class="mini">进度 ${{task.progress}}%</span>
                     </div>
                     <h3>${{title}}</h3>
-                    <a href="${{sourceUrl}}" target="_blank" rel="noreferrer">${{sourceUrl}}</a>
+                    ${{sourceLink}}
                   </div>
                   <div class="big-hint">
                     <strong>现在该做什么</strong>
@@ -1308,6 +1339,11 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                 elements.ingestUrl.focus();
                 return;
               }}
+              if (!isWechatArticleUrl(url)) {{
+                setFlashMessage("这里只收微信公众号文章链接。", "waiting");
+                elements.ingestUrl.focus();
+                return;
+              }}
               try {{
                 elements.ingestButton.disabled = true;
                 setFlashMessage("任务已提交，开始排队。");
@@ -1315,6 +1351,10 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                 state.selectedTaskId = data.task_id;
                 elements.ingestUrl.value = "";
                 await loadSnapshot();
+                if (data.deduped) {{
+                  setFlashMessage("这篇文章之前跑过，已经帮你打开原来的任务。", "waiting");
+                  return;
+                }}
                 setFlashMessage("任务已收到，左边会自己刷新。");
               }} catch (error) {{
                 setFlashMessage(error.message || "提交失败。", "fail");
@@ -1342,6 +1382,12 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
 
             elements.taskSearch.addEventListener("input", (event) => {{
               state.search = event.target.value.trim();
+              refreshVisibleSelection().catch((error) => setFlashMessage(error.message || "加载任务失败。", "fail"));
+            }});
+
+            elements.clearSearchButton.addEventListener("click", () => {{
+              state.search = "";
+              elements.taskSearch.value = "";
               refreshVisibleSelection().catch((error) => setFlashMessage(error.message || "加载任务失败。", "fail"));
             }});
 
