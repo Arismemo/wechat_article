@@ -79,9 +79,12 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("/api/v1/tasks/{task_id}/feedback", routes)
         self.assertIn("/api/v1/feedback/experiments", routes)
         self.assertIn("/api/v1/feedback/style-assets", routes)
+        self.assertIn("/api/v1/admin/settings", routes)
+        self.assertIn("/api/v1/admin/settings/{key}", routes)
         self.assertIn("/admin", routes)
         self.assertIn("/admin/phase2", routes)
         self.assertIn("/admin/console", routes)
+        self.assertIn("/admin/settings", routes)
         self.assertIn("/admin/phase5", routes)
         self.assertIn("/admin/phase6", routes)
 
@@ -125,6 +128,17 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("自动轮询任务列表和当前选中任务", response.text)
         self.assertIn("打开 Phase 5 审核台", response.text)
 
+    def test_admin_settings_page_renders(self) -> None:
+        app_module = reload(import_module("app.main"))
+        client = TestClient(app_module.create_app())
+
+        response = client.get("/admin/settings")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Phase 7B 设置台", response.text)
+        self.assertIn("运行参数设置", response.text)
+        self.assertIn("这里只允许修改可以热覆盖的运行参数", response.text)
+
     def test_admin_portal_page_renders(self) -> None:
         app_module = reload(import_module("app.main"))
         client = TestClient(app_module.create_app())
@@ -136,6 +150,7 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("监控首页", response.text)
         self.assertIn("审核台", response.text)
         self.assertIn("反馈台", response.text)
+        self.assertIn("设置", response.text)
 
     def test_admin_phase6_page_renders(self) -> None:
         app_module = reload(import_module("app.main"))
@@ -173,6 +188,13 @@ class AppRouteTests(unittest.TestCase):
             console_authorized = client.get("/admin/console", headers={"Authorization": f"Basic {encoded}"})
             self.assertEqual(console_authorized.status_code, 200)
             self.assertIn("统一任务监控首页", console_authorized.text)
+
+            settings_unauthorized = client.get("/admin/settings")
+            self.assertEqual(settings_unauthorized.status_code, 401)
+
+            settings_authorized = client.get("/admin/settings", headers={"Authorization": f"Basic {encoded}"})
+            self.assertEqual(settings_authorized.status_code, 200)
+            self.assertIn("运行参数设置", settings_authorized.text)
 
             portal_unauthorized = client.get("/admin")
             self.assertEqual(portal_unauthorized.status_code, 401)

@@ -9,6 +9,7 @@ from app.models.related_article import RelatedArticle
 from app.models.review_report import ReviewReport
 from app.models.source_article import SourceArticle
 from app.models.style_asset import StyleAsset
+from app.models.system_setting import SystemSetting
 from app.models.task import Task
 from app.models.wechat_draft import WechatDraft
 
@@ -24,6 +25,7 @@ __all__ = [
     "ReviewReport",
     "SourceArticle",
     "StyleAsset",
+    "SystemSetting",
     "Task",
     "WechatDraft",
 ]

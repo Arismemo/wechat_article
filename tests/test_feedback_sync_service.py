@@ -14,6 +14,7 @@ from app.db.redis_client import get_redis_client
 from app.db.session import get_engine, get_session_factory
 from app.models.content_brief import ContentBrief
 from app.models.generation import Generation
+from app.models.system_setting import SystemSetting
 from app.models.task import Task
 from app.models.wechat_draft import WechatDraft
 from app.services.feedback_queue_service import FeedbackSyncEnqueueResult
@@ -241,6 +242,22 @@ class FeedbackSyncServiceTests(unittest.TestCase):
             self.assertIn(self.task_id, result.task_ids)
             self.assertIn(self.secondary_task_id, result.task_ids)
             session.close()
+
+    def test_run_uses_database_backed_provider_and_day_offsets(self) -> None:
+        session = self.Session()
+        session.add(SystemSetting(key="feedback.sync_provider", value="mock"))
+        session.add(SystemSetting(key="feedback.sync_day_offsets", value=[2, 5]))
+        session.commit()
+
+        service = FeedbackSyncService(session)
+        result = service.run(self.task_id, operator="sync-bot")
+
+        self.assertEqual(result.provider, "mock")
+        self.assertEqual(result.requested_day_offsets, [2, 5])
+        self.assertEqual(result.imported_day_offsets, [2, 5])
+        metrics = service.feedback.list_task_metrics(self.task_id)
+        self.assertEqual({item.day_offset for item in metrics}, {2, 5})
+        session.close()
 
 
 if __name__ == "__main__":

@@ -13,7 +13,7 @@ router = APIRouter()
 
 @router.get("/admin", response_class=HTMLResponse, tags=["admin"], dependencies=[Depends(verify_admin_basic_auth)])
 def unified_admin_portal(view: str = Query(default="monitor")) -> str:
-    initial_view = view if view in {"monitor", "review", "feedback"} else "monitor"
+    initial_view = view if view in {"monitor", "review", "feedback", "settings"} else "monitor"
     return dedent(
         f"""\
         <!DOCTYPE html>
@@ -134,7 +134,7 @@ def unified_admin_portal(view: str = Query(default="monitor")) -> str:
             <section class="hero">
               <span class="eyebrow">UNIFIED ADMIN ENTRY</span>
               <h1>统一后台入口</h1>
-              <p>以后只需要记一个链接：`/admin`。监控、审核、反馈仍然分成三个视图，但统一放在这个入口里切换。旧链接继续保留兼容，不需要立刻删除。</p>
+              <p>以后只需要记一个链接：`/admin`。监控、审核、反馈和运行参数设置统一放在这个入口里切换。旧链接继续保留兼容，不需要立刻删除。</p>
             </section>
 
             <section class="panel">
@@ -142,6 +142,7 @@ def unified_admin_portal(view: str = Query(default="monitor")) -> str:
                 <button class="tab" data-view="monitor">监控首页</button>
                 <button class="tab" data-view="review">审核台</button>
                 <button class="tab" data-view="feedback">反馈台</button>
+                <button class="tab" data-view="settings">设置</button>
               </div>
               <div class="meta">
                 <span id="view-desc">当前视图：监控首页</span>
@@ -167,6 +168,11 @@ def unified_admin_portal(view: str = Query(default="monitor")) -> str:
                 label: "反馈台",
                 desc: "反馈导入、Prompt 实验榜和风格资产",
                 src: "/admin/phase6",
+              }},
+              settings: {{
+                label: "设置",
+                desc: "网页修改运行参数，密钥和基础设施配置仍然留在 .env",
+                src: "/admin/settings",
               }},
             }};
 
@@ -1038,6 +1044,530 @@ def unified_console() -> str:
             if (tokenEl.value.trim()) {
               refreshAll().catch((error) => {
                 setStatus("失败");
+                renderOutput(error.message || String(error));
+              });
+            }
+          </script>
+        </body>
+        </html>
+        """
+    )
+
+
+@router.get("/admin/settings", response_class=HTMLResponse, tags=["admin"], dependencies=[Depends(verify_admin_basic_auth)])
+def settings_console() -> str:
+    return dedent(
+        """\
+        <!DOCTYPE html>
+        <html lang="zh-CN">
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <title>Phase 7B 设置台</title>
+          <style>
+            :root {
+              --bg: #efe8dd;
+              --panel: rgba(255, 251, 246, 0.94);
+              --line: #d4c2ad;
+              --text: #221a11;
+              --muted: #6d6256;
+              --accent: #255d52;
+              --accent-dark: #173f38;
+              --danger: #9e4032;
+              --warn: #b07a18;
+              --shadow: 0 18px 48px rgba(55, 40, 21, 0.1);
+            }
+            * { box-sizing: border-box; }
+            body {
+              margin: 0;
+              color: var(--text);
+              font-family: "PingFang SC", "Noto Serif SC", serif;
+              min-height: 100vh;
+              background:
+                radial-gradient(circle at top left, rgba(255, 229, 175, 0.5), transparent 26%),
+                radial-gradient(circle at bottom right, rgba(178, 222, 208, 0.42), transparent 28%),
+                linear-gradient(140deg, #efe8dd 0%, #f6f2ea 44%, #ebe1d2 100%);
+            }
+            main {
+              max-width: 1440px;
+              margin: 0 auto;
+              padding: 28px 20px 48px;
+              display: grid;
+              gap: 18px;
+            }
+            .hero {
+              display: grid;
+              gap: 10px;
+            }
+            .eyebrow {
+              display: inline-flex;
+              width: fit-content;
+              padding: 6px 10px;
+              border-radius: 999px;
+              font-size: 12px;
+              letter-spacing: 0.08em;
+              background: rgba(37, 93, 82, 0.12);
+              color: var(--accent-dark);
+            }
+            .hero h1 {
+              margin: 0;
+              font-size: 40px;
+              line-height: 1.05;
+            }
+            .hero p {
+              margin: 0;
+              max-width: 920px;
+              line-height: 1.75;
+              color: var(--muted);
+            }
+            .layout {
+              display: grid;
+              grid-template-columns: 340px minmax(0, 1fr);
+              gap: 18px;
+              align-items: start;
+            }
+            .stack {
+              display: grid;
+              gap: 16px;
+            }
+            .panel {
+              background: var(--panel);
+              border: 1px solid var(--line);
+              border-radius: 22px;
+              padding: 20px;
+              box-shadow: var(--shadow);
+              backdrop-filter: blur(8px);
+            }
+            .panel h2 {
+              margin: 0 0 14px;
+              font-size: 18px;
+            }
+            .status {
+              display: inline-flex;
+              padding: 7px 12px;
+              border-radius: 999px;
+              background: rgba(37, 93, 82, 0.12);
+              color: var(--accent-dark);
+              font-size: 12px;
+              margin-bottom: 12px;
+            }
+            label {
+              display: block;
+              font-size: 13px;
+              color: var(--muted);
+              margin-bottom: 6px;
+            }
+            input, textarea, select, button {
+              width: 100%;
+              border-radius: 12px;
+              border: 1px solid var(--line);
+              font: inherit;
+            }
+            input, textarea, select {
+              padding: 11px 13px;
+              background: #fffdf8;
+              color: var(--text);
+            }
+            textarea {
+              min-height: 100px;
+              resize: vertical;
+            }
+            .checkbox {
+              display: flex;
+              align-items: center;
+              gap: 10px;
+              padding: 12px 13px;
+              border: 1px solid var(--line);
+              border-radius: 12px;
+              background: #fffdf8;
+            }
+            .checkbox input {
+              width: 18px;
+              height: 18px;
+              margin: 0;
+            }
+            button {
+              width: auto;
+              min-width: 128px;
+              padding: 10px 16px;
+              cursor: pointer;
+              background: var(--accent);
+              color: #f8fbf7;
+              border: none;
+              transition: transform 0.12s ease, background 0.12s ease;
+            }
+            button:hover { background: var(--accent-dark); transform: translateY(-1px); }
+            button.secondary { background: #dcccb5; color: #2c241a; }
+            button.ghost {
+              background: #fffdf8;
+              color: var(--accent-dark);
+              border: 1px solid var(--line);
+            }
+            .actions {
+              display: flex;
+              flex-wrap: wrap;
+              gap: 10px;
+              margin-top: 14px;
+            }
+            .hint, .list {
+              color: var(--muted);
+              line-height: 1.72;
+              font-size: 14px;
+            }
+            .list {
+              padding-left: 18px;
+              margin: 0;
+            }
+            .categories {
+              display: grid;
+              gap: 18px;
+            }
+            .category {
+              display: grid;
+              gap: 12px;
+            }
+            .category h3 {
+              margin: 0;
+              font-size: 20px;
+            }
+            .setting-grid {
+              display: grid;
+              grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+              gap: 14px;
+            }
+            .setting-card {
+              border: 1px solid var(--line);
+              border-radius: 18px;
+              padding: 16px;
+              background: #fffdf8;
+              display: grid;
+              gap: 12px;
+            }
+            .setting-card h4 {
+              margin: 0;
+              font-size: 16px;
+            }
+            .setting-card p {
+              margin: 0;
+              color: var(--muted);
+              line-height: 1.66;
+            }
+            .setting-meta {
+              display: grid;
+              gap: 6px;
+              font-size: 12px;
+              color: var(--muted);
+            }
+            .setting-meta strong {
+              color: var(--text);
+              font-weight: 600;
+            }
+            .setting-actions {
+              display: flex;
+              flex-wrap: wrap;
+              gap: 10px;
+            }
+            pre {
+              margin: 0;
+              white-space: pre-wrap;
+              word-break: break-word;
+              background: #2f261a;
+              color: #f9f2de;
+              padding: 16px;
+              border-radius: 14px;
+              min-height: 220px;
+              line-height: 1.6;
+              overflow: auto;
+            }
+            .empty {
+              border: 1px dashed var(--line);
+              border-radius: 18px;
+              padding: 24px;
+              color: var(--muted);
+              background: rgba(255, 255, 255, 0.4);
+            }
+            @media (max-width: 960px) {
+              .layout { grid-template-columns: 1fr; }
+            }
+            @media (max-width: 720px) {
+              .hero h1 { font-size: 30px; }
+              .setting-actions, .actions { flex-direction: column; }
+              button { width: 100%; }
+            }
+          </style>
+        </head>
+        <body>
+          <main>
+            <section class="hero">
+              <span class="eyebrow">PHASE 7B SETTINGS</span>
+              <h1>运行参数设置</h1>
+              <p>这里只允许修改可以热覆盖的运行参数，例如写稿模型、审稿模型和自动反馈开关。数据库地址、第三方密钥、Bearer Token、微信 Secret 这类基础设施和敏感配置仍然留在 `.env`。</p>
+            </section>
+
+            <section class="layout">
+              <div class="stack">
+                <section class="panel">
+                  <span class="status" id="status">等待加载</span>
+                  <h2>认证与操作</h2>
+                  <div>
+                    <label for="token">Bearer Token</label>
+                    <input id="token" type="password" placeholder="输入 API_BEARER_TOKEN" />
+                  </div>
+                  <div style="margin-top: 14px;">
+                    <label for="operator">operator</label>
+                    <input id="operator" type="text" value="admin-console" />
+                  </div>
+                  <div style="margin-top: 14px;">
+                    <label for="note">变更备注</label>
+                    <textarea id="note" placeholder="例如：将写稿模型切到新版本做小流量验证"></textarea>
+                  </div>
+                  <div class="actions">
+                    <button id="refresh">刷新设置</button>
+                    <button id="clear-output" class="secondary">清空输出</button>
+                  </div>
+                </section>
+
+                <section class="panel">
+                  <h2>边界说明</h2>
+                  <ul class="list">
+                    <li>这里的值会优先覆盖环境变量，但仅限少量运行参数。</li>
+                    <li>密钥类值仍然只保留在服务器 `.env`，页面不显示也不支持改写。</li>
+                    <li>Phase 4 仍然受 `WECHAT_ENABLE_DRAFT_PUSH` 总开关约束。</li>
+                    <li>自动反馈切到 `http` 前，仍需在 `.env` 里配置 `FEEDBACK_SYNC_HTTP_URL` 与可选 `FEEDBACK_SYNC_API_KEY`。</li>
+                  </ul>
+                </section>
+
+                <section class="panel">
+                  <h2>调试输出</h2>
+                  <pre id="output">等待请求。</pre>
+                </section>
+              </div>
+
+              <section class="panel">
+                <h2>当前设置</h2>
+                <div class="hint" style="margin-bottom: 14px;">保存后新任务会读取最新运行参数；恢复默认会删除数据库覆盖值，重新回退到环境变量默认值。</div>
+                <div id="categories" class="categories">
+                  <div class="empty">请输入 Bearer Token 后点击“刷新设置”。</div>
+                </div>
+              </section>
+            </section>
+          </main>
+
+          <script>
+            const statusEl = document.getElementById("status");
+            const outputEl = document.getElementById("output");
+            const tokenEl = document.getElementById("token");
+            const operatorEl = document.getElementById("operator");
+            const noteEl = document.getElementById("note");
+            const categoriesEl = document.getElementById("categories");
+            const CATEGORY_LABELS = {
+              phase4: "Phase 4 生成与审稿",
+              feedback: "Phase 6 自动反馈",
+            };
+            let currentSettings = [];
+
+            const setStatus = (text) => {
+              statusEl.textContent = text;
+            };
+
+            const renderOutput = (value) => {
+              outputEl.textContent = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+            };
+
+            const escapeHtml = (value) =>
+              String(value)
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+                .replaceAll('"', "&quot;");
+
+            const formatValue = (value, valueType) => {
+              if (value === null || value === undefined) return "未设置";
+              if (valueType === "boolean") return value ? "true" : "false";
+              if (valueType === "integer_list" && Array.isArray(value)) return value.join(", ");
+              if (typeof value === "object") return JSON.stringify(value);
+              return String(value);
+            };
+
+            const readDraft = () => {
+              tokenEl.value = localStorage.getItem("phase7_settings_token") || "";
+              operatorEl.value = localStorage.getItem("phase7_settings_operator") || "admin-console";
+              noteEl.value = localStorage.getItem("phase7_settings_note") || "";
+            };
+
+            const saveDraft = () => {
+              localStorage.setItem("phase7_settings_token", tokenEl.value.trim());
+              localStorage.setItem("phase7_settings_operator", operatorEl.value.trim());
+              localStorage.setItem("phase7_settings_note", noteEl.value);
+            };
+
+            const request = async (path, options = {}) => {
+              const token = tokenEl.value.trim();
+              if (!token) throw new Error("请先输入 Bearer Token");
+              const headers = {
+                Authorization: `Bearer ${token}`,
+                ...(options.headers || {}),
+              };
+              const response = await fetch(path, { ...options, headers });
+              const text = await response.text();
+              let body = null;
+              try {
+                body = text ? JSON.parse(text) : null;
+              } catch (_error) {
+                body = text;
+              }
+              if (!response.ok) {
+                const detail = body && typeof body === "object" && body.detail ? body.detail : text || response.statusText;
+                throw new Error(detail);
+              }
+              return body;
+            };
+
+            const buildInput = (setting) => {
+              const inputId = `setting-${setting.key}`;
+              if (setting.value_type === "boolean") {
+                const checked = setting.effective_value ? "checked" : "";
+                return `
+                  <label for="${inputId}">当前值</label>
+                  <label class="checkbox" for="${inputId}">
+                    <input id="${inputId}" type="checkbox" ${checked} />
+                    <span>启用</span>
+                  </label>
+                `;
+              }
+              if (setting.value_type === "enum") {
+                const options = (setting.options || [])
+                  .map((item) => {
+                    const selected = item.value === setting.effective_value ? "selected" : "";
+                    return `<option value="${escapeHtml(item.value)}" ${selected}>${escapeHtml(item.label)} (${escapeHtml(item.value)})</option>`;
+                  })
+                  .join("");
+                return `
+                  <label for="${inputId}">当前值</label>
+                  <select id="${inputId}">${options}</select>
+                `;
+              }
+              const value = setting.value_type === "integer_list"
+                ? formatValue(setting.effective_value, setting.value_type)
+                : escapeHtml(formatValue(setting.effective_value, setting.value_type));
+              return `
+                <label for="${inputId}">${setting.value_type === "integer_list" ? "当前值（逗号分隔）" : "当前值"}</label>
+                <input id="${inputId}" type="text" value="${value}" />
+              `;
+            };
+
+            const renderCategories = (settings) => {
+              if (!settings.length) {
+                categoriesEl.innerHTML = '<div class="empty">没有可配置的运行参数。</div>';
+                return;
+              }
+              const groups = new Map();
+              settings.forEach((setting) => {
+                const category = setting.category || "other";
+                if (!groups.has(category)) groups.set(category, []);
+                groups.get(category).push(setting);
+              });
+              categoriesEl.innerHTML = Array.from(groups.entries()).map(([category, items]) => `
+                <section class="category">
+                  <h3>${escapeHtml(CATEGORY_LABELS[category] || category)}</h3>
+                  <div class="setting-grid">
+                    ${items.map((setting) => `
+                      <article class="setting-card" data-key="${escapeHtml(setting.key)}" data-value-type="${escapeHtml(setting.value_type)}">
+                        <div>
+                          <h4>${escapeHtml(setting.label)}</h4>
+                          <p>${escapeHtml(setting.description)}</p>
+                        </div>
+                        <div>
+                          ${buildInput(setting)}
+                        </div>
+                        <div class="setting-meta">
+                          <div><strong>环境默认：</strong> ${escapeHtml(formatValue(setting.default_value, setting.value_type))}</div>
+                          <div><strong>数据库覆盖：</strong> ${setting.has_override ? escapeHtml(formatValue(setting.stored_value, setting.value_type)) : "无"}</div>
+                          <div><strong>实际生效：</strong> ${escapeHtml(formatValue(setting.effective_value, setting.value_type))}</div>
+                          <div><strong>最后更新时间：</strong> ${setting.updated_at || "无"}</div>
+                        </div>
+                        <div class="setting-actions">
+                          <button data-action="save">保存</button>
+                          <button data-action="reset" class="ghost">恢复默认</button>
+                        </div>
+                      </article>
+                    `).join("")}
+                  </div>
+                </section>
+              `).join("");
+            };
+
+            const parseValueFromCard = (setting, card) => {
+              const input = card.querySelector(`#setting-${CSS.escape(setting.key)}`);
+              if (!input) throw new Error("设置输入框不存在。");
+              if (setting.value_type === "boolean") return Boolean(input.checked);
+              if (setting.value_type === "integer_list") return input.value.trim();
+              return input.value.trim();
+            };
+
+            const loadSettings = async () => {
+              saveDraft();
+              setStatus("加载中");
+              const settings = await request("/api/v1/admin/settings");
+              currentSettings = settings;
+              renderCategories(settings);
+              renderOutput(settings);
+              setStatus(`已加载 · ${settings.length} 项`);
+            };
+
+            const updateSetting = async (setting, card, resetToDefault = false) => {
+              saveDraft();
+              setStatus(resetToDefault ? "恢复默认中" : "保存中");
+              const payload = {
+                operator: operatorEl.value.trim() || "admin-console",
+                note: noteEl.value.trim() || null,
+                reset_to_default: resetToDefault,
+              };
+              if (!resetToDefault) payload.value = parseValueFromCard(setting, card);
+              const result = await request(`/api/v1/admin/settings/${encodeURIComponent(setting.key)}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+              });
+              renderOutput(result);
+              await loadSettings();
+              setStatus(resetToDefault ? "已恢复默认" : "已保存");
+            };
+
+            document.getElementById("refresh").addEventListener("click", () => {
+              loadSettings().catch((error) => {
+                setStatus("加载失败");
+                renderOutput(error.message || String(error));
+              });
+            });
+
+            document.getElementById("clear-output").addEventListener("click", () => {
+              renderOutput("等待请求。");
+              setStatus("空闲");
+            });
+
+            [tokenEl, operatorEl, noteEl].forEach((element) => {
+              element.addEventListener("input", saveDraft);
+            });
+
+            categoriesEl.addEventListener("click", (event) => {
+              const button = event.target.closest("button[data-action]");
+              if (!button) return;
+              const card = button.closest(".setting-card");
+              if (!card) return;
+              const settingKey = card.dataset.key;
+              const setting = currentSettings.find((item) => item.key === settingKey);
+              if (!setting) return;
+              updateSetting(setting, card, button.dataset.action === "reset").catch((error) => {
+                setStatus("操作失败");
+                renderOutput(error.message || String(error));
+              });
+            });
+
+            readDraft();
+            if (tokenEl.value.trim()) {
+              loadSettings().catch((error) => {
+                setStatus("加载失败");
                 renderOutput(error.message || String(error));
               });
             }

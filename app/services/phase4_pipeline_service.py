@@ -28,6 +28,7 @@ from app.repositories.style_asset_repository import StyleAssetRepository
 from app.repositories.task_repository import TaskRepository
 from app.services.llm_service import LLMService, LLMServiceError
 from app.services.phase3_pipeline_service import Phase3PipelineService
+from app.services.system_setting_service import SystemSettingService
 from app.services.wechat_draft_publish_service import WechatDraftPublishService
 from app.settings import get_settings
 
@@ -59,6 +60,7 @@ class Phase4PipelineService:
         self.generations = GenerationRepository(session)
         self.reviews = ReviewReportRepository(session)
         self.llm = LLMService()
+        self.system_settings = SystemSettingService(session)
         self.wechat_publisher = WechatDraftPublishService(session)
 
     def run(self, task_id: str) -> Phase4PipelineResult:
@@ -305,7 +307,7 @@ class Phase4PipelineService:
             {"generation_id": generation.id, "review_report_id": review.id, "auto_revised": auto_revised},
         )
         self.session.commit()
-        if self.settings.phase4_auto_push_wechat_draft:
+        if self.system_settings.phase4_auto_push_wechat_draft():
             return self._auto_push_wechat_draft(task, generation, review, auto_revised=auto_revised)
         return Phase4PipelineResult(
             task_id=task.id,
@@ -449,17 +451,18 @@ class Phase4PipelineService:
                 f"审稿建议：{self._json_items(prior_review.suggestions)}\n"
                 "请保留核心新角度，但根据审稿建议完成一次实质性修订。\n"
             )
+        write_model = self.system_settings.phase4_write_model()
         try:
             return (
                 self.llm.complete_json(
                     system_prompt=system_prompt,
                     user_prompt=user_prompt,
-                    model=self.settings.llm_model_write,
+                    model=write_model,
                     temperature=0.6,
                     json_mode=True,
                     timeout_seconds=self.settings.llm_write_timeout_seconds,
                 ),
-                self.settings.llm_model_write,
+                write_model,
             )
         except Exception as exc:
             self._log_action(
@@ -514,11 +517,12 @@ class Phase4PipelineService:
             f"生成稿摘要：{generation.digest or '无'}\n"
             f"生成稿正文：{(generation.markdown_content or '')[:4500]}\n"
         )
+        review_model = self.system_settings.phase4_review_model()
         try:
             return self.llm.complete_json(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
-                model=self.settings.llm_model_review,
+                model=review_model,
                 temperature=0.2,
                 json_mode=True,
                 timeout_seconds=self.settings.llm_review_timeout_seconds,

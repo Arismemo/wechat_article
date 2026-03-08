@@ -52,6 +52,8 @@
   - 阶段 6 服务器部署与 smoke test 记录
 - `docs/phase-7/console-monitoring.md`
   - Phase 7A 统一控制台、自动轮询和历史筛选说明
+- `docs/phase-7/runtime-settings.md`
+  - Phase 7B 运行参数设置、system_settings 覆盖层与审计日志说明
 - `docs/research-wechat-fetch-and-browser-options-2026-03-07.md`
   - 微信公众号读取方案、Claude Code skill 和浏览器自动化方案调研
 - `docs/mvp-closeout-2026-03-08.md`

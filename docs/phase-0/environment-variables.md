@@ -7,6 +7,12 @@
 - 敏感信息只通过环境变量或密钥管理注入，不写死在仓库里。
 - 所有环境变量在阶段 1 开始前先冻结第一版命名。
 - 可选变量也要记录默认值策略。
+- Phase 7B 之后，少量运行参数允许通过 `system_settings` 做数据库覆盖；密钥和基础设施配置仍然只允许保留在环境变量。
+
+当前运行时读取顺序：
+
+1. `system_settings`
+2. `.env`
 
 ## 2. 基础配置
 
@@ -82,6 +88,7 @@
 - `LLM_MODEL_REVIEW=glm-5`
 - `LLM_API_BASE=https://open.bigmodel.cn/api/coding/paas/v4`
 - `LLM_API_KEY`：已收到，文档中不明文记录
+- `LLM_MODEL_WRITE`、`LLM_MODEL_REVIEW` 当前可被 `/admin/settings` 网页运行参数覆盖
 
 ## 7. 搜索服务
 
@@ -160,6 +167,7 @@
 - Tailscale 管理入口：`100.112.123.6`
 - 真实公网出口 IP：`117.72.155.136`
 - 本地或测试环境如需验证自动反馈链路，可设：`FEEDBACK_SYNC_PROVIDER=mock`
+- `PHASE4_AUTO_PUSH_WECHAT_DRAFT`、`FEEDBACK_SYNC_PROVIDER`、`FEEDBACK_SYNC_DAY_OFFSETS` 当前可被 `/admin/settings` 网页运行参数覆盖
 - 若要实现“快捷指令提交后直接跑完整链路到草稿箱”，需同时满足：
   - `INGEST_SHORTCUT_AUTO_ENQUEUE_PHASE4=true`
   - `WECHAT_ENABLE_DRAFT_PUSH=true`

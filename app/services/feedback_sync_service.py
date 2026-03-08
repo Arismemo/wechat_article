@@ -17,6 +17,7 @@ from app.repositories.task_repository import TaskRepository
 from app.repositories.wechat_draft_repository import WechatDraftRepository
 from app.services.feedback_queue_service import FeedbackQueueService, FeedbackSyncEnqueueResult
 from app.services.feedback_service import FeedbackImportResult, FeedbackService
+from app.services.system_setting_service import SystemSettingService
 from app.settings import get_settings
 
 
@@ -255,6 +256,7 @@ class FeedbackSyncService:
         self.wechat_drafts = WechatDraftRepository(session)
         self.audit_logs = AuditLogRepository(session)
         self.feedback = FeedbackService(session)
+        self.system_settings = SystemSettingService(session)
         self.queue = FeedbackQueueService()
 
     def run(
@@ -426,14 +428,14 @@ class FeedbackSyncService:
         )
 
     def _provider(self) -> FeedbackMetricsProvider:
-        provider_name = (self.settings.feedback_sync_provider or "").strip().lower()
+        provider_name = (self.system_settings.feedback_sync_provider() or "").strip().lower()
         if provider_name in {"", "disabled", "none", "off"}:
             raise ValueError("FEEDBACK_SYNC_PROVIDER is disabled.")
         if provider_name == "mock":
             return MockFeedbackMetricsProvider()
         if provider_name == "http":
             return HttpFeedbackMetricsProvider()
-        raise ValueError(f"Unsupported FEEDBACK_SYNC_PROVIDER: {self.settings.feedback_sync_provider}")
+        raise ValueError(f"Unsupported FEEDBACK_SYNC_PROVIDER: {provider_name}")
 
     def _require_task(self, task_id: str) -> Task:
         task = self.tasks.get_by_id(task_id)
@@ -461,19 +463,7 @@ class FeedbackSyncService:
         return normalized
 
     def _parse_day_offsets_setting(self) -> list[int]:
-        parsed: list[int] = []
-        for item in (self.settings.feedback_sync_day_offsets or "").split(","):
-            normalized = item.strip()
-            if not normalized:
-                continue
-            try:
-                value = int(normalized)
-            except ValueError as exc:
-                raise ValueError("FEEDBACK_SYNC_DAY_OFFSETS must be a comma-separated integer list.") from exc
-            if value < 0:
-                raise ValueError("FEEDBACK_SYNC_DAY_OFFSETS must contain non-negative integers.")
-            parsed.append(value)
-        return parsed or [1, 3, 7]
+        return self.system_settings.feedback_sync_day_offsets()
 
     def _normalize_operator(self, operator: Optional[str]) -> str:
         return (operator or "").strip() or "feedback-sync"

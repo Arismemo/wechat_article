@@ -1,7 +1,7 @@
 # 网页端控制台规划
 
 更新时间：2026-03-08
-状态：Phase 7A Started
+状态：Phase 7B Started
 
 ## 1. 结论
 
@@ -11,6 +11,7 @@
 
 - 任务看板与聚合详情：`/admin/phase5`
 - 反馈与实验榜：`/admin/phase6`
+- 运行参数设置：`/admin/settings`
 - 人工审核、人工推草稿、推草稿开关
 - `workspace` 聚合接口，可作为前端工作台的数据底座
 
@@ -135,6 +136,7 @@
    - `system_settings` 表
    - 可网页修改的运行参数
    - 配置变更审计日志
+   - 当前已落第一批参数：写稿模型、审稿模型、自动推草稿、反馈 provider、反馈 day offsets
 
 3. `Phase 7C`
    - 实时推送

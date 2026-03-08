@@ -19,6 +19,7 @@ from app.models.related_article import RelatedArticle
 from app.models.review_report import ReviewReport
 from app.models.source_article import SourceArticle
 from app.models.style_asset import StyleAsset
+from app.models.system_setting import SystemSetting
 from app.models.task import Task
 from app.services.phase4_pipeline_service import Phase4PipelineService
 from app.services.wechat_draft_publish_service import WechatDraftPublishResult
@@ -216,12 +217,10 @@ class Phase4PipelineServiceTests(unittest.TestCase):
     def test_phase4_pipeline_auto_pushes_wechat_draft_when_enabled(self) -> None:
         session = self.Session()
         task = self._seed_phase4_ready_task(session, "tsk_phase4_autopush")
+        session.add(SystemSetting(key="phase4.auto_push_wechat_draft", value=True))
+        session.commit()
 
-        with patch.dict(
-            os.environ,
-            {"PHASE4_AUTO_PUSH_WECHAT_DRAFT": "true", "WECHAT_ENABLE_DRAFT_PUSH": "true"},
-            clear=False,
-        ):
+        with patch.dict(os.environ, {"WECHAT_ENABLE_DRAFT_PUSH": "true"}, clear=False):
             get_settings.cache_clear()
             service = Phase4PipelineService(session)
             service.llm = MagicMock()
@@ -270,12 +269,51 @@ class Phase4PipelineServiceTests(unittest.TestCase):
 
             result = service.run(task.id)
 
-        self.assertEqual(result.status, TaskStatus.DRAFT_SAVED.value)
-        refreshed_task = session.get(Task, task.id)
-        self.assertEqual(refreshed_task.status, TaskStatus.DRAFT_SAVED.value)
-        service.wechat_publisher.push_generation.assert_called_once()
+            self.assertEqual(result.status, TaskStatus.DRAFT_SAVED.value)
+            refreshed_task = session.get(Task, task.id)
+            self.assertEqual(refreshed_task.status, TaskStatus.DRAFT_SAVED.value)
+            service.wechat_publisher.push_generation.assert_called_once()
+            get_settings.cache_clear()
         session.close()
-        get_settings.cache_clear()
+
+    def test_phase4_pipeline_uses_database_backed_model_overrides(self) -> None:
+        session = self.Session()
+        task = self._seed_phase4_ready_task(session, "tsk_phase4_models")
+        session.add(SystemSetting(key="phase4.write_model", value="glm-5-write-override"))
+        session.add(SystemSetting(key="phase4.review_model", value="glm-5-review-override"))
+        session.commit()
+
+        service = Phase4PipelineService(session)
+        service.llm = MagicMock()
+        service.llm.complete_json.side_effect = [
+            {
+                "title": "模型覆盖测试",
+                "subtitle": "写稿模型覆盖",
+                "digest": "检查运行参数是否生效。",
+                "markdown_content": "# 模型覆盖测试\n\n## 一\n内容。\n\n## 二\n内容。\n\n## 三\n内容。",
+            },
+            {
+                "final_decision": "pass",
+                "similarity_score": 0.12,
+                "factual_risk_score": 0.06,
+                "policy_risk_score": 0.03,
+                "readability_score": 88,
+                "title_score": 83,
+                "novelty_score": 84,
+                "issues": ["通过。"],
+                "suggestions": ["无需调整。"],
+            },
+        ]
+
+        result = service.run(task.id)
+
+        self.assertEqual(result.status, TaskStatus.REVIEW_PASSED.value)
+        generation = session.get(Generation, result.generation_id)
+        self.assertIsNotNone(generation)
+        self.assertEqual(generation.model_name, "glm-5-write-override")
+        self.assertEqual(service.llm.complete_json.call_args_list[0].kwargs["model"], "glm-5-write-override")
+        self.assertEqual(service.llm.complete_json.call_args_list[1].kwargs["model"], "glm-5-review-override")
+        session.close()
 
     def _seed_phase4_ready_task(self, session, task_code: str) -> Task:
         task = Task(

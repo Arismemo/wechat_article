@@ -3,7 +3,7 @@
 微信公众号选题重构与草稿生产系统。
 
 当前正式版本：`v1.0.0`  
-状态：`MVP Closed`
+状态：`MVP Closed · main 已进入 Phase 7B`
 
 ## 系统能做什么
 
@@ -19,6 +19,7 @@
 - Phase 5：后台工作台、任务看板、版本 diff、人工审核、人工推草稿开关
 - Phase 6：手工/批量反馈导入、Prompt 实验榜、风格资产、自动反馈同步入口
 - Phase 7A：统一监控首页、自动轮询、历史筛选、任务聚合详情
+- Phase 7B：网页运行参数设置、`system_settings` 覆盖层、配置审计日志
 
 ## 仓库结构
 
@@ -40,12 +41,14 @@
 - `GET /api/v1/tasks/{task_id}/draft`
 - `GET /api/v1/tasks/{task_id}/feedback`
 - `GET /api/v1/tasks/{task_id}/workspace`
+- `GET /api/v1/admin/settings`
 
 后台页：
 
 - `GET /admin`
 - `GET /admin/phase2`
 - `GET /admin/console`
+- `GET /admin/settings`
 - `GET /admin/phase5`
 - `GET /admin/phase6`
 
@@ -169,16 +172,38 @@ bash scripts/deploy_prebuilt_from_local.sh
 
 - `/admin`
   - 单一入口
-  - 内部切换监控首页、审核台、反馈台
+  - 内部切换监控首页、审核台、反馈台、设置
 - `/admin/console`
   - 统一任务监控首页
   - 自动轮询任务列表和当前选中任务
   - 支持按状态、来源、关键词、起始时间筛选历史任务
   - 可直接查看聚合任务详情，再跳转到 Phase 5 / Phase 6
+- `/admin/settings`
+  - 查看和修改网页可配置的运行参数
+  - 当前支持 Phase 4 写稿模型、审稿模型、自动推草稿
+  - 当前支持反馈 Provider 和默认 day offsets
+  - 展示环境默认值、数据库覆盖值和实际生效值
 - `/admin/phase5`
   - 查看最近任务、状态分组、待处理筛选、版本 diff、人工审核
 - `/admin/phase6`
   - 查看反馈导入、Prompt 实验榜、风格资产、自动反馈入口
+
+## 网页配置边界
+
+Phase 7B 只开放“可热修改的运行参数”，当前读取顺序为：
+
+1. `system_settings`
+2. `.env`
+
+也就是说，网页设置不会直接重写 `.env`。当前仍然只允许通过环境变量管理的值包括：
+
+- 数据库与 Redis 连接
+- `API_BEARER_TOKEN`
+- `ADMIN_PASSWORD`
+- `LLM_API_KEY`
+- `WECHAT_APP_SECRET`
+- `FEEDBACK_SYNC_HTTP_URL`
+- `FEEDBACK_SYNC_API_KEY`
 
 ## 自动反馈 Provider 协议
 
@@ -238,6 +263,7 @@ bash scripts/deploy_prebuilt_from_local.sh
 - `docs/README.md`
 - `docs/mvp-closeout-2026-03-08.md`
 - `docs/phase-0/ios-shortcuts.md`
+- `docs/phase-7/runtime-settings.md`
 - `docs/phase-7/console-monitoring.md`
 - `docs/web-console-plan.md`
 - `CHANGELOG.md`
