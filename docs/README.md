@@ -55,7 +55,7 @@
 - `docs/phase-7/deployment-log.md`
   - Phase 7A / 7B / 7C 服务器部署与实时监控验收记录
 - `docs/phase-7/runtime-settings.md`
-  - Phase 7B 运行参数设置、`system_settings` 覆盖层与审计日志说明
+  - Phase 7 运行参数设置、`.env` 只读状态和测试告警说明
 - `docs/research-wechat-fetch-and-browser-options-2026-03-07.md`
   - 微信公众号读取方案、Claude Code skill 和浏览器自动化方案调研
 - `docs/mvp-closeout-2026-03-08.md`

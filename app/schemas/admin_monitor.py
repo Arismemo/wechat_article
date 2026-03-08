@@ -16,8 +16,13 @@ class AdminMonitorSummaryResponse(APIModel):
     filtered_review_passed: int
     filtered_draft_saved: int
     filtered_failed: int
+    filtered_stuck: int
     today_submitted: int
     today_draft_saved: int
+    today_failed: int
+    today_review_success_rate: Optional[float] = None
+    today_auto_push_success_rate: Optional[float] = None
+    stuck_threshold_minutes: int
     status_counts: dict[str, int] = Field(default_factory=dict)
     selected_task_id: Optional[str] = None
     generated_at: datetime

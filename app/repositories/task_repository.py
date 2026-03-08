@@ -57,6 +57,7 @@ class TaskRepository:
         source_type: Optional[str] = None,
         query: Optional[str] = None,
         created_after: Optional[datetime] = None,
+        updated_before: Optional[datetime] = None,
     ) -> int:
         statement = self._apply_filters(
             select(func.count()).select_from(Task),
@@ -66,6 +67,7 @@ class TaskRepository:
             source_type=source_type,
             query=query,
             created_after=created_after,
+            updated_before=updated_before,
         )
         return int(self.session.scalar(statement) or 0)
 
@@ -84,6 +86,7 @@ class TaskRepository:
         source_type: Optional[str] = None,
         query: Optional[str] = None,
         created_after: Optional[datetime] = None,
+        updated_before: Optional[datetime] = None,
     ) -> Select:
         if active_only:
             statement = statement.where(Task.status.in_([status.value for status in ACTIVE_TASK_STATUSES]))
@@ -104,4 +107,6 @@ class TaskRepository:
             )
         if created_after:
             statement = statement.where(Task.created_at >= created_after)
+        if updated_before:
+            statement = statement.where(Task.updated_at <= updated_before)
         return statement

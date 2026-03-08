@@ -49,6 +49,8 @@ class AdminMonitorFilters:
 
 
 class AdminMonitorService:
+    _STUCK_THRESHOLD_MINUTES = 30
+
     def __init__(self, session: Session) -> None:
         self.session = session
         self.settings = get_settings()
@@ -240,6 +242,7 @@ class AdminMonitorService:
         task_summaries: list[TaskSummaryResponse],
     ) -> AdminMonitorSummaryResponse:
         today_start = self._start_of_today_utc()
+        stuck_before = datetime.now(timezone.utc) - self._stuck_threshold_delta()
         status_counts: dict[str, int] = {}
         for item in task_summaries:
             status_counts[item.status] = status_counts.get(item.status, 0) + 1
@@ -247,6 +250,30 @@ class AdminMonitorService:
         active_statuses = [item.value for item in ACTIVE_TASK_STATUSES]
         manual_statuses = [TaskStatus.NEEDS_MANUAL_REVIEW.value, TaskStatus.NEEDS_MANUAL_SOURCE.value, TaskStatus.NEEDS_REGENERATE.value]
         failure_statuses = [item.value for item in FINAL_FAILURE_STATUSES]
+        review_success_statuses = [TaskStatus.REVIEW_PASSED.value, TaskStatus.DRAFT_SAVED.value]
+        review_outcome_statuses = review_success_statuses + [
+            TaskStatus.NEEDS_REGENERATE.value,
+            TaskStatus.NEEDS_MANUAL_REVIEW.value,
+            TaskStatus.REVIEW_FAILED.value,
+            TaskStatus.PUSH_FAILED.value,
+        ]
+        today_submitted = self.tasks.count(created_after=today_start)
+        today_draft_saved = self.tasks.count(
+            status_values=[TaskStatus.DRAFT_SAVED.value],
+            created_after=today_start,
+        )
+        today_failed = self.tasks.count(
+            status_values=failure_statuses,
+            created_after=today_start,
+        )
+        today_review_success = self.tasks.count(
+            status_values=review_success_statuses,
+            created_after=today_start,
+        )
+        today_review_outcomes = self.tasks.count(
+            status_values=review_outcome_statuses,
+            created_after=today_start,
+        )
 
         return AdminMonitorSummaryResponse(
             filtered_total=self.tasks.count(
@@ -291,11 +318,26 @@ class AdminMonitorService:
                 created_after=filters.created_after,
                 status_filter=filters.status_filter,
             ),
-            today_submitted=self.tasks.count(created_after=today_start),
-            today_draft_saved=self.tasks.count(
-                status_values=[TaskStatus.DRAFT_SAVED.value],
-                created_after=today_start,
+            filtered_stuck=self.tasks.count(
+                status_values=active_statuses,
+                source_type=filters.source_type,
+                query=filters.query,
+                created_after=filters.created_after,
+                status_filter=filters.status_filter,
+                updated_before=stuck_before,
             ),
+            today_submitted=today_submitted,
+            today_draft_saved=today_draft_saved,
+            today_failed=today_failed,
+            today_review_success_rate=self._percentage(today_review_success, today_review_outcomes),
+            today_auto_push_success_rate=self._percentage(
+                today_draft_saved,
+                self.tasks.count(
+                    status_values=[TaskStatus.REVIEW_PASSED.value, TaskStatus.DRAFT_SAVED.value],
+                    created_after=today_start,
+                ),
+            ),
+            stuck_threshold_minutes=self._STUCK_THRESHOLD_MINUTES,
             status_counts=status_counts,
             selected_task_id=filters.selected_task_id,
             generated_at=datetime.now(timezone.utc),
@@ -325,3 +367,15 @@ class AdminMonitorService:
         now_local = datetime.now(zone)
         start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
         return start_local.astimezone(timezone.utc)
+
+    @classmethod
+    def _stuck_threshold_delta(cls):
+        from datetime import timedelta
+
+        return timedelta(minutes=cls._STUCK_THRESHOLD_MINUTES)
+
+    @staticmethod
+    def _percentage(numerator: int, denominator: int) -> Optional[float]:
+        if denominator <= 0:
+            return None
+        return round((numerator / denominator) * 100, 1)

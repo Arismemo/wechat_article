@@ -906,6 +906,7 @@ def unified_console() -> str:
             };
 
             const renderMetrics = (summary) => {
+              const formatRate = (value) => value === null || value === undefined ? "暂无" : `${value}%`;
               metricsEl.innerHTML = `
                 <div class="metric-card"><strong>当前筛选</strong><span>${escapeHtml(summary.filtered_total)}</span></div>
                 <div class="metric-card"><strong>运行中</strong><span>${escapeHtml(summary.filtered_active)}</span></div>
@@ -913,8 +914,12 @@ def unified_console() -> str:
                 <div class="metric-card"><strong>待推草稿</strong><span>${escapeHtml(summary.filtered_review_passed)}</span></div>
                 <div class="metric-card"><strong>已入草稿</strong><span>${escapeHtml(summary.filtered_draft_saved)}</span></div>
                 <div class="metric-card"><strong>失败任务</strong><span>${escapeHtml(summary.filtered_failed)}</span></div>
+                <div class="metric-card"><strong>异常堆积</strong><span>${escapeHtml(summary.filtered_stuck)}</span></div>
                 <div class="metric-card"><strong>今日提交</strong><span>${escapeHtml(summary.today_submitted)}</span></div>
                 <div class="metric-card"><strong>今日入草稿</strong><span>${escapeHtml(summary.today_draft_saved)}</span></div>
+                <div class="metric-card"><strong>今日失败</strong><span>${escapeHtml(summary.today_failed)}</span></div>
+                <div class="metric-card"><strong>今日审稿通过率</strong><span>${escapeHtml(formatRate(summary.today_review_success_rate))}</span></div>
+                <div class="metric-card"><strong>今日自动推稿成功率</strong><span>${escapeHtml(formatRate(summary.today_auto_push_success_rate))}</span></div>
                 <div class="metric-card"><strong>快照时间</strong><span style="font-size:16px; line-height:1.35;">${escapeHtml(formatDate(summary.generated_at))}</span></div>
               `;
             };
@@ -1365,6 +1370,45 @@ def settings_console() -> str:
               display: grid;
               gap: 12px;
             }
+            .env-grid {
+              display: grid;
+              grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+              gap: 14px;
+            }
+            .env-card {
+              border: 1px solid var(--line);
+              border-radius: 18px;
+              padding: 14px;
+              background: #fffdf8;
+              display: grid;
+              gap: 8px;
+            }
+            .env-top {
+              display: flex;
+              justify-content: space-between;
+              gap: 10px;
+              align-items: center;
+            }
+            .env-top strong {
+              font-size: 14px;
+            }
+            .env-badge {
+              display: inline-flex;
+              align-items: center;
+              border-radius: 999px;
+              padding: 4px 8px;
+              font-size: 12px;
+              background: rgba(37, 93, 82, 0.12);
+              color: var(--accent-dark);
+            }
+            .env-badge.warn {
+              background: rgba(171, 92, 47, 0.14);
+              color: #8a4a21;
+            }
+            .env-card code {
+              font-size: 12px;
+              color: var(--accent-dark);
+            }
             .setting-card h4 {
               margin: 0;
               font-size: 16px;
@@ -1421,9 +1465,9 @@ def settings_console() -> str:
         <body>
           <main>
             <section class="hero">
-              <span class="eyebrow">PHASE 7B SETTINGS</span>
+              <span class="eyebrow">RUNTIME SETTINGS & STATUS</span>
               <h1>运行参数设置</h1>
-              <p>这里只允许修改可以热覆盖的运行参数，例如写稿模型、审稿模型和自动反馈开关。数据库地址、第三方密钥、Bearer Token、微信 Secret 这类基础设施和敏感配置仍然留在 `.env`。</p>
+              <p>这里只允许修改可以热覆盖的运行参数，例如写稿模型、审稿模型和自动反馈开关。数据库地址、第三方密钥、Bearer Token、微信 Secret 这类基础设施和敏感配置仍然留在 `.env`；Phase 7D 会在这里额外显示只读环境状态，并提供测试告警入口。</p>
             </section>
 
             <section class="layout">
@@ -1460,33 +1504,61 @@ def settings_console() -> str:
                 </section>
 
                 <section class="panel">
+                  <h2>告警测试</h2>
+                  <div class="hint" id="alert-hint">请输入 Bearer Token 后刷新状态。若 `ALERT_WEBHOOK_URL` 未配置，这里会显示为不可用。</div>
+                  <div class="actions">
+                    <button id="send-alert">发送测试告警</button>
+                  </div>
+                </section>
+
+                <section class="panel">
                   <h2>调试输出</h2>
                   <pre id="output">等待请求。</pre>
                 </section>
               </div>
 
-              <section class="panel">
-                <h2>当前设置</h2>
-                <div class="hint" style="margin-bottom: 14px;">保存后新任务会读取最新运行参数；恢复默认会删除数据库覆盖值，重新回退到环境变量默认值。</div>
-                <div id="categories" class="categories">
-                  <div class="empty">请输入 Bearer Token 后点击“刷新设置”。</div>
-                </div>
-              </section>
+              <div class="stack">
+                <section class="panel">
+                  <h2>当前设置</h2>
+                  <div class="hint" style="margin-bottom: 14px;">保存后新任务会读取最新运行参数；恢复默认会删除数据库覆盖值，重新回退到环境变量默认值。</div>
+                  <div id="categories" class="categories">
+                    <div class="empty">请输入 Bearer Token 后点击“刷新设置”。</div>
+                  </div>
+                </section>
+
+                <section class="panel">
+                  <h2>环境状态</h2>
+                  <div class="hint" style="margin-bottom: 14px;">这里是只读环境状态面板。密钥不会明文展示，只告诉你当前是否已配置；普通 URL 和基础参数会显示简化预览。</div>
+                  <div id="runtime-status" class="categories">
+                    <div class="empty">请输入 Bearer Token 后点击“刷新设置”。</div>
+                  </div>
+                </section>
+              </div>
             </section>
           </main>
 
           <script>
             const statusEl = document.getElementById("status");
             const outputEl = document.getElementById("output");
+            const alertHintEl = document.getElementById("alert-hint");
             const tokenEl = document.getElementById("token");
             const operatorEl = document.getElementById("operator");
             const noteEl = document.getElementById("note");
             const categoriesEl = document.getElementById("categories");
+            const runtimeStatusEl = document.getElementById("runtime-status");
             const CATEGORY_LABELS = {
               phase4: "Phase 4 生成与审稿",
               feedback: "Phase 6 自动反馈",
             };
+            const RUNTIME_CATEGORY_LABELS = {
+              app: "应用基础配置",
+              infra: "基础设施连接",
+              security: "访问控制与密钥",
+              integrations: "外部集成",
+              observability: "观测与告警",
+            };
             let currentSettings = [];
+            let currentRuntimeStatus = null;
 
             const setStatus = (text) => {
               statusEl.textContent = text;
@@ -1619,6 +1691,48 @@ def settings_console() -> str:
               `).join("");
             };
 
+            const renderRuntimeStatus = (payload) => {
+              currentRuntimeStatus = payload;
+              const envItems = payload.environment || [];
+              if (!envItems.length) {
+                runtimeStatusEl.innerHTML = '<div class="empty">没有环境状态可展示。</div>';
+              } else {
+                const groups = new Map();
+                envItems.forEach((item) => {
+                  const category = item.category || "other";
+                  if (!groups.has(category)) groups.set(category, []);
+                  groups.get(category).push(item);
+                });
+                runtimeStatusEl.innerHTML = Array.from(groups.entries()).map(([category, items]) => `
+                  <section class="category">
+                    <h3>${escapeHtml(RUNTIME_CATEGORY_LABELS[category] || category)}</h3>
+                    <div class="env-grid">
+                      ${items.map((item) => `
+                        <article class="env-card">
+                          <div class="env-top">
+                            <strong>${escapeHtml(item.label)}</strong>
+                            <span class="env-badge ${item.required && !item.configured ? "warn" : ""}">
+                              ${item.configured ? "已配置" : (item.required ? "缺失" : "未配置")}
+                            </span>
+                          </div>
+                          <code>${escapeHtml(item.key)}</code>
+                          <div class="hint">${item.secret ? "密钥类配置不展示明文。" : escapeHtml(item.preview || "无预览")}</div>
+                          <div class="hint">${item.note ? escapeHtml(item.note) : (item.required ? "当前阶段要求存在。" : "当前为可选项。")}</div>
+                        </article>
+                      `).join("")}
+                    </div>
+                  </section>
+                `).join("");
+              }
+
+              const alerts = payload.alerts || {};
+              if (alerts.enabled) {
+                alertHintEl.textContent = `告警已启用 · ${alerts.destination_preview || "Webhook 已配置"}。可以发送测试告警验证连通性。`;
+              } else {
+                alertHintEl.textContent = alerts.note || "当前未配置 ALERT_WEBHOOK_URL，测试告警按钮会返回错误。";
+              }
+            };
+
             const parseValueFromCard = (setting, card) => {
               const input = card.querySelector(`#setting-${CSS.escape(setting.key)}`);
               if (!input) throw new Error("设置输入框不存在。");
@@ -1628,13 +1742,24 @@ def settings_console() -> str:
             };
 
             const loadSettings = async () => {
-              saveDraft();
-              setStatus("加载中");
               const settings = await request("/api/v1/admin/settings");
               currentSettings = settings;
               renderCategories(settings);
-              renderOutput(settings);
-              setStatus(`已加载 · ${settings.length} 项`);
+              return settings;
+            };
+
+            const loadRuntimeStatus = async () => {
+              const payload = await request("/api/v1/admin/runtime-status");
+              renderRuntimeStatus(payload);
+              return payload;
+            };
+
+            const loadAll = async () => {
+              saveDraft();
+              setStatus("加载中");
+              const [settings, runtimeStatus] = await Promise.all([loadSettings(), loadRuntimeStatus()]);
+              renderOutput({ settings, runtime_status: runtimeStatus });
+              setStatus(`已加载 · ${settings.length} 项设置 / ${runtimeStatus.environment.length} 项环境状态`);
             };
 
             const updateSetting = async (setting, card, resetToDefault = false) => {
@@ -1652,13 +1777,32 @@ def settings_console() -> str:
                 body: JSON.stringify(payload),
               });
               renderOutput(result);
-              await loadSettings();
+              await loadAll();
               setStatus(resetToDefault ? "已恢复默认" : "已保存");
             };
 
             document.getElementById("refresh").addEventListener("click", () => {
-              loadSettings().catch((error) => {
+              loadAll().catch((error) => {
                 setStatus("加载失败");
+                renderOutput(error.message || String(error));
+              });
+            });
+
+            document.getElementById("send-alert").addEventListener("click", () => {
+              saveDraft();
+              setStatus("发送测试告警中");
+              request("/api/v1/admin/alerts/test", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  operator: operatorEl.value.trim() || "admin-console",
+                  note: noteEl.value.trim() || null,
+                }),
+              }).then((result) => {
+                renderOutput(result);
+                setStatus("测试告警已发送");
+              }).catch((error) => {
+                setStatus("测试告警失败");
                 renderOutput(error.message || String(error));
               });
             });
@@ -1688,7 +1832,7 @@ def settings_console() -> str:
 
             readDraft();
             if (tokenEl.value.trim()) {
-              loadSettings().catch((error) => {
+              loadAll().catch((error) => {
                 setStatus("加载失败");
                 renderOutput(error.message || String(error));
               });

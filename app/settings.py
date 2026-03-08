@@ -107,6 +107,7 @@ class Settings(BaseSettings):
     feedback_sync_worker_poll_timeout_seconds: int = Field(default=5, alias="FEEDBACK_SYNC_WORKER_POLL_TIMEOUT_SECONDS")
     feedback_sync_worker_idle_sleep_seconds: int = Field(default=1, alias="FEEDBACK_SYNC_WORKER_IDLE_SLEEP_SECONDS")
     feedback_sync_recent_limit: int = Field(default=20, alias="FEEDBACK_SYNC_RECENT_LIMIT")
+    alert_webhook_url: Optional[str] = Field(default=None, alias="ALERT_WEBHOOK_URL")
 
     local_storage_root: Path = Field(default=Path("./data"), alias="LOCAL_STORAGE_ROOT")
 

@@ -3,7 +3,7 @@
 微信公众号选题重构与草稿生产系统。
 
 当前正式版本：`v1.0.0`  
-状态：`MVP Closed · main 已进入 Phase 7C`
+状态：`MVP Closed · main 已进入 Phase 7D`
 
 ## 系统能做什么
 
@@ -21,6 +21,7 @@
 - Phase 7A：统一监控首页、自动轮询、历史筛选、任务聚合详情
 - Phase 7B：网页运行参数设置、`system_settings` 覆盖层、配置审计日志
 - Phase 7C：统一控制台实时流、统计卡片、SSE 监控快照接口
+- Phase 7D：只读环境状态面板、测试告警入口、成功率与异常卡片
 
 ## 仓库结构
 
@@ -43,7 +44,9 @@
 - `GET /api/v1/tasks/{task_id}/feedback`
 - `GET /api/v1/tasks/{task_id}/workspace`
 - `GET /api/v1/admin/monitor/snapshot`
+- `GET /api/v1/admin/runtime-status`
 - `GET /api/v1/admin/settings`
+- `POST /api/v1/admin/alerts/test`
 
 后台页：
 
@@ -179,7 +182,7 @@ bash scripts/deploy_prebuilt_from_local.sh
 - `/admin/console`
   - 统一任务监控首页
   - 优先通过 SSE 实时推送任务快照，失败时回退轮询
-  - 展示当前筛选、运行中、待人工、待推草稿、已入草稿、失败任务、今日提交、今日入草稿等统计卡片
+  - 展示当前筛选、运行中、待人工、待推草稿、已入草稿、失败任务、异常堆积、今日提交、今日入草稿、今日失败、今日审稿通过率、今日自动推稿成功率等统计卡片
   - 支持按状态、来源、关键词、起始时间筛选历史任务
   - 可直接查看聚合任务详情，再跳转到 Phase 5 / Phase 6
 - `/admin/settings`
@@ -187,6 +190,8 @@ bash scripts/deploy_prebuilt_from_local.sh
   - 当前支持 Phase 4 写稿模型、审稿模型、自动推草稿
   - 当前支持反馈 Provider 和默认 day offsets
   - 展示环境默认值、数据库覆盖值和实际生效值
+  - 展示 `.env` 只读环境状态面板
+  - 支持发送测试告警验证 `ALERT_WEBHOOK_URL`
 - `/admin/phase5`
   - 查看最近任务、状态分组、待处理筛选、版本 diff、人工审核
 - `/admin/phase6`
@@ -199,7 +204,7 @@ Phase 7B 只开放“可热修改的运行参数”，当前读取顺序为：
 1. `system_settings`
 2. `.env`
 
-Phase 7C 的监控快照接口与统一控制台不会直接暴露密钥明文；实时流仍然通过后台 Basic Auth 保护，监控数据接口则继续要求 `API_BEARER_TOKEN`。
+Phase 7C / 7D 的监控快照接口、环境状态接口和统一控制台不会直接暴露密钥明文；实时流仍然通过后台 Basic Auth 保护，数据接口继续要求 `API_BEARER_TOKEN`。
 
 也就是说，网页设置不会直接重写 `.env`。当前仍然只允许通过环境变量管理的值包括：
 

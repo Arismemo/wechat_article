@@ -80,6 +80,8 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("/api/v1/feedback/experiments", routes)
         self.assertIn("/api/v1/feedback/style-assets", routes)
         self.assertIn("/api/v1/admin/monitor/snapshot", routes)
+        self.assertIn("/api/v1/admin/runtime-status", routes)
+        self.assertIn("/api/v1/admin/alerts/test", routes)
         self.assertIn("/api/v1/admin/settings", routes)
         self.assertIn("/api/v1/admin/settings/{key}", routes)
         self.assertIn("/admin", routes)
@@ -137,9 +139,11 @@ class AppRouteTests(unittest.TestCase):
         response = client.get("/admin/settings")
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn("Phase 7B 设置台", response.text)
+        self.assertIn("RUNTIME SETTINGS & STATUS", response.text)
         self.assertIn("运行参数设置", response.text)
         self.assertIn("这里只允许修改可以热覆盖的运行参数", response.text)
+        self.assertIn("环境状态", response.text)
+        self.assertIn("告警测试", response.text)
 
     def test_admin_portal_page_renders(self) -> None:
         app_module = reload(import_module("app.main"))

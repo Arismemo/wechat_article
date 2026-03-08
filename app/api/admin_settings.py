@@ -5,7 +5,10 @@ from sqlalchemy.orm import Session
 
 from app.core.security import verify_bearer_token
 from app.db.session import get_db_session
+from app.schemas.admin_runtime import AdminAlertTestRequest, AdminAlertTestResponse, AdminRuntimeStatusResponse
 from app.schemas.system_settings import SystemSettingResponse, SystemSettingUpdateRequest
+from app.services.admin_runtime_service import AdminRuntimeService
+from app.services.alert_service import AlertService
 from app.services.system_setting_service import SystemSettingService
 
 
@@ -16,6 +19,11 @@ router = APIRouter()
 def list_admin_settings(session: Session = Depends(get_db_session)) -> list[SystemSettingResponse]:
     service = SystemSettingService(session)
     return [_build_response(item) for item in service.list_settings()]
+
+
+@router.get("/admin/runtime-status", response_model=AdminRuntimeStatusResponse, dependencies=[Depends(verify_bearer_token)])
+def get_admin_runtime_status(session: Session = Depends(get_db_session)) -> AdminRuntimeStatusResponse:
+    return AdminRuntimeService(session).build_runtime_status()
 
 
 @router.get("/admin/settings/{key}", response_model=SystemSettingResponse, dependencies=[Depends(verify_bearer_token)])
@@ -46,6 +54,20 @@ def update_admin_setting(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return _build_response(setting)
+
+
+@router.post("/admin/alerts/test", response_model=AdminAlertTestResponse, dependencies=[Depends(verify_bearer_token)])
+def send_admin_test_alert(
+    payload: AdminAlertTestRequest,
+    session: Session = Depends(get_db_session),
+) -> AdminAlertTestResponse:
+    service = AlertService(session)
+    try:
+        return service.send_test_alert(operator=payload.operator, note=payload.note)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
 
 
 def _build_response(setting) -> SystemSettingResponse:

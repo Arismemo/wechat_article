@@ -1,7 +1,7 @@
 import os
 import tempfile
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
@@ -73,6 +73,7 @@ class AdminMonitorApiTests(unittest.TestCase):
         )
         session.add(running_task)
         session.flush()
+        running_task.updated_at = datetime.now(timezone.utc) - timedelta(hours=1)
         session.add(ContentBrief(task_id=running_task.id, brief_version=1, positioning="监控测试"))
         session.flush()
         session.add(
@@ -149,7 +150,9 @@ class AdminMonitorApiTests(unittest.TestCase):
         self.assertEqual(body["summary"]["filtered_total"], 2)
         self.assertEqual(body["summary"]["filtered_active"], 1)
         self.assertEqual(body["summary"]["filtered_draft_saved"], 1)
+        self.assertEqual(body["summary"]["filtered_stuck"], 1)
         self.assertEqual(body["summary"]["today_submitted"], 2)
+        self.assertEqual(body["summary"]["today_review_success_rate"], 100.0)
         self.assertEqual(len(body["tasks"]), 2)
         self.assertEqual(body["workspace"]["task_id"], self.draft_task_id)
         self.assertEqual(body["workspace"]["wechat_media_id"], "media-monitor-1")
