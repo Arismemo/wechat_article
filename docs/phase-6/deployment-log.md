@@ -112,6 +112,82 @@ Phase 6 第一版已经完成服务器收口，当前可用闭环是：
 
 `review_passed / draft_saved 任务 -> 手工或 CSV 批量导入 T+1/T+3/T+7 指标 -> Prompt 实验榜聚合 -> 风格资产沉淀`
 
+## 追加联调：自动反馈入口
+
+在 Phase 6 第一版基础上，进一步部署了“自动反馈入口”，目标是先不依赖微信官方分析接口，而是通过可配置 Provider 把外部反馈快照接回 `publication_metrics`。
+
+追加代码版本：
+
+- Git commit：`43e358a`
+- 提交信息：`Add automatic feedback sync entrypoint`
+
+本次运行环境配置：
+
+- `FEEDBACK_SYNC_PROVIDER=mock`
+- `FEEDBACK_SYNC_DAY_OFFSETS=1,3,7`
+
+### 服务器部署方式
+
+由于远端网络仍然会卡在冷下载依赖和 Playwright，且大镜像通过 SSH 传输也偏慢，这次自动反馈入口最终采用了“工作区热同步 + 容器重建 + 容器内热更新”的折中方案：
+
+1. 本地 `git push origin main`
+2. 用 `scripts/sync_to_server.sh` 将最新工作区同步到远端
+3. 在服务器 `.env` 中补充 `FEEDBACK_SYNC_*` 配置
+4. 远端执行 `docker compose up -d --no-build --force-recreate api phase2_worker phase3_worker phase4_worker feedback_worker`
+5. 将远端工作区中的 `app/` 和 `scripts/` 直接 `docker cp` 到各运行中的容器，再重启容器
+
+最终容器状态：
+
+- `api` healthy
+- `phase2_worker` running
+- `phase3_worker` running
+- `phase4_worker` running
+- `feedback_worker` running
+
+### 自动反馈同步 smoke test
+
+同步验收任务：
+
+- `task_id`: `96694882-8c18-44a2-8c7b-8efc06a0f30d`
+- `generation_id`: `87593229-076d-4333-bedc-6ab4e4372626`
+- `wechat_media_id`: `PyYQ74YwFFGh2wyA3BOdv9qynbQA5cvPgqO5cZH6pvLyOHhp2ta_lzV2bHObWbQg`
+
+验收步骤：
+
+1. `POST /internal/v1/tasks/{task_id}/run-feedback-sync`
+   - 请求窗口：`[1,3,7]`
+   - 请求操作人：`server-smoke`
+   - 返回：
+     - `provider=mock`
+     - `imported_count=3`
+     - `imported_day_offsets=[1,3,7]`
+2. `GET /api/v1/tasks/{task_id}/feedback`
+   - 返回 3 条自动同步快照
+   - `source_type=auto:mock`
+   - `imported_by=feedback-sync-mock`
+
+异步验收任务：
+
+- `task_id`: `5d9cc392-bb31-4f7c-a9ec-7258d1862621`
+- `generation_id`: `eb746a3c-9cd5-405e-a63b-478b214f50e3`
+
+验收步骤：
+
+1. `POST /internal/v1/tasks/{task_id}/enqueue-feedback-sync`
+   - 请求窗口：`[7]`
+   - 返回：
+     - `enqueued=true`
+2. `feedback_worker` 自动消费队列
+3. `GET /api/v1/tasks/{task_id}/feedback`
+   - 成功返回 `day_offset=7`
+   - `source_type=auto:mock`
+
+结论：
+
+- 自动反馈入口已经在服务器跑通
+- 同步入口、异步队列入口和 `feedback_worker` 都已通过真实环境验收
+- 只要后续把 `FEEDBACK_SYNC_PROVIDER` 从 `mock` 切到 `http` 并提供真实上游接口，就可以平滑接入生产反馈源
+
 ## 追加联调：phase4-v2 反馈回写
 
 在将 `style_assets` 接回 Phase 4 后，追加做了一轮 “新 prompt 版本 -> 反馈导入” 联调，用来确认 Phase 6 不会再把新 generation 记成旧版 `phase4-v1`。
