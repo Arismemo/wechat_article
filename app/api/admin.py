@@ -1069,6 +1069,7 @@ def phase5_console() -> str:
             const tokenEl = document.getElementById("token");
             const urlEl = document.getElementById("url");
             const taskEl = document.getElementById("task");
+            const reviewNoteEl = document.getElementById("review-note");
             const deviceEl = document.getElementById("device");
             const outputEl = document.getElementById("output");
             const statusEl = document.getElementById("status");
