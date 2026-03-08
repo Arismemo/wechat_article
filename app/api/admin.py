@@ -5,6 +5,7 @@ from textwrap import dedent
 from fastapi import APIRouter, Depends
 from fastapi.responses import HTMLResponse
 
+from app.api.admin_ui import admin_section_nav, admin_section_nav_styles
 from app.core.security import verify_admin_basic_auth
 
 
@@ -503,7 +504,7 @@ def phase2_console() -> str:
 
 @router.get("/admin/phase5", response_class=HTMLResponse, tags=["admin"], dependencies=[Depends(verify_admin_basic_auth)])
 def phase5_console() -> str:
-    return dedent(
+    html = dedent(
         """\
         <!DOCTYPE html>
         <html lang="zh-CN">
@@ -951,6 +952,7 @@ def phase5_console() -> str:
             .fold .meta {
               margin-top: 10px;
             }
+            __ADMIN_NAV_STYLES__
             @media (max-width: 1024px) {
               .layout {
                 grid-template-columns: 1fr;
@@ -971,19 +973,21 @@ def phase5_console() -> str:
           <main>
             <section class="hero">
               <span class="eyebrow">PHASE 5 ADMIN CONSOLE</span>
-              <h1>任务看板、人工审核与手动干预</h1>
-              <p>看任务，做决定，推草稿。不翻日志，也能完成日常审核。</p>
+              <h1>审核台</h1>
+              <p>先看任务，再决定：通过、重写，还是推草稿。</p>
+              __ADMIN_SECTION_NAV__
             </section>
 
             <section class="layout">
               <div class="stack">
                 <section class="panel">
-                  <h2>认证与操作</h2>
+                  <h2>先选任务</h2>
                   <div class="grid single">
                     <div>
                       <label for="token">Bearer Token</label>
                       <input id="token" type="password" placeholder="输入 API_BEARER_TOKEN" />
                     </div>
+                    <p class="hint" style="margin: 0;">第一次打开时填一次就行，页面会先记住。</p>
                     <div>
                       <label for="device">device_id</label>
                       <input id="device" type="text" value="phase5-console" />
@@ -1034,15 +1038,14 @@ def phase5_console() -> str:
                 </section>
 
                 <section class="panel">
-                  <h2>最短操作</h2>
+                  <h2>怎么用</h2>
                   <div class="meta">
-                    <div>1. 刷新最近任务，点一条卡片。</div>
+                    <div>1. 先刷新最近任务，再点一条卡片。</div>
                     <div>2. 右边先看状态、最新一稿和风险。</div>
                     <div>3. 可用就通过，不行就驳回或重跑。</div>
-                    <div>4. 最后再决定是否推草稿。</div>
                   </div>
                   <details class="fold">
-                    <summary>展开完整规则</summary>
+                    <summary>再看完整规则</summary>
                     <div class="meta">
                       <div>研究层明显缺信息时，先入队 Phase3；Brief 已够但稿子不行时，直接重跑 Phase4。</div>
                       <div>已推草稿的版本不允许再驳回；人工审核备注会写入 audit log。</div>
@@ -1906,11 +1909,16 @@ def phase5_console() -> str:
         </html>
         """
     )
+    return (
+        html.replace("__ADMIN_NAV_STYLES__", admin_section_nav_styles()).replace(
+            "__ADMIN_SECTION_NAV__", admin_section_nav("review")
+        )
+    )
 
 
 @router.get("/admin/phase6", response_class=HTMLResponse, tags=["admin"], dependencies=[Depends(verify_admin_basic_auth)])
 def phase6_console() -> str:
-    return dedent(
+    html = dedent(
         """\
         <!DOCTYPE html>
         <html lang="zh-CN">
@@ -2135,6 +2143,7 @@ def phase6_console() -> str:
             .tool-note {
               margin-top: 10px;
             }
+            __ADMIN_NAV_STYLES__
             @media (max-width: 980px) {
               .layout { grid-template-columns: 1fr; }
             }
@@ -2151,19 +2160,21 @@ def phase6_console() -> str:
           <main>
             <section class="hero">
               <span class="eyebrow">PHASE 6 FEEDBACK LOOP</span>
-              <h1>Phase 6 反馈台</h1>
-              <p>这里回收发布后的数据：导入反馈、自动同步、看实验榜、存风格资产。</p>
+              <h1>反馈台</h1>
+              <p>先选任务，再看反馈、实验和可复用的写法。</p>
+              __ADMIN_SECTION_NAV__
             </section>
 
             <section class="layout">
               <div class="stack">
                 <section class="panel">
-                  <h2>认证与任务</h2>
+                  <h2>先选任务</h2>
                   <div class="grid single">
                     <div>
                       <label for="token">Bearer Token</label>
                       <input id="token" type="password" placeholder="输入 API_BEARER_TOKEN" />
                     </div>
+                    <p class="hint" style="margin: 0;">第一次打开时填一次就行，页面会先记住。</p>
                     <div>
                       <label for="task-id">Task ID</label>
                       <input id="task-id" type="text" placeholder="f703c3ef-..." />
@@ -2202,7 +2213,7 @@ def phase6_console() -> str:
                     <button id="queue-feedback-sync" class="secondary">入队同步</button>
                     <button id="queue-recent-feedback-sync" class="secondary">扫描入队</button>
                   </div>
-                  <p class="hint">自动同步只处理已经成功入草稿的任务。</p>
+                  <p class="hint">这里只处理已经成功入草稿的任务。</p>
                 </section>
 
                 <section class="panel">
@@ -2313,7 +2324,7 @@ def phase6_console() -> str:
 
                 <section class="panel">
                   <h2>任务反馈快照</h2>
-                  <p class="hint">看这条任务已经回收到了哪些反馈。</p>
+                  <p class="hint">这条任务已经回收到了哪些反馈。</p>
                   <div class="list" id="task-feedback-list">
                     <div class="hint">等待查询任务反馈...</div>
                   </div>
@@ -2321,7 +2332,7 @@ def phase6_console() -> str:
 
                 <section class="panel">
                   <h2>Prompt 实验榜</h2>
-                  <p class="hint">看哪套 prompt 更稳。</p>
+                  <p class="hint">哪套 prompt 更稳。</p>
                   <div class="list" id="experiment-list">
                     <div class="hint">等待加载实验榜...</div>
                   </div>
@@ -2329,7 +2340,7 @@ def phase6_console() -> str:
 
                 <section class="panel">
                   <h2>风格资产库</h2>
-                  <p class="hint">看哪些写法值得留下来复用。</p>
+                  <p class="hint">哪些写法值得留下来复用。</p>
                   <div class="list" id="style-asset-list">
                     <div class="hint">等待加载风格资产...</div>
                   </div>
@@ -2724,4 +2735,9 @@ def phase6_console() -> str:
         </body>
         </html>
         """
+    )
+    return (
+        html.replace("__ADMIN_NAV_STYLES__", admin_section_nav_styles()).replace(
+            "__ADMIN_SECTION_NAV__", admin_section_nav("feedback")
+        )
     )

@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import verify_admin_basic_auth
 from app.db.session import get_db_session, get_session_factory
+from app.api.admin_ui import admin_section_nav, admin_section_nav_styles
 from app.schemas.admin_monitor import AdminMonitorSnapshotResponse
 from app.schemas.ingest import IngestLinkRequest, IngestLinkResponse
 from app.schemas.internal import ManualReviewActionResponse, Phase4EnqueueResponse, WechatPushResponse
@@ -234,7 +235,7 @@ def unified_console_stream(
 
 @router.get("/admin", response_class=HTMLResponse, tags=["admin"], dependencies=[Depends(verify_admin_basic_auth)])
 def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
-    return dedent(
+    html = dedent(
         f"""\
         <!DOCTYPE html>
         <html lang="zh-CN">
@@ -739,6 +740,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               color: var(--muted);
               font-size: 12px;
             }}
+            __ADMIN_NAV_STYLES__
             @media (max-width: 1080px) {{
               .layout {{ grid-template-columns: 1fr; }}
               .detail-column {{ position: static; }}
@@ -775,14 +777,15 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                   <div class="hero-copy">
                     <span class="badge">PRIMARY CONTROL ROOM</span>
                     <h1>微信文章工厂</h1>
-                    <p>贴链接，等一下，看结果。</p>
+                    <p>贴链接，任务会自己往下走。</p>
                   </div>
                   <div class="status-line">
                     <span class="status-chip" id="auto-refresh">自动刷新中</span>
                     <span class="mini" id="flash-message">准备好了。</span>
                   </div>
                 </div>
-                <p class="hero-note">左边看任务，右边看下一步。网页端是主入口，手机快捷指令只是附加入口。</p>
+                <p class="hero-note">先贴链接。需要人工判断时，再点下面这排。</p>
+                __ADMIN_SECTION_NAV__
               </section>
 
               <div class="layout">
@@ -824,15 +827,6 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                         <input id="task-search" type="search" placeholder="搜标题、链接或任务号" autocomplete="off" />
                         <button id="clear-search-button" class="tiny-button ghost" type="button">清空</button>
                       </div>
-                      <details class="advanced-shell">
-                        <summary>更多工具</summary>
-                        <div class="advanced-links">
-                          <a href="/admin/settings" target="_blank" rel="noreferrer">设置</a>
-                          <a href="/admin/console" target="_blank" rel="noreferrer">监控详情</a>
-                          <a href="/admin/phase5" target="_blank" rel="noreferrer">审核台</a>
-                          <a href="/admin/phase6" target="_blank" rel="noreferrer">反馈台</a>
-                        </div>
-                      </details>
                     </div>
                     <div class="task-list" id="task-list">
                       <div class="empty">还没有任务。</div>
@@ -1531,6 +1525,11 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
         </body>
         </html>
         """
+    )
+    return (
+        html.replace("__ADMIN_NAV_STYLES__", admin_section_nav_styles()).replace(
+            "__ADMIN_SECTION_NAV__", admin_section_nav("portal")
+        )
     )
 
 
@@ -2570,7 +2569,7 @@ def unified_console() -> str:
 
 @router.get("/admin/settings", response_class=HTMLResponse, tags=["admin"], dependencies=[Depends(verify_admin_basic_auth)])
 def settings_console() -> str:
-    return dedent(
+    html = dedent(
         """\
         <!DOCTYPE html>
         <html lang="zh-CN">
@@ -2863,6 +2862,7 @@ def settings_console() -> str:
               color: var(--muted);
               background: rgba(255, 255, 255, 0.4);
             }
+            __ADMIN_NAV_STYLES__
             @media (max-width: 960px) {
               .layout { grid-template-columns: 1fr; }
             }
@@ -2880,18 +2880,20 @@ def settings_console() -> str:
             <section class="hero">
               <span class="eyebrow">RUNTIME SETTINGS & STATUS</span>
               <h1>运行参数设置</h1>
-              <p>这里只改运行参数，不改密钥和基础设施。</p>
+              <p>这里只改少量运行开关，不碰密钥和基础设施。</p>
+              __ADMIN_SECTION_NAV__
             </section>
 
             <section class="layout">
               <div class="stack">
                 <section class="panel">
                   <span class="status" id="status">等待加载</span>
-                  <h2>认证与操作</h2>
+                  <h2>先准备</h2>
                   <div>
                     <label for="token">Bearer Token</label>
                     <input id="token" type="password" placeholder="输入 API_BEARER_TOKEN" />
                   </div>
+                  <p class="hint" style="margin: 10px 0 0;">第一次打开时填一次就行，页面会先记住。</p>
                   <div style="margin-top: 14px;">
                     <label for="operator">operator</label>
                     <input id="operator" type="text" value="admin-console" />
@@ -3264,4 +3266,9 @@ def settings_console() -> str:
         </body>
         </html>
         """
+    )
+    return (
+        html.replace("__ADMIN_NAV_STYLES__", admin_section_nav_styles()).replace(
+            "__ADMIN_SECTION_NAV__", admin_section_nav("settings")
+        )
     )
