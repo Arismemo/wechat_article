@@ -100,6 +100,8 @@
   - 本地构建 `linux/amd64` 镜像
   - 通过 `docker save | ssh ... docker load` 灌到服务器
   - 服务器仍然坚持 `git pull` 更新工作树和 migration
+  - 加载后会 `--force-recreate` 目标服务，确保同名 tag 更新后容器实际切到新镜像
+  - 如果本机已经有可复用镜像，可加：`SKIP_LOCAL_BUILD=1 BASE_IMAGE=...`
 - `scripts/deploy_from_git.sh` 支持：
   - `SERVICES="api phase4_worker"` 只部署部分服务
   - `SKIP_BUILD=1` 跳过镜像构建，仅做 `git pull + migration + compose up`

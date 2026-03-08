@@ -65,7 +65,8 @@
 - `scripts/deploy_prebuilt_from_local.sh`
   - 本地构建 `linux/amd64` 镜像并打多个服务标签
   - 通过 `docker save | ssh ... docker load` 推到服务器
-  - 服务端仍先 `git pull`，再做 migration 和 `docker compose up -d --no-build`
+  - 服务端仍先 `git pull`，再做 migration 和 `docker compose up -d --no-build --force-recreate`
+  - 支持 `SKIP_LOCAL_BUILD=1 BASE_IMAGE=...`，在本机已有同版本镜像时直接复用
 
 ## 影响
 
