@@ -261,12 +261,30 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             * {{ box-sizing: border-box; }}
             body {{
               margin: 0;
+              min-height: 100vh;
               color: var(--text);
+              line-height: 1.5;
               font-family: "PingFang SC", "Noto Serif SC", serif;
               background:
                 radial-gradient(circle at top left, rgba(244, 210, 147, 0.58), transparent 24%),
                 radial-gradient(circle at top right, rgba(168, 209, 196, 0.42), transparent 26%),
                 linear-gradient(145deg, #efe5d7 0%, #f7f3ec 42%, #eadfcd 100%);
+            }}
+            .skip-link {{
+              position: absolute;
+              top: 16px;
+              left: 16px;
+              transform: translateY(-180%);
+              padding: 10px 14px;
+              border-radius: 999px;
+              background: var(--accent-strong);
+              color: #f7faf8;
+              text-decoration: none;
+              z-index: 20;
+              transition: transform 120ms ease;
+            }}
+            .skip-link:focus-visible {{
+              transform: translateY(0);
             }}
             main {{
               max-width: 1420px;
@@ -287,12 +305,11 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               box-shadow: var(--shadow);
               backdrop-filter: blur(10px);
             }}
-            .hero-top {{
-              display: flex;
-              justify-content: space-between;
-              gap: 16px;
-              align-items: flex-start;
-              flex-wrap: wrap;
+            .hero-grid {{
+              display: grid;
+              grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.95fr);
+              gap: 18px;
+              align-items: stretch;
             }}
             .badge {{
               display: inline-flex;
@@ -311,7 +328,8 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             }}
             .hero-copy {{
               display: grid;
-              gap: 8px;
+              align-content: start;
+              gap: 10px;
             }}
             .hero-copy p {{
               margin: 0;
@@ -319,10 +337,50 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               color: var(--muted);
               line-height: 1.7;
             }}
+            .hero-status-card {{
+              display: grid;
+              gap: 14px;
+              padding: 18px;
+              border-radius: 24px;
+              border: 1px solid rgba(31, 93, 83, 0.12);
+              background: linear-gradient(160deg, rgba(255, 252, 247, 0.95), rgba(249, 245, 237, 0.9));
+            }}
+            .hero-status-copy {{
+              margin: 0;
+              font-size: 15px;
+              line-height: 1.7;
+            }}
+            .hero-summary {{
+              display: grid;
+              grid-template-columns: repeat(2, minmax(0, 1fr));
+              gap: 10px;
+            }}
+            .hero-summary-card {{
+              display: grid;
+              gap: 6px;
+              padding: 12px 14px;
+              border-radius: 18px;
+              border: 1px solid rgba(65, 48, 27, 0.1);
+              background: rgba(255, 253, 249, 0.78);
+            }}
+            .hero-summary-card strong {{
+              color: var(--muted);
+              font-size: 12px;
+              font-weight: 500;
+            }}
+            .hero-summary-card span {{
+              font-size: 16px;
+              line-height: 1.5;
+            }}
+            .hero-summary-card.wide {{
+              grid-column: 1 / -1;
+              background: linear-gradient(135deg, rgba(31, 93, 83, 0.1), rgba(255, 249, 242, 0.95));
+            }}
             .hero-note {{
               margin: 0;
               color: var(--muted);
               font-size: 13px;
+              line-height: 1.7;
             }}
             .panel {{
               background: var(--paper);
@@ -363,6 +421,12 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               margin: 0;
               font-size: 19px;
             }}
+            .panel-intro {{
+              margin: 0 0 14px;
+              color: var(--muted);
+              font-size: 13px;
+              line-height: 1.7;
+            }}
             .mini {{
               color: var(--muted);
               font-size: 13px;
@@ -370,6 +434,10 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             .composer {{
               display: grid;
               gap: 12px;
+            }}
+            .field {{
+              display: grid;
+              gap: 6px;
             }}
             .composer-row {{
               display: grid;
@@ -379,6 +447,16 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               display: grid;
               grid-template-columns: 120px minmax(0, 1fr);
               gap: 10px;
+            }}
+            label {{
+              color: var(--muted);
+              font-size: 13px;
+            }}
+            .field-hint {{
+              margin: 0;
+              color: var(--muted);
+              font-size: 13px;
+              line-height: 1.7;
             }}
             input, button {{
               width: 100%;
@@ -391,8 +469,14 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               padding: 18px 20px;
               color: var(--text);
             }}
-            input:focus {{
+            input:focus-visible,
+            button:focus-visible,
+            a:focus-visible,
+            summary:focus-visible {{
               outline: 2px solid rgba(31, 93, 83, 0.18);
+              outline-offset: 3px;
+            }}
+            input:focus-visible {{
               border-color: rgba(31, 93, 83, 0.4);
             }}
             button {{
@@ -459,28 +543,41 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               background: rgba(161, 69, 52, 0.12);
               color: var(--danger);
             }}
-            .metrics {{
+            .overview-strip {{
               display: grid;
               grid-template-columns: repeat(4, minmax(0, 1fr));
-              gap: 10px;
+              gap: 12px;
             }}
-            .metric {{
-              padding: 14px;
+            .overview-card {{
+              display: grid;
+              gap: 8px;
+              min-width: 0;
+              padding: 16px;
               border-radius: 20px;
               border: 1px solid var(--line);
-              background: #fffdf9;
+              background: rgba(255, 251, 246, 0.9);
+              box-shadow: 0 14px 32px rgba(58, 40, 18, 0.08);
             }}
-            .metric strong {{
+            .overview-card.highlight {{
+              grid-column: span 2;
+              background: linear-gradient(135deg, rgba(31, 93, 83, 0.1), rgba(255, 249, 242, 0.96));
+            }}
+            .overview-card strong {{
               display: block;
               color: var(--muted);
               font-size: 12px;
               font-weight: 500;
-              margin-bottom: 8px;
             }}
-            .metric span {{
+            .overview-card span {{
               display: block;
-              font-size: 30px;
-              line-height: 1;
+              font-size: 28px;
+              line-height: 1.1;
+            }}
+            .overview-card p {{
+              margin: 0;
+              color: var(--muted);
+              font-size: 13px;
+              line-height: 1.7;
             }}
             .task-toolbar {{
               display: grid;
@@ -555,7 +652,10 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               display: grid;
               align-content: start;
               gap: 8px;
+              width: 100%;
               padding: 14px 15px;
+              color: var(--text);
+              font: inherit;
               border-radius: 20px;
               border: 1px solid var(--line);
               background: #fffdf9;
@@ -563,9 +663,13 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               position: relative;
               isolation: isolate;
               cursor: pointer;
+              appearance: none;
+              text-align: left;
               transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
             }}
             .task-card:hover {{
+              background: #fffdf9;
+              color: var(--text);
               transform: translateY(-1px);
               border-color: rgba(31, 93, 83, 0.35);
               box-shadow: 0 12px 26px rgba(58, 40, 18, 0.08);
@@ -573,11 +677,30 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             .task-card.selected {{
               border-color: rgba(31, 93, 83, 0.45);
               box-shadow: 0 14px 28px rgba(31, 93, 83, 0.11);
+              background: linear-gradient(135deg, rgba(31, 93, 83, 0.08), #fffdf9 45%);
+            }}
+            .task-card.tone-waiting {{
+              border-color: rgba(176, 122, 24, 0.26);
+            }}
+            .task-card.tone-fail {{
+              border-color: rgba(161, 69, 52, 0.24);
+            }}
+            .task-card.tone-done {{
+              border-color: rgba(47, 124, 83, 0.24);
             }}
             .task-title {{
               font-size: 16px;
               line-height: 1.45;
               overflow-wrap: anywhere;
+            }}
+            .task-eyebrow {{
+              color: var(--muted);
+              font-size: 12px;
+            }}
+            .task-reason {{
+              color: #3a3026;
+              font-size: 13px;
+              line-height: 1.6;
             }}
             .task-meta {{
               color: var(--muted);
@@ -603,6 +726,10 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               border: 1px dashed rgba(65, 48, 27, 0.18);
               color: var(--muted);
               background: rgba(255, 253, 249, 0.75);
+            }}
+            .task-list[aria-busy="true"],
+            .detail-grid[aria-busy="true"] {{
+              opacity: 0.8;
             }}
             .detail-grid {{
               display: grid;
@@ -743,12 +870,14 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             .footer-note {{
               color: var(--muted);
               font-size: 12px;
+              line-height: 1.7;
             }}
             __ADMIN_NAV_STYLES__
             @media (max-width: 1080px) {{
+              .hero-grid {{ grid-template-columns: 1fr; }}
+              .overview-strip {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
               .layout {{ grid-template-columns: 1fr; }}
               .detail-column {{ position: static; }}
-              .metrics {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
               .action-grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
             }}
             @media (max-width: 720px) {{
@@ -757,6 +886,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               .hero-note {{ font-size: 12px; line-height: 1.6; }}
               .panel {{ padding: 16px; border-radius: 20px; }}
               h1 {{ font-size: 32px; }}
+              .hero-summary {{ grid-template-columns: 1fr; }}
               .filter-row {{
                 flex-wrap: nowrap;
                 overflow-x: auto;
@@ -766,42 +896,114 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               .filter-row::-webkit-scrollbar {{ display: none; }}
               .pill {{ flex: 0 0 auto; white-space: nowrap; }}
               .composer-actions {{ grid-template-columns: 1fr; }}
-              .metrics {{ grid-template-columns: 1fr; }}
+              .overview-strip {{ grid-template-columns: 1fr; }}
+              .overview-card.highlight {{ grid-column: span 1; }}
               .task-list {{ max-height: none; overflow: visible; }}
               .kv-grid {{ grid-template-columns: 1fr; }}
               .action-grid {{ grid-template-columns: 1fr; }}
+              .search-row {{ grid-template-columns: 1fr; }}
             }}
           </style>
         </head>
         <body>
-          <main>
+          <a class="skip-link" href="#task-region">跳到任务主区</a>
+          <main id="main-content">
             <div class="shell">
               <section class="hero">
-                <div class="hero-top">
+                <div class="hero-grid">
                   <div class="hero-copy">
                     <span class="badge">PRIMARY CONTROL ROOM</span>
                     <h1>微信文章工厂</h1>
                     <p>贴链接，任务会自己往下走。</p>
                   </div>
-                  <div class="status-line">
-                    <span class="status-chip" id="auto-refresh">自动刷新中</span>
-                    <span class="mini" id="flash-message">准备好了。</span>
-                  </div>
+                  <aside class="hero-status-card" aria-label="运行状态">
+                    <div class="status-line">
+                      <span class="status-chip" id="auto-refresh">自动刷新中</span>
+                      <span class="mini">每 4 秒同步一次</span>
+                    </div>
+                    <p class="hero-status-copy" id="flash-message" role="status" aria-live="polite" aria-atomic="true">准备好了。</p>
+                    <div class="hero-summary" aria-label="首屏提示">
+                      <div class="hero-summary-card">
+                        <strong>唯一主动作</strong>
+                        <span>贴链接开始处理</span>
+                      </div>
+                      <div class="hero-summary-card">
+                        <strong>人工介入</strong>
+                        <span>只在任务卡住或待审核时出现</span>
+                      </div>
+                      <div class="hero-summary-card wide">
+                        <strong>当前建议</strong>
+                        <span id="hero-focus">先贴链接。需要人工判断时，再点下面这排。</span>
+                      </div>
+                    </div>
+                  </aside>
                 </div>
                 <p class="hero-note">先贴链接。需要人工判断时，再点下面这排。</p>
                 __ADMIN_SECTION_NAV__
               </section>
 
+              <section class="overview-strip" aria-label="任务概览">
+                <article class="overview-card">
+                  <strong>当前任务</strong>
+                  <span id="overview-total">0</span>
+                  <p>主控台里当前可见的任务总数。</p>
+                </article>
+                <article class="overview-card">
+                  <strong>处理中</strong>
+                  <span id="metric-active">0</span>
+                  <p>系统正在自动推进，不需要额外点击。</p>
+                </article>
+                <article class="overview-card">
+                  <strong>等你处理</strong>
+                  <span id="metric-manual">0</span>
+                  <p>需要人工审核、重写或补原文的任务。</p>
+                </article>
+                <article class="overview-card">
+                  <strong>已进草稿</strong>
+                  <span id="metric-draft">0</span>
+                  <p>已经推送进公众号草稿箱的任务。</p>
+                </article>
+                <article class="overview-card">
+                  <strong>失败</strong>
+                  <span id="metric-failed">0</span>
+                  <p>需要优先查看报错并决定是否重跑。</p>
+                </article>
+                <article class="overview-card">
+                  <strong>今天提交</strong>
+                  <span id="metric-today-submitted">0</span>
+                  <p>当天新进来的链接量。</p>
+                </article>
+                <article class="overview-card">
+                  <strong>今天进草稿</strong>
+                  <span id="metric-today-draft">0</span>
+                  <p>当天真正推进到微信草稿箱的任务。</p>
+                </article>
+                <article class="overview-card highlight">
+                  <strong>当前优先</strong>
+                  <span id="overview-focus">先贴第一条链接开始。</span>
+                  <p id="overview-focus-note">有人工审核或失败任务时，这里会提醒先处理哪一类。</p>
+                </article>
+              </section>
+
               <div class="layout">
-                <section class="stack">
+                <section class="stack" id="task-region">
                   <section class="panel">
                     <div class="panel-head">
                       <h2>开始一个任务</h2>
-                      <span class="mini">从这里开始</span>
+                      <span class="mini">唯一主动作</span>
                     </div>
+                    <p class="panel-intro">只接受微信公众号文章链接。提交后默认一路跑到微信草稿箱；如果这篇文章以前跑过，会直接帮你定位到原任务。</p>
                     <div class="composer">
-                      <div class="composer-row">
-                        <input id="ingest-url" type="url" placeholder="把微信文章链接贴在这里" autocomplete="off" />
+                      <div class="composer-row field">
+                        <label for="ingest-url">微信公众号文章链接</label>
+                        <input
+                          id="ingest-url"
+                          type="url"
+                          placeholder="https://mp.weixin.qq.com/s/..."
+                          autocomplete="url"
+                          aria-describedby="ingest-url-hint"
+                        />
+                        <p class="field-hint" id="ingest-url-hint">支持直接粘贴手机分享出来的链接。点击“开始处理”后，左侧列表会自动刷新并切到当前任务。</p>
                       </div>
                       <div class="composer-actions">
                         <button id="paste-button" class="secondary" type="button">粘贴</button>
@@ -816,9 +1018,11 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                       <h2>最近任务</h2>
                       <div class="panel-tools">
                         <span class="mini" id="task-count">0 个</span>
+                        <span class="mini" id="generated-at">刚刚更新</span>
                         <button id="refresh-button" class="tiny-button" type="button">刷新列表</button>
                       </div>
                     </div>
+                    <p class="panel-intro">先用筛选找“等我处理”或“失败”，再点进右侧详情。状态会自动刷新，搜索支持标题、链接和任务号。</p>
                     <div class="task-toolbar">
                       <div class="filter-row">
                         <button class="pill active" data-filter="all" data-label="全部" type="button">全部</button>
@@ -832,7 +1036,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                         <button id="clear-search-button" class="tiny-button ghost" type="button">清空</button>
                       </div>
                     </div>
-                    <div class="task-list" id="task-list">
+                    <div class="task-list" id="task-list" role="listbox" aria-label="最近任务列表" aria-busy="false">
                       <div class="empty">还没有任务。</div>
                     </div>
                   </section>
@@ -844,21 +1048,9 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                       <h2>任务详情</h2>
                       <span class="mini" id="selected-task-code">先点左边任意一条</span>
                     </div>
-                    <div class="detail-grid" id="task-detail">
+                    <p class="panel-intro">右侧先告诉你下一步，再展示关键状态、可执行动作和必要的补充信息。</p>
+                    <div class="detail-grid" id="task-detail" aria-live="polite" aria-busy="false">
                       <div class="empty">选中一条任务后，这里会告诉你现在到了哪一步，以及下一步该按哪个按钮。</div>
-                    </div>
-                  </section>
-
-                  <section class="panel">
-                    <div class="panel-head">
-                      <h2>现在</h2>
-                      <span class="mini" id="generated-at">刚刚更新</span>
-                    </div>
-                    <div class="metrics">
-                      <div class="metric"><strong>处理中</strong><span id="metric-active">0</span></div>
-                      <div class="metric"><strong>等你处理</strong><span id="metric-manual">0</span></div>
-                      <div class="metric"><strong>已进草稿</strong><span id="metric-draft">0</span></div>
-                      <div class="metric"><strong>失败</strong><span id="metric-failed">0</span></div>
                     </div>
                   </section>
                 </section>
@@ -936,6 +1128,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             const elements = {{
               flashMessage: document.getElementById("flash-message"),
               autoRefresh: document.getElementById("auto-refresh"),
+              heroFocus: document.getElementById("hero-focus"),
               ingestUrl: document.getElementById("ingest-url"),
               ingestButton: document.getElementById("ingest-button"),
               pasteButton: document.getElementById("paste-button"),
@@ -947,10 +1140,15 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               selectedTaskCode: document.getElementById("selected-task-code"),
               taskDetail: document.getElementById("task-detail"),
               generatedAt: document.getElementById("generated-at"),
+              overviewTotal: document.getElementById("overview-total"),
               metricActive: document.getElementById("metric-active"),
               metricManual: document.getElementById("metric-manual"),
               metricDraft: document.getElementById("metric-draft"),
               metricFailed: document.getElementById("metric-failed"),
+              metricTodaySubmitted: document.getElementById("metric-today-submitted"),
+              metricTodayDraft: document.getElementById("metric-today-draft"),
+              overviewFocus: document.getElementById("overview-focus"),
+              overviewFocusNote: document.getElementById("overview-focus-note"),
               filterButtons: Array.from(document.querySelectorAll("[data-filter]")),
             }};
 
@@ -971,6 +1169,10 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                 hour: "2-digit",
                 minute: "2-digit",
               }}).format(date);
+            }};
+            const formatPercent = (value) => {{
+              if (value === null || value === undefined) return "暂无";
+              return `${{Math.round(value)}}%`;
             }};
 
             const statusLabel = (status) => STATUS_LABELS[status] || status || "未知";
@@ -1009,6 +1211,13 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             const setFlashMessage = (message, tone = "") => {{
               elements.flashMessage.textContent = message;
               elements.autoRefresh.className = `status-chip ${{tone}}`.trim();
+              elements.autoRefresh.textContent = tone === "fail"
+                ? "同步异常"
+                : (tone === "waiting" ? "正在更新" : "自动刷新中");
+            }};
+            const setRegionsBusy = (busy) => {{
+              elements.taskList.setAttribute("aria-busy", busy ? "true" : "false");
+              elements.taskDetail.setAttribute("aria-busy", busy ? "true" : "false");
             }};
             const setButtonBusy = (button, busy, pendingLabel = "处理中…") => {{
               if (!button) return;
@@ -1161,6 +1370,42 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               if (summary.filtered_draft_saved > 0) return "done";
               return "all";
             }};
+            const focusSummary = (summary) => {{
+              if (!summary) {{
+                return {{
+                  headline: "先贴第一条链接开始。",
+                  note: "新任务会自动排队，主控台会把当前任务切到右侧详情。",
+                }};
+              }}
+              if (summary.filtered_manual > 0) {{
+                return {{
+                  headline: `先处理 ${{summary.filtered_manual}} 条等你判断的任务`,
+                  note: "优先看“等我处理”，避免已写完的任务卡在人工审核或重写环节。",
+                }};
+              }}
+              if (summary.filtered_failed > 0) {{
+                return {{
+                  headline: `有 ${{summary.filtered_failed}} 条失败任务待处理`,
+                  note: "先打开失败任务看报错，再决定重跑还是去高级页面补数据。",
+                }};
+              }}
+              if (summary.filtered_active > 0) {{
+                return {{
+                  headline: `系统正在自动推进 ${{summary.filtered_active}} 条任务`,
+                  note: "当前以观察为主，右侧详情会持续更新到最新状态。",
+                }};
+              }}
+              if (summary.filtered_draft_saved > 0) {{
+                return {{
+                  headline: `已有 ${{summary.filtered_draft_saved}} 条任务进草稿`,
+                  note: "可以去公众号后台检查排版、补图和正式发布。",
+                }};
+              }}
+              return {{
+                headline: summary.today_submitted > 0 ? "今天已经有任务进来，可以从列表继续看。" : "先贴第一条链接开始。",
+                note: "提交新链接后，系统会按既定流程自动往下跑到草稿箱。",
+              }};
+            }};
 
             const appUrl = (path, params = null) => {{
               const url = new URL(path, window.location.origin);
@@ -1191,11 +1436,18 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             const renderSummary = () => {{
               const summary = state.snapshot?.summary;
               if (!summary) return;
+              const focus = focusSummary(summary);
+              elements.overviewTotal.textContent = summary.filtered_total;
               elements.metricActive.textContent = summary.filtered_active;
               elements.metricManual.textContent = summary.filtered_manual;
               elements.metricDraft.textContent = summary.filtered_draft_saved;
               elements.metricFailed.textContent = summary.filtered_failed;
+              elements.metricTodaySubmitted.textContent = summary.today_submitted;
+              elements.metricTodayDraft.textContent = summary.today_draft_saved;
               elements.generatedAt.textContent = `${{formatDateTime(summary.generated_at)}} 更新`;
+              elements.heroFocus.textContent = focus.headline;
+              elements.overviewFocus.textContent = focus.headline;
+              elements.overviewFocusNote.textContent = `${{focus.note}} 审稿通过率 ${{formatPercent(summary.today_review_success_rate)}}，推稿成功率 ${{formatPercent(summary.today_auto_push_success_rate)}}。`;
               const counts = {{
                 all: summary.filtered_total,
                 doing: summary.filtered_active,
@@ -1222,19 +1474,37 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               }}
               elements.taskList.innerHTML = tasks.map((task) => {{
                 const selected = task.task_id === state.selectedTaskId ? "selected" : "";
+                const tone = statusTone(task.status);
+                const toneClass = tone ? `tone-${{tone}}` : "";
                 const title = escapeHtml(task.title || task.source_url || "未命名任务");
                 const meta = escapeHtml(compactUrl(task.source_url || "", 60) || task.task_code);
+                const nextStep = escapeHtml(shorten(nextStepText(task), 54));
+                const created = formatDateTime(task.created_at);
+                const updated = formatDateTime(task.updated_at);
+                const selectedAttr = task.task_id === state.selectedTaskId ? "true" : "false";
+                const summaryTone = WAITING.has(task.status)
+                  ? "需要你处理"
+                  : (FAILED.has(task.status) ? "需要修复" : (DONE.has(task.status) ? "已完成" : "自动处理中"));
                 return `
-                  <article class="task-card ${{selected}}" data-task-id="${{task.task_id}}">
+                  <button
+                    type="button"
+                    class="task-card ${{selected}} ${{toneClass}}"
+                    data-task-id="${{task.task_id}}"
+                    role="option"
+                    aria-selected="${{selectedAttr}}"
+                    aria-controls="task-detail"
+                  >
                     <div class="status-line">
                       <span class="status-chip ${{statusTone(task.status)}}">${{statusLabel(task.status)}}</span>
-                      <span class="mini">${{task.progress}}%</span>
+                      <span class="task-eyebrow">${{summaryTone}}</span>
                     </div>
                     <div class="task-title">${{title}}</div>
+                    <div class="task-reason">${{nextStep}}</div>
                     <div class="progress-track"><div class="progress-fill" style="width:${{Math.max(task.progress || 0, 4)}}%"></div></div>
                     <div class="task-meta">${{meta}}</div>
-                    <div class="task-meta">任务号：${{escapeHtml(task.task_code)}} · 更新：${{formatDateTime(task.updated_at)}}</div>
-                  </article>
+                    <div class="task-meta">进度 ${{task.progress}}% · 创建：${{created}} · 更新：${{updated}}</div>
+                    <div class="task-meta">任务号：${{escapeHtml(task.task_code)}}</div>
+                  </button>
                 `;
               }}).join("");
             }};
@@ -1320,7 +1590,9 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                 ? `<a href="${{sourceUrl}}" title="${{sourceUrl}}" target="_blank" rel="noreferrer">${{sourceLabel}}</a>`
                 : "";
               const quickFacts = [
+                `创建：${{formatDateTime(task.created_at)}}`,
                 `更新时间：${{formatDateTime(task.updated_at)}}`,
+                WAITING.has(task.status) ? "当前需要人工介入" : "当前无需人工介入",
                 `参考：${{task.related_article_count || 0}} 篇`,
                 rawMediaId ? "草稿已生成" : "还没进草稿",
               ];
@@ -1398,35 +1670,41 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             }};
 
             const loadSnapshot = async () => {{
-              const response = await fetch(appUrl("/admin/api/home-snapshot", {{
-                limit: 18,
-                selected_task_id: state.selectedTaskId,
-              }}), {{
-                headers: {{ Accept: "application/json" }},
-              }});
-              if (!response.ok) {{
-                throw new Error("加载任务列表失败。");
+              setRegionsBusy(true);
+              try {{
+                const response = await fetch(appUrl("/admin/api/home-snapshot", {{
+                  limit: 18,
+                  selected_task_id: state.selectedTaskId,
+                }}), {{
+                  headers: {{ Accept: "application/json" }},
+                }});
+                if (!response.ok) {{
+                  throw new Error("加载任务列表失败。");
+                }}
+                state.snapshot = await response.json();
+                if (!state.filterPinned) {{
+                  state.filter = suggestFilter(state.snapshot.summary);
+                }}
+                if (!state.selectedTaskId && state.snapshot.tasks.length) {{
+                  state.selectedTaskId = state.snapshot.tasks[0].task_id;
+                }}
+                if (
+                  state.selectedTaskId &&
+                  !state.snapshot.workspace &&
+                  !state.snapshot.tasks.some((item) => item.task_id === state.selectedTaskId)
+                ) {{
+                  state.selectedTaskId = state.snapshot.tasks[0]?.task_id || null;
+                }}
+                const selectionAlignment = alignSelectedTaskToVisibleTasks();
+                if (selectionAlignment.needsReload && state.selectedTaskId) {{
+                  await loadSnapshot();
+                  return;
+                }}
+                syncUrl();
+                render();
+              }} finally {{
+                setRegionsBusy(false);
               }}
-              state.snapshot = await response.json();
-              if (!state.filterPinned) {{
-                state.filter = suggestFilter(state.snapshot.summary);
-              }}
-              if (!state.selectedTaskId && state.snapshot.tasks.length) {{
-                state.selectedTaskId = state.snapshot.tasks[0].task_id;
-              }}
-              if (
-                state.selectedTaskId &&
-                !state.snapshot.workspace &&
-                !state.snapshot.tasks.some((item) => item.task_id === state.selectedTaskId)
-              ) {{
-                state.selectedTaskId = state.snapshot.tasks[0]?.task_id || null;
-              }}
-              const selectionAlignment = alignSelectedTaskToVisibleTasks();
-              if (selectionAlignment.needsReload && state.selectedTaskId) {{
-                return loadSnapshot();
-              }}
-              syncUrl();
-              render();
             }};
 
             const apiPost = async (url, payload) => {{
@@ -1570,6 +1848,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                 const text = await navigator.clipboard.readText();
                 if (text) {{
                   elements.ingestUrl.value = text.trim();
+                  elements.ingestUrl.focus();
                   setFlashMessage("已粘贴。");
                 }}
               }} catch (_error) {{
@@ -2010,6 +2289,21 @@ def unified_console() -> str:
               overflow: auto;
               line-height: 1.65;
             }
+            .article-preview-shell {
+              margin-top: 12px;
+              padding: 16px;
+              border-radius: 18px;
+              border: 1px solid rgba(65, 48, 27, 0.12);
+              background: linear-gradient(180deg, rgba(255, 252, 247, 0.98), rgba(247, 242, 233, 0.96));
+              overflow: auto;
+            }
+            .article-preview-shell img {
+              max-width: 100%;
+              height: auto;
+            }
+            .article-preview-shell section {
+              margin: 0 auto;
+            }
             @media (max-width: 1040px) {
               .layout {
                 grid-template-columns: 1fr;
@@ -2221,6 +2515,14 @@ def unified_console() -> str:
                 .replaceAll(">", "&gt;")
                 .replaceAll('"', "&quot;")
                 .replaceAll("'", "&#39;");
+            };
+            const hydrateArticlePreview = (root, generations) => {
+              if (!root || !Array.isArray(generations)) return;
+              root.querySelectorAll("[data-generation-html]").forEach((node) => {
+                const generationId = node.getAttribute("data-generation-html");
+                const generation = generations.find((item) => item.generation_id === generationId);
+                node.innerHTML = generation?.html_content || '<div class="hint">暂无 HTML 预览。</div>';
+              });
             };
 
             const setStatus = (text) => {
@@ -2479,8 +2781,12 @@ def unified_console() -> str:
                       <div><strong>摘要</strong> ${escapeHtml(latestGeneration?.digest || "暂无")}</div>
                       <div><strong>Prompt</strong> ${escapeHtml(latestGeneration?.prompt_version || "未记录")}</div>
                     </div>
+                    <details open>
+                      <summary>展开 HTML 预览</summary>
+                      <div class="article-preview-shell" data-generation-html="${escapeHtml(latestGeneration?.generation_id || "")}"></div>
+                    </details>
                     <details>
-                      <summary>展开最新正文</summary>
+                      <summary>展开原始 Markdown</summary>
                       <pre>${escapeHtml(latestGeneration?.markdown_content || "暂无")}</pre>
                     </details>
                   </div>
@@ -2499,6 +2805,7 @@ def unified_console() -> str:
                   </div>
                 </div>
               `;
+              hydrateArticlePreview(workspaceEl, workspace.generations || []);
             };
 
             const renderMonitorSnapshot = (snapshot, { updateOutput = true, source = "manual" } = {}) => {

@@ -882,6 +882,21 @@ def phase5_console() -> str:
             .diff-line.same {
               color: #f7f1df;
             }
+            .article-preview-shell {
+              margin-top: 12px;
+              padding: 16px;
+              border-radius: 18px;
+              border: 1px solid rgba(65, 48, 27, 0.12);
+              background: linear-gradient(180deg, rgba(255, 252, 247, 0.98), rgba(247, 242, 233, 0.96));
+              overflow: auto;
+            }
+            .article-preview-shell img {
+              max-width: 100%;
+              height: auto;
+            }
+            .article-preview-shell section {
+              margin: 0 auto;
+            }
             .generation-header {
               display: flex;
               flex-wrap: wrap;
@@ -1179,6 +1194,14 @@ def phase5_console() -> str:
                 .replaceAll(">", "&gt;")
                 .replaceAll('"', "&quot;")
                 .replaceAll("'", "&#39;");
+            };
+            const hydrateArticlePreview = (root, generations) => {
+              if (!root || !Array.isArray(generations)) return;
+              root.querySelectorAll("[data-generation-html]").forEach((node) => {
+                const generationId = node.getAttribute("data-generation-html");
+                const generation = generations.find((item) => item.generation_id === generationId);
+                node.innerHTML = generation?.html_content || '<div class="hint">暂无 HTML 预览。</div>';
+              });
             };
 
             const loadDraft = () => {
@@ -1517,8 +1540,12 @@ def phase5_console() -> str:
                           <summary>展开审稿风险与建议</summary>
                           <pre>${escapeHtml(JSON.stringify(generation.review || {}, null, 2))}</pre>
                         </details>
+                        <details open>
+                          <summary>展开 HTML 预览</summary>
+                          <div class="article-preview-shell" data-generation-html="${escapeHtml(generation.generation_id)}"></div>
+                        </details>
                         <details>
-                          <summary>展开 Markdown 正文</summary>
+                          <summary>展开原始 Markdown</summary>
                           <pre>${escapeHtml(generation.markdown_content || "暂无")}</pre>
                         </details>
                       </div>
@@ -1550,6 +1577,7 @@ def phase5_console() -> str:
                 compareRight.addEventListener("change", rerenderDiff);
                 updateDiffView(workspace.generations);
               }
+              hydrateArticlePreview(workspaceEl, workspace.generations);
 
               if (latestReview && latestReview.final_decision) {
                 setStatus(`已加载 · 最新结论 ${latestReview.final_decision}`);

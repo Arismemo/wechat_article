@@ -20,6 +20,7 @@ from app.repositories.task_repository import TaskRepository
 from app.repositories.wechat_draft_repository import WechatDraftRepository
 from app.services.source_fetch_service import SourceFetchService
 from app.services.wechat_push_policy_service import WechatPushBlockedError, WechatPushPolicyService
+from app.services.wechat_layout_service import WechatLayoutService
 from app.services.wechat_service import WechatDraftArticle, WechatService
 from app.settings import get_settings
 
@@ -45,6 +46,7 @@ class WechatDraftPublishService:
         self.push_policy = WechatPushPolicyService(session)
         self.fetcher = SourceFetchService()
         self.wechat = WechatService()
+        self.wechat_layout = WechatLayoutService()
 
     def push_latest_accepted_generation(self, task_id: str) -> WechatDraftPublishResult:
         task = self._require_task(task_id)
@@ -111,8 +113,16 @@ class WechatDraftPublishService:
             raise RuntimeError("WECHAT_ENABLE_DRAFT_PUSH is disabled.")
         thumb_bytes, filename, mime_type = self._resolve_thumb(source_article.cover_image_url)
         material_payload = self.wechat.upload_image_material(thumb_bytes, filename, mime_type)
+        rendered_layout = self.wechat_layout.render_markdown(
+            self.wechat_layout.ensure_title_heading(
+                generation.markdown_content or "",
+                generation.title,
+                generation.subtitle,
+            )
+        )
+        html_content = rendered_layout.html if rendered_layout.normalized_markdown else (generation.html_content or "")
         rewritten_html, inline_images = self._rewrite_html_images_for_wechat(
-            generation.html_content or self._html_from_markdown(generation.markdown_content or "")
+            html_content
         )
         article = WechatDraftArticle(
             title=generation.title or "阶段 4 通过稿",
@@ -169,45 +179,6 @@ class WechatDraftPublishService:
             except Exception as exc:  # noqa: BLE001
                 upload_logs.append({"source_url": source_url, "status": "failed", "error": str(exc)[:300]})
         return self._render_html_fragment(soup), upload_logs
-
-    def _html_from_markdown(self, markdown: str) -> str:
-        if not markdown:
-            return ""
-        parts = ["<section>"]
-        in_list = False
-        for raw_line in markdown.splitlines():
-            line = raw_line.strip()
-            if not line:
-                if in_list:
-                    parts.append("</ul>")
-                    in_list = False
-                continue
-            if line.startswith("# "):
-                if in_list:
-                    parts.append("</ul>")
-                    in_list = False
-                parts.append(f"<h1>{line[2:]}</h1>")
-                continue
-            if line.startswith("## "):
-                if in_list:
-                    parts.append("</ul>")
-                    in_list = False
-                parts.append(f"<h2>{line[3:]}</h2>")
-                continue
-            if line.startswith("- "):
-                if not in_list:
-                    parts.append("<ul>")
-                    in_list = True
-                parts.append(f"<li>{line[2:]}</li>")
-                continue
-            if in_list:
-                parts.append("</ul>")
-                in_list = False
-            parts.append(f"<p>{line}</p>")
-        if in_list:
-            parts.append("</ul>")
-        parts.append("</section>")
-        return "".join(parts)
 
     def _select_author(self, source_author: Optional[str]) -> str:
         if self.settings.wechat_default_author:

@@ -241,3 +241,59 @@ class WechatDraftPublishServiceTests(unittest.TestCase):
         self.assertEqual(blocked_attempt.payload["mode"], "blocked")
         self.assertEqual(blocked_attempt.payload["note"], "人工拦截")
         session.close()
+
+    def test_push_latest_accepted_generation_renders_html_from_markdown(self) -> None:
+        session = self.Session()
+        task = Task(
+            task_code="tsk_push_markdown",
+            source_url="https://mp.weixin.qq.com/s/example-markdown",
+            normalized_url="https://mp.weixin.qq.com/s/example-markdown",
+            source_type="wechat",
+            status=TaskStatus.REVIEW_PASSED.value,
+        )
+        session.add(task)
+        session.flush()
+        session.add(
+            SourceArticle(
+                task_id=task.id,
+                url=task.source_url,
+                title="源标题",
+                author="作者",
+                summary="摘要",
+                cleaned_text="正文",
+                fetch_status="success",
+            )
+        )
+        generation = Generation(
+            task_id=task.id,
+            version_no=1,
+            model_name="glm-5",
+            title="重构稿标题",
+            digest="重构稿摘要",
+            html_content="<section><p>旧 HTML</p></section>",
+            markdown_content=(
+                "# 重构稿标题\n\n"
+                "这里有 **重点**，还有 [链接](https://example.com)。\n\n"
+                "- 第一条\n"
+                "- 第二条\n"
+            ),
+            status="accepted",
+        )
+        session.add(generation)
+        session.commit()
+
+        service = WechatDraftPublishService(session)
+        service.wechat = MagicMock()
+        service.wechat.build_fallback_thumb.return_value = (b"png", "thumb.png", "image/png")
+        service.wechat.upload_image_material.return_value = {"media_id": "thumb-2"}
+        service.wechat.add_draft.return_value = {"media_id": "draft-2"}
+
+        result = service.push_latest_accepted_generation(task.id)
+
+        self.assertEqual(result.wechat_media_id, "draft-2")
+        article = service.wechat.add_draft.call_args.args[0]
+        self.assertIn("<strong", article.content)
+        self.assertIn("<a href=\"https://example.com\"", article.content)
+        self.assertIn("<ul", article.content)
+        self.assertNotIn("旧 HTML", article.content)
+        session.close()

@@ -124,9 +124,12 @@ class Phase4PipelineServiceTests(unittest.TestCase):
         self.assertEqual(generation_rows[0].prompt_type, "phase4_write")
         self.assertEqual(generation_rows[0].prompt_version, "phase4-v2")
         self.assertGreater(float(generation_rows[0].score_overall or 0), 75)
+        self.assertIn("<h1", generation_rows[0].html_content or "")
+        self.assertNotIn("**", generation_rows[0].html_content or "")
         self.assertEqual(review_rows[0].final_decision, "pass")
         self.assertIn("已验证风格资产", service.llm.complete_json.call_args_list[0].kwargs["user_prompt"])
         self.assertIn("先给反直觉结论，再拆误区", service.llm.complete_json.call_args_list[0].kwargs["user_prompt"])
+        self.assertIn("只允许使用以下 Markdown 子集", service.llm.complete_json.call_args_list[0].kwargs["user_prompt"])
         self.assertEqual(service.llm.complete_json.call_args_list[0].kwargs["timeout_seconds"], 180)
         self.assertEqual(service.llm.complete_json.call_args_list[1].kwargs["timeout_seconds"], 90)
         session.close()
@@ -313,6 +316,56 @@ class Phase4PipelineServiceTests(unittest.TestCase):
         self.assertEqual(generation.model_name, "glm-5-write-override")
         self.assertEqual(service.llm.complete_json.call_args_list[0].kwargs["model"], "glm-5-write-override")
         self.assertEqual(service.llm.complete_json.call_args_list[1].kwargs["model"], "glm-5-review-override")
+        session.close()
+
+    def test_phase4_pipeline_normalizes_markdown_noise_before_storage(self) -> None:
+        session = self.Session()
+        task = self._seed_phase4_ready_task(session, "tsk_phase4_markdown_cleanup")
+
+        service = Phase4PipelineService(session)
+        service.llm = MagicMock()
+        service.llm.complete_json.side_effect = [
+            {
+                "title": "Markdown 清洗测试",
+                "subtitle": "检查排版后处理",
+                "digest": "确保不会把 Markdown 噪音带进 HTML。",
+                "markdown_content": (
+                    "## 先说问题\n"
+                    "这里有 **重点** 和 [链接](https://example.com)。\n\n"
+                    "```bash\n"
+                    "npm run build\n"
+                    "```\n\n"
+                    "| 列1 | 列2 |\n"
+                    "| --- | --- |\n"
+                    "| A | B |\n\n"
+                    "- [x] 已完成\n"
+                ),
+            },
+            {
+                "final_decision": "pass",
+                "similarity_score": 0.20,
+                "factual_risk_score": 0.12,
+                "policy_risk_score": 0.05,
+                "readability_score": 86,
+                "title_score": 84,
+                "novelty_score": 83,
+                "issues": ["清洗后结构正常。"],
+                "suggestions": ["可以进入下一阶段。"],
+            },
+        ]
+
+        result = service.run(task.id)
+
+        generation = session.get(Generation, result.generation_id)
+        self.assertIsNotNone(generation)
+        self.assertTrue((generation.markdown_content or "").startswith("# Markdown 清洗测试"))
+        self.assertNotIn("```", generation.markdown_content or "")
+        self.assertNotIn("| 列1 | 列2 |", generation.markdown_content or "")
+        self.assertNotIn("- [x]", generation.markdown_content or "")
+        self.assertIn("<strong", generation.html_content or "")
+        self.assertIn("<a href=\"https://example.com\"", generation.html_content or "")
+        self.assertNotIn("```", generation.html_content or "")
+        self.assertNotIn("| 列1 | 列2 |", generation.html_content or "")
         session.close()
 
     def _seed_phase4_ready_task(self, session, task_code: str) -> Task:

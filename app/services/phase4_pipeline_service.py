@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from html import escape
 from typing import Any, Optional
 
 from sqlalchemy.orm import Session
@@ -30,6 +29,7 @@ from app.services.llm_service import LLMService, LLMServiceError
 from app.services.phase3_pipeline_service import Phase3PipelineService
 from app.services.system_setting_service import SystemSettingService
 from app.services.wechat_draft_publish_service import WechatDraftPublishService
+from app.services.wechat_layout_service import WechatLayoutService
 from app.settings import get_settings
 
 
@@ -62,6 +62,7 @@ class Phase4PipelineService:
         self.llm = LLMService()
         self.system_settings = SystemSettingService(session)
         self.wechat_publisher = WechatDraftPublishService(session)
+        self.wechat_layout = WechatLayoutService()
 
     def run(self, task_id: str) -> Phase4PipelineResult:
         task = self._require_task(task_id)
@@ -163,9 +164,30 @@ class Phase4PipelineService:
             prior_generation=prior_generation,
             prior_review=prior_review,
         )
-        markdown_content = str(payload.get("markdown_content") or "").strip()
+        draft_title = self._limit(str(payload.get("title") or self._fallback_title(source, brief)), 64)
+        draft_subtitle = self._limit(str(payload.get("subtitle") or ""), 120) or None
+        markdown_content = self.wechat_layout.ensure_title_heading(
+            str(payload.get("markdown_content") or "").strip(),
+            draft_title,
+            draft_subtitle,
+        )
         if not markdown_content:
             raise ValueError("Generated draft does not contain markdown_content.")
+        rendered_layout = self.wechat_layout.render_markdown(markdown_content)
+        if rendered_layout.residual_markdown_markers:
+            raise ValueError(
+                "Generated draft still contains unsupported markdown markers: "
+                + ", ".join(rendered_layout.residual_markdown_markers)
+            )
+        if rendered_layout.normalization_warnings:
+            self._log_action(
+                task.id,
+                "phase4.layout.normalized",
+                {
+                    "warnings": rendered_layout.normalization_warnings,
+                    "revision_from_generation_id": prior_generation.id if prior_generation else None,
+                },
+            )
 
         generation = self.generations.create(
             Generation(
@@ -175,11 +197,11 @@ class Phase4PipelineService:
                 prompt_type=DEFAULT_GENERATION_PROMPT_TYPE,
                 prompt_version=CURRENT_PHASE4_PROMPT_VERSION,
                 model_name=model_name,
-                title=self._limit(str(payload.get("title") or self._fallback_title(source, brief)), 64),
-                subtitle=self._limit(str(payload.get("subtitle") or ""), 120) or None,
+                title=draft_title,
+                subtitle=draft_subtitle,
                 digest=self._limit(str(payload.get("digest") or self._fallback_digest(source, brief)), 120),
-                markdown_content=markdown_content,
-                html_content=self._render_markdown_to_html(markdown_content),
+                markdown_content=rendered_layout.normalized_markdown,
+                html_content=rendered_layout.html,
                 status="generated",
             )
         )
@@ -426,7 +448,11 @@ class Phase4PipelineService:
         user_prompt = (
             "请返回 JSON，字段固定为：title,subtitle,digest,markdown_content。"
             "其中 markdown_content 必须是一篇完整的新稿，必须包含一级标题、至少三个二级标题，"
-            "并明确体现新的论证顺序和信息增量。\n\n"
+            "并明确体现新的论证顺序和信息增量。"
+            "markdown_content 只允许使用以下 Markdown 子集：# / ## / ### 标题、普通段落、> 引用、"
+            "- 或 1. 列表、**加粗**、[链接](https://...)、![配图说明](https://...)、--- 分隔线。"
+            "不要输出代码块、表格、任务列表、原始 HTML、过量 emoji。"
+            "每段控制在 2 到 4 句，尽量保持移动端阅读的短段落节奏。\n\n"
             f"原文标题：{source.title or '未知'}\n"
             f"原文摘要：{source.summary or '无'}\n"
             f"原文分析主题：{analysis.theme or '未知'}\n"
@@ -707,55 +733,6 @@ class Phase4PipelineService:
             + (100.0 - policy_risk * 100.0) * 0.1
             + (100.0 - factual_risk * 100.0) * 0.05
         )
-
-    def _render_markdown_to_html(self, markdown: str) -> str:
-        parts = ["<section>"]
-        in_list = False
-        for raw_line in markdown.splitlines():
-            line = raw_line.strip()
-            if not line:
-                if in_list:
-                    parts.append("</ul>")
-                    in_list = False
-                continue
-            if line.startswith("# "):
-                if in_list:
-                    parts.append("</ul>")
-                    in_list = False
-                parts.append(f"<h1>{escape(line[2:])}</h1>")
-                continue
-            if line.startswith("## "):
-                if in_list:
-                    parts.append("</ul>")
-                    in_list = False
-                parts.append(f"<h2>{escape(line[3:])}</h2>")
-                continue
-            if line.startswith("### "):
-                if in_list:
-                    parts.append("</ul>")
-                    in_list = False
-                parts.append(f"<h3>{escape(line[4:])}</h3>")
-                continue
-            if line.startswith("> "):
-                if in_list:
-                    parts.append("</ul>")
-                    in_list = False
-                parts.append(f"<blockquote>{escape(line[2:])}</blockquote>")
-                continue
-            if line.startswith("- "):
-                if not in_list:
-                    parts.append("<ul>")
-                    in_list = True
-                parts.append(f"<li>{escape(line[2:])}</li>")
-                continue
-            if in_list:
-                parts.append("</ul>")
-                in_list = False
-            parts.append(f"<p>{escape(line)}</p>")
-        if in_list:
-            parts.append("</ul>")
-        parts.append("</section>")
-        return "".join(parts)
 
     def _related_context(self, related: list[RelatedArticle]) -> str:
         lines: list[str] = []
