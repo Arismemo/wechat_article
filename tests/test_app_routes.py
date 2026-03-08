@@ -84,6 +84,12 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("/api/v1/admin/alerts/test", routes)
         self.assertIn("/api/v1/admin/settings", routes)
         self.assertIn("/api/v1/admin/settings/{key}", routes)
+        self.assertIn("/admin/api/home-snapshot", routes)
+        self.assertIn("/admin/api/ingest", routes)
+        self.assertIn("/admin/api/tasks/{task_id}/retry", routes)
+        self.assertIn("/admin/api/tasks/{task_id}/approve", routes)
+        self.assertIn("/admin/api/tasks/{task_id}/reject", routes)
+        self.assertIn("/admin/api/tasks/{task_id}/push-draft", routes)
         self.assertIn("/admin", routes)
         self.assertIn("/admin/phase2", routes)
         self.assertIn("/admin/console", routes)
@@ -153,11 +159,13 @@ class AppRouteTests(unittest.TestCase):
         response = client.get("/admin")
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn("统一后台入口", response.text)
-        self.assertIn("监控首页", response.text)
-        self.assertIn("审核台", response.text)
-        self.assertIn("反馈台", response.text)
-        self.assertIn("设置", response.text)
+        self.assertIn("微信文章工厂", response.text)
+        self.assertIn("贴链接，等一下，看结果。", response.text)
+        self.assertIn("开始一个任务", response.text)
+        self.assertIn("最近任务", response.text)
+        self.assertIn("任务详情", response.text)
+        self.assertIn("开始处理", response.text)
+        self.assertIn("手机快捷指令只是附加入口", response.text)
 
     def test_admin_phase6_page_renders(self) -> None:
         app_module = reload(import_module("app.main"))
@@ -208,7 +216,10 @@ class AppRouteTests(unittest.TestCase):
 
             portal_authorized = client.get("/admin", headers={"Authorization": f"Basic {encoded}"})
             self.assertEqual(portal_authorized.status_code, 200)
-            self.assertIn("统一后台入口", portal_authorized.text)
+            self.assertIn("微信文章工厂", portal_authorized.text)
+
+            admin_api_unauthorized = client.get("/admin/api/home-snapshot")
+            self.assertEqual(admin_api_unauthorized.status_code, 401)
 
             phase6_unauthorized = client.get("/admin/phase6")
             self.assertEqual(phase6_unauthorized.status_code, 401)

@@ -6,15 +6,182 @@ from time import sleep
 from textwrap import dedent
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import HTMLResponse, StreamingResponse
+from sqlalchemy.orm import Session
 
 from app.core.security import verify_admin_basic_auth
-from app.db.session import get_session_factory
+from app.db.session import get_db_session, get_session_factory
+from app.schemas.admin_monitor import AdminMonitorSnapshotResponse
+from app.schemas.ingest import IngestLinkRequest, IngestLinkResponse
+from app.schemas.internal import ManualReviewActionResponse, Phase4EnqueueResponse, WechatPushResponse
 from app.services.admin_monitor_service import AdminMonitorFilters, AdminMonitorService
+from app.services.manual_review_service import ManualReviewConflictError, ManualReviewService
+from app.services.phase4_queue_service import Phase4QueueService
+from app.services.task_service import TaskService
+from app.services.wechat_draft_publish_service import WechatDraftPublishService
+from app.services.wechat_push_policy_service import WechatPushBlockedError
 
 
 router = APIRouter()
+
+
+@router.get(
+    "/admin/api/home-snapshot",
+    response_model=AdminMonitorSnapshotResponse,
+    tags=["admin"],
+    dependencies=[Depends(verify_admin_basic_auth)],
+)
+def admin_home_snapshot(
+    limit: int = Query(default=18, ge=1, le=50),
+    selected_task_id: Optional[str] = Query(default=None),
+    session: Session = Depends(get_db_session),
+) -> AdminMonitorSnapshotResponse:
+    return AdminMonitorService(session).build_snapshot(
+        AdminMonitorFilters(
+            limit=limit,
+            active_only=False,
+            selected_task_id=selected_task_id,
+        )
+    )
+
+
+@router.post(
+    "/admin/api/ingest",
+    response_model=IngestLinkResponse,
+    tags=["admin"],
+    dependencies=[Depends(verify_admin_basic_auth)],
+)
+def admin_ingest(
+    payload: IngestLinkRequest,
+    session: Session = Depends(get_db_session),
+) -> IngestLinkResponse:
+    task_service = TaskService(session)
+    task, deduped = task_service.ingest_link(
+        IngestLinkRequest(
+            url=payload.url,
+            source="admin-web",
+            device_id="admin-browser",
+            trigger="admin-home",
+            note=payload.note,
+            dispatch_mode="phase4_enqueue",
+        )
+    )
+    if not deduped:
+        task = task_service.mark_queued_for_phase4(task, reason="admin-home")
+        queue_result = Phase4QueueService().enqueue(task.id)
+        return IngestLinkResponse(
+            task_id=task.id,
+            status=task.status,
+            deduped=deduped,
+            dispatch_mode="phase4_enqueue",
+            enqueued=queue_result.enqueued,
+            queue_depth=queue_result.queue_depth,
+        )
+
+    return IngestLinkResponse(
+        task_id=task.id,
+        status=task.status,
+        deduped=deduped,
+        dispatch_mode="phase4_enqueue",
+        enqueued=False,
+        queue_depth=None,
+    )
+
+
+@router.post(
+    "/admin/api/tasks/{task_id}/retry",
+    response_model=Phase4EnqueueResponse,
+    tags=["admin"],
+    dependencies=[Depends(verify_admin_basic_auth)],
+)
+def admin_retry_phase4(task_id: str, session: Session = Depends(get_db_session)) -> Phase4EnqueueResponse:
+    task_service = TaskService(session)
+    try:
+        task = task_service.require_task(task_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    task = task_service.mark_queued_for_phase4(task, reason="admin-retry")
+    result = Phase4QueueService().enqueue(task.id)
+    return Phase4EnqueueResponse(
+        task_id=task.id,
+        status=task.status,
+        enqueued=result.enqueued,
+        queue_depth=result.queue_depth,
+    )
+
+
+@router.post(
+    "/admin/api/tasks/{task_id}/approve",
+    response_model=ManualReviewActionResponse,
+    tags=["admin"],
+    dependencies=[Depends(verify_admin_basic_auth)],
+)
+def admin_approve_latest_generation(
+    task_id: str,
+    session: Session = Depends(get_db_session),
+) -> ManualReviewActionResponse:
+    try:
+        result = ManualReviewService(session).approve_latest_generation(task_id, operator="admin-home")
+    except ManualReviewConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return ManualReviewActionResponse(
+        task_id=result.task_id,
+        status=result.status,
+        generation_id=result.generation_id,
+        decision=result.decision,
+    )
+
+
+@router.post(
+    "/admin/api/tasks/{task_id}/reject",
+    response_model=ManualReviewActionResponse,
+    tags=["admin"],
+    dependencies=[Depends(verify_admin_basic_auth)],
+)
+def admin_reject_latest_generation(
+    task_id: str,
+    session: Session = Depends(get_db_session),
+) -> ManualReviewActionResponse:
+    try:
+        result = ManualReviewService(session).reject_latest_generation(task_id, operator="admin-home")
+    except ManualReviewConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return ManualReviewActionResponse(
+        task_id=result.task_id,
+        status=result.status,
+        generation_id=result.generation_id,
+        decision=result.decision,
+    )
+
+
+@router.post(
+    "/admin/api/tasks/{task_id}/push-draft",
+    response_model=WechatPushResponse,
+    tags=["admin"],
+    dependencies=[Depends(verify_admin_basic_auth)],
+)
+def admin_push_wechat_draft(
+    task_id: str,
+    session: Session = Depends(get_db_session),
+) -> WechatPushResponse:
+    try:
+        result = WechatDraftPublishService(session).push_latest_accepted_generation(task_id)
+    except WechatPushBlockedError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return WechatPushResponse(
+        task_id=result.task_id,
+        status=result.status,
+        generation_id=result.generation_id,
+        wechat_media_id=result.wechat_media_id,
+        reused_existing=result.reused_existing,
+    )
 
 
 @router.get(
@@ -66,8 +233,7 @@ def unified_console_stream(
 
 
 @router.get("/admin", response_class=HTMLResponse, tags=["admin"], dependencies=[Depends(verify_admin_basic_auth)])
-def unified_admin_portal(view: str = Query(default="monitor")) -> str:
-    initial_view = view if view in {"monitor", "review", "feedback", "settings"} else "monitor"
+def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
     return dedent(
         f"""\
         <!DOCTYPE html>
@@ -75,186 +241,968 @@ def unified_admin_portal(view: str = Query(default="monitor")) -> str:
         <head>
           <meta charset="utf-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1" />
-          <title>统一后台入口</title>
+          <title>微信文章工厂</title>
           <style>
             :root {{
-              --bg: #f0e9de;
-              --panel: rgba(255, 251, 246, 0.94);
-              --line: #d4c2ad;
-              --text: #221a11;
-              --muted: #6d6256;
-              --accent: #255d52;
-              --accent-dark: #173f38;
-              --shadow: 0 18px 48px rgba(55, 40, 21, 0.1);
+              --paper: rgba(255, 251, 246, 0.94);
+              --paper-soft: rgba(255, 249, 242, 0.88);
+              --line: rgba(65, 48, 27, 0.12);
+              --text: #241b12;
+              --muted: #6a5f53;
+              --accent: #1f5d53;
+              --accent-strong: #143d37;
+              --accent-soft: rgba(31, 93, 83, 0.12);
+              --gold: #b07a18;
+              --danger: #a14534;
+              --ok: #2f7c53;
+              --shadow: 0 22px 60px rgba(58, 40, 18, 0.12);
             }}
             * {{ box-sizing: border-box; }}
             body {{
               margin: 0;
-              min-height: 100vh;
               color: var(--text);
               font-family: "PingFang SC", "Noto Serif SC", serif;
               background:
-                radial-gradient(circle at top left, rgba(255, 229, 175, 0.45), transparent 26%),
-                radial-gradient(circle at bottom right, rgba(178, 222, 208, 0.38), transparent 28%),
-                linear-gradient(140deg, #efe8dd 0%, #f6f2ea 44%, #ebe1d2 100%);
+                radial-gradient(circle at top left, rgba(244, 210, 147, 0.58), transparent 24%),
+                radial-gradient(circle at top right, rgba(168, 209, 196, 0.42), transparent 26%),
+                linear-gradient(145deg, #efe5d7 0%, #f7f3ec 42%, #eadfcd 100%);
             }}
             main {{
-              max-width: 1480px;
+              max-width: 1420px;
               margin: 0 auto;
-              padding: 24px 18px 28px;
+              padding: 28px 20px 42px;
+            }}
+            .shell {{
               display: grid;
-              gap: 16px;
+              gap: 18px;
             }}
             .hero {{
               display: grid;
-              gap: 10px;
+              gap: 14px;
+              padding: 24px;
+              border: 1px solid var(--line);
+              border-radius: 28px;
+              background: linear-gradient(135deg, rgba(255, 248, 239, 0.92), rgba(248, 244, 237, 0.86));
+              box-shadow: var(--shadow);
+              backdrop-filter: blur(10px);
             }}
-            .eyebrow {{
+            .hero-top {{
+              display: flex;
+              justify-content: space-between;
+              gap: 16px;
+              align-items: flex-start;
+              flex-wrap: wrap;
+            }}
+            .badge {{
               display: inline-flex;
               width: fit-content;
-              padding: 6px 10px;
+              padding: 6px 11px;
               border-radius: 999px;
-              background: rgba(37, 93, 82, 0.12);
-              color: var(--accent-dark);
+              background: var(--accent-soft);
+              color: var(--accent-strong);
               font-size: 12px;
               letter-spacing: 0.08em;
             }}
             h1 {{
               margin: 0;
-              font-size: 38px;
-              line-height: 1.05;
+              font-size: 42px;
+              line-height: 1;
             }}
-            .hero p {{
+            .hero-copy {{
+              display: grid;
+              gap: 8px;
+            }}
+            .hero-copy p {{
               margin: 0;
-              max-width: 920px;
+              max-width: 760px;
               color: var(--muted);
-              line-height: 1.72;
-            }}
-            .panel {{
-              background: var(--panel);
-              border: 1px solid var(--line);
-              border-radius: 22px;
-              padding: 16px;
-              box-shadow: var(--shadow);
-              backdrop-filter: blur(8px);
-            }}
-            .tabs {{
-              display: flex;
-              flex-wrap: wrap;
-              gap: 10px;
-              margin-bottom: 10px;
-            }}
-            .tab {{
-              border: none;
-              border-radius: 999px;
-              padding: 10px 16px;
-              font: inherit;
-              cursor: pointer;
-              background: #e6d7bf;
-              color: #2c241a;
-            }}
-            .tab.active {{
-              background: var(--accent);
-              color: #f8fbf7;
-            }}
-            .meta {{
-              display: flex;
-              flex-wrap: wrap;
-              gap: 10px;
-              color: var(--muted);
-              font-size: 13px;
               line-height: 1.7;
             }}
-            .meta a {{
-              color: var(--accent-dark);
-              text-decoration: none;
-              border-bottom: 1px solid rgba(23, 63, 56, 0.25);
+            .steps {{
+              display: grid;
+              grid-template-columns: repeat(3, minmax(0, 1fr));
+              gap: 12px;
             }}
-            iframe {{
-              width: 100%;
-              min-height: calc(100vh - 260px);
+            .step {{
+              display: grid;
+              gap: 8px;
+              padding: 14px 16px;
+              border-radius: 20px;
+              background: var(--paper-soft);
               border: 1px solid var(--line);
-              border-radius: 18px;
+            }}
+            .step strong {{
+              font-size: 14px;
+            }}
+            .step span {{
+              color: var(--muted);
+              font-size: 13px;
+              line-height: 1.6;
+            }}
+            .panel {{
+              background: var(--paper);
+              border: 1px solid var(--line);
+              border-radius: 24px;
+              padding: 18px;
+              box-shadow: var(--shadow);
+              backdrop-filter: blur(10px);
+            }}
+            .layout {{
+              display: grid;
+              grid-template-columns: 380px minmax(0, 1fr);
+              gap: 18px;
+              align-items: start;
+            }}
+            .stack {{
+              display: grid;
+              gap: 18px;
+            }}
+            .panel-head {{
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              gap: 12px;
+              margin-bottom: 14px;
+            }}
+            .panel h2 {{
+              margin: 0;
+              font-size: 19px;
+            }}
+            .mini {{
+              color: var(--muted);
+              font-size: 13px;
+            }}
+            .composer {{
+              display: grid;
+              gap: 12px;
+            }}
+            .composer-row {{
+              display: grid;
+              grid-template-columns: minmax(0, 1fr) 110px 130px;
+              gap: 10px;
+            }}
+            input, button {{
+              width: 100%;
+              font: inherit;
+              border-radius: 999px;
+            }}
+            input {{
+              border: 1px solid var(--line);
+              background: #fffdf9;
+              padding: 14px 18px;
+              color: var(--text);
+            }}
+            input:focus {{
+              outline: 2px solid rgba(31, 93, 83, 0.18);
+              border-color: rgba(31, 93, 83, 0.4);
+            }}
+            button {{
+              border: none;
+              padding: 14px 16px;
+              cursor: pointer;
+              background: var(--accent);
+              color: #f7faf8;
+              transition: transform 120ms ease, background 120ms ease, opacity 120ms ease;
+            }}
+            button:hover {{
+              background: var(--accent-strong);
+              transform: translateY(-1px);
+            }}
+            button.secondary {{
+              background: #dfceb3;
+              color: #2f261d;
+            }}
+            button.ghost {{
+              background: transparent;
+              border: 1px solid rgba(31, 93, 83, 0.22);
+              color: var(--accent-strong);
+            }}
+            button.warn {{
+              background: var(--gold);
+            }}
+            button.danger {{
+              background: var(--danger);
+            }}
+            button:disabled {{
+              opacity: 0.48;
+              cursor: not-allowed;
+              transform: none;
+            }}
+            .status-line {{
+              display: flex;
+              flex-wrap: wrap;
+              gap: 8px;
+              align-items: center;
+            }}
+            .status-chip {{
+              display: inline-flex;
+              align-items: center;
+              width: fit-content;
+              padding: 7px 12px;
+              border-radius: 999px;
+              font-size: 13px;
+              background: var(--accent-soft);
+              color: var(--accent-strong);
+            }}
+            .status-chip.waiting {{
+              background: rgba(176, 122, 24, 0.12);
+              color: #875f11;
+            }}
+            .status-chip.done {{
+              background: rgba(47, 124, 83, 0.12);
+              color: var(--ok);
+            }}
+            .status-chip.fail {{
+              background: rgba(161, 69, 52, 0.12);
+              color: var(--danger);
+            }}
+            .metrics {{
+              display: grid;
+              grid-template-columns: repeat(4, minmax(0, 1fr));
+              gap: 10px;
+            }}
+            .metric {{
+              padding: 14px;
+              border-radius: 20px;
+              border: 1px solid var(--line);
               background: #fffdf9;
             }}
+            .metric strong {{
+              display: block;
+              color: var(--muted);
+              font-size: 12px;
+              font-weight: 500;
+              margin-bottom: 8px;
+            }}
+            .metric span {{
+              display: block;
+              font-size: 30px;
+              line-height: 1;
+            }}
+            .task-toolbar {{
+              display: grid;
+              gap: 10px;
+            }}
+            .filter-row, .advanced-links {{
+              display: flex;
+              flex-wrap: wrap;
+              gap: 8px;
+            }}
+            .pill {{
+              padding: 9px 14px;
+              border-radius: 999px;
+              border: 1px solid rgba(31, 93, 83, 0.16);
+              background: transparent;
+              color: var(--accent-strong);
+            }}
+            .pill.active {{
+              background: var(--accent);
+              color: #f7faf8;
+              border-color: transparent;
+            }}
+            .advanced-links a {{
+              color: var(--accent-strong);
+              text-decoration: none;
+              border-bottom: 1px solid rgba(31, 93, 83, 0.22);
+              font-size: 13px;
+            }}
+            .task-list {{
+              display: grid;
+              gap: 10px;
+              max-height: 780px;
+              overflow: auto;
+              padding-right: 4px;
+            }}
+            .task-card {{
+              display: grid;
+              gap: 8px;
+              padding: 14px 15px;
+              border-radius: 20px;
+              border: 1px solid var(--line);
+              background: #fffdf9;
+              cursor: pointer;
+              transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+            }}
+            .task-card:hover {{
+              transform: translateY(-1px);
+              border-color: rgba(31, 93, 83, 0.35);
+              box-shadow: 0 12px 26px rgba(58, 40, 18, 0.08);
+            }}
+            .task-card.selected {{
+              border-color: rgba(31, 93, 83, 0.45);
+              box-shadow: 0 14px 28px rgba(31, 93, 83, 0.11);
+            }}
+            .task-title {{
+              font-size: 16px;
+              line-height: 1.45;
+            }}
+            .task-meta {{
+              color: var(--muted);
+              font-size: 12px;
+              line-height: 1.6;
+              word-break: break-all;
+            }}
+            .progress-track {{
+              width: 100%;
+              height: 10px;
+              border-radius: 999px;
+              background: rgba(31, 93, 83, 0.08);
+              overflow: hidden;
+            }}
+            .progress-fill {{
+              height: 100%;
+              border-radius: 999px;
+              background: linear-gradient(90deg, #2f7c53, #1f5d53);
+            }}
+            .empty {{
+              padding: 22px 18px;
+              border-radius: 20px;
+              border: 1px dashed rgba(65, 48, 27, 0.18);
+              color: var(--muted);
+              background: rgba(255, 253, 249, 0.75);
+            }}
+            .detail-grid {{
+              display: grid;
+              gap: 18px;
+            }}
+            .summary-block {{
+              display: grid;
+              gap: 12px;
+            }}
+            .summary-title {{
+              display: grid;
+              gap: 8px;
+            }}
+            .summary-title h3 {{
+              margin: 0;
+              font-size: 28px;
+              line-height: 1.25;
+            }}
+            .summary-title a {{
+              width: fit-content;
+              color: var(--accent-strong);
+              text-decoration: none;
+              border-bottom: 1px solid rgba(31, 93, 83, 0.22);
+            }}
+            .kv-grid {{
+              display: grid;
+              grid-template-columns: repeat(2, minmax(0, 1fr));
+              gap: 10px;
+            }}
+            .kv {{
+              padding: 14px;
+              border-radius: 18px;
+              border: 1px solid var(--line);
+              background: #fffdf9;
+            }}
+            .kv strong {{
+              display: block;
+              margin-bottom: 8px;
+              font-size: 12px;
+              color: var(--muted);
+              font-weight: 500;
+            }}
+            .kv span {{
+              word-break: break-word;
+              line-height: 1.6;
+            }}
+            .big-hint {{
+              padding: 18px;
+              border-radius: 22px;
+              border: 1px solid rgba(31, 93, 83, 0.14);
+              background: linear-gradient(135deg, rgba(31, 93, 83, 0.08), rgba(255, 249, 242, 0.94));
+            }}
+            .big-hint strong {{
+              display: block;
+              margin-bottom: 8px;
+              font-size: 13px;
+              color: var(--muted);
+              font-weight: 500;
+            }}
+            .big-hint span {{
+              font-size: 21px;
+              line-height: 1.45;
+            }}
+            .action-grid {{
+              display: grid;
+              grid-template-columns: repeat(4, minmax(0, 1fr));
+              gap: 10px;
+            }}
+            .latest-box {{
+              display: grid;
+              gap: 8px;
+              padding: 16px;
+              border-radius: 20px;
+              border: 1px solid var(--line);
+              background: #fffdf9;
+            }}
+            .latest-box strong {{
+              font-size: 13px;
+              color: var(--muted);
+              font-weight: 500;
+            }}
+            .latest-box p {{
+              margin: 0;
+              line-height: 1.7;
+            }}
+            .footer-note {{
+              color: var(--muted);
+              font-size: 12px;
+            }}
+            @media (max-width: 1080px) {{
+              .layout {{ grid-template-columns: 1fr; }}
+              .metrics {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+              .action-grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+              .composer-row {{ grid-template-columns: 1fr; }}
+            }}
             @media (max-width: 720px) {{
-              h1 {{ font-size: 30px; }}
-              iframe {{ min-height: calc(100vh - 220px); }}
+              main {{ padding: 18px 14px 32px; }}
+              h1 {{ font-size: 32px; }}
+              .steps {{ grid-template-columns: 1fr; }}
+              .metrics {{ grid-template-columns: 1fr; }}
+              .kv-grid {{ grid-template-columns: 1fr; }}
+              .action-grid {{ grid-template-columns: 1fr; }}
             }}
           </style>
         </head>
         <body>
           <main>
-            <section class="hero">
-              <span class="eyebrow">UNIFIED ADMIN ENTRY</span>
-              <h1>统一后台入口</h1>
-              <p>以后只需要记一个链接：`/admin`。监控、审核、反馈和运行参数设置统一放在这个入口里切换。旧链接继续保留兼容，不需要立刻删除。</p>
-            </section>
+            <div class="shell">
+              <section class="hero">
+                <div class="hero-top">
+                  <div class="hero-copy">
+                    <span class="badge">PRIMARY CONTROL ROOM</span>
+                    <h1>微信文章工厂</h1>
+                    <p>贴链接，等一下，看结果。</p>
+                  </div>
+                  <div class="status-line">
+                    <span class="status-chip" id="auto-refresh">自动刷新中</span>
+                    <span class="mini" id="flash-message">准备好了。</span>
+                  </div>
+                </div>
+                <div class="steps">
+                  <div class="step">
+                    <strong>1. 贴链接</strong>
+                    <span>把微信文章链接贴进来，点一次“开始处理”。</span>
+                  </div>
+                  <div class="step">
+                    <strong>2. 看进度</strong>
+                    <span>左边会自动刷新。处理中、卡住、完成，一眼就能看见。</span>
+                  </div>
+                  <div class="step">
+                    <strong>3. 做动作</strong>
+                    <span>需要你决定时，只会剩下几个按钮：重写、通过、推草稿。</span>
+                  </div>
+                </div>
+              </section>
 
-            <section class="panel">
-              <div class="tabs">
-                <button class="tab" data-view="monitor">监控首页</button>
-                <button class="tab" data-view="review">审核台</button>
-                <button class="tab" data-view="feedback">反馈台</button>
-                <button class="tab" data-view="settings">设置</button>
+              <div class="layout">
+                <section class="stack">
+                  <section class="panel">
+                    <div class="panel-head">
+                      <h2>开始一个任务</h2>
+                      <span class="mini">手机快捷指令只是附加入口</span>
+                    </div>
+                    <div class="composer">
+                      <div class="composer-row">
+                        <input id="ingest-url" type="url" placeholder="把微信文章链接贴在这里" autocomplete="off" />
+                        <button id="paste-button" class="secondary" type="button">粘贴</button>
+                        <button id="ingest-button" type="button">开始处理</button>
+                      </div>
+                      <div class="footer-note">默认直接走完整流程。处理通过后会自动进入微信草稿箱。</div>
+                    </div>
+                  </section>
+
+                  <section class="panel">
+                    <div class="panel-head">
+                      <h2>最近任务</h2>
+                      <span class="mini" id="task-count">0 个</span>
+                    </div>
+                    <div class="task-toolbar">
+                      <div class="filter-row">
+                        <button class="pill active" data-filter="all" type="button">全部</button>
+                        <button class="pill" data-filter="doing" type="button">处理中</button>
+                        <button class="pill" data-filter="waiting" type="button">等我处理</button>
+                        <button class="pill" data-filter="done" type="button">已进草稿</button>
+                        <button class="pill" data-filter="failed" type="button">失败</button>
+                      </div>
+                      <input id="task-search" type="search" placeholder="搜标题、链接或任务号" autocomplete="off" />
+                      <div class="advanced-links">
+                        <a href="/admin/settings" target="_blank" rel="noreferrer">设置</a>
+                        <a href="/admin/console" target="_blank" rel="noreferrer">监控详情</a>
+                        <a href="/admin/phase5" target="_blank" rel="noreferrer">审核台</a>
+                        <a href="/admin/phase6" target="_blank" rel="noreferrer">反馈台</a>
+                      </div>
+                    </div>
+                    <div class="task-list" id="task-list">
+                      <div class="empty">还没有任务。</div>
+                    </div>
+                  </section>
+                </section>
+
+                <section class="stack">
+                  <section class="panel">
+                    <div class="panel-head">
+                      <h2>今天怎么样</h2>
+                      <span class="mini" id="generated-at">刚刚更新</span>
+                    </div>
+                    <div class="metrics">
+                      <div class="metric"><strong>处理中</strong><span id="metric-active">0</span></div>
+                      <div class="metric"><strong>等你处理</strong><span id="metric-manual">0</span></div>
+                      <div class="metric"><strong>已进草稿</strong><span id="metric-draft">0</span></div>
+                      <div class="metric"><strong>失败</strong><span id="metric-failed">0</span></div>
+                    </div>
+                  </section>
+
+                  <section class="panel">
+                    <div class="panel-head">
+                      <h2>任务详情</h2>
+                      <span class="mini" id="selected-task-code">先点左边任意一条</span>
+                    </div>
+                    <div class="detail-grid" id="task-detail">
+                      <div class="empty">选中一条任务后，这里会告诉你现在到了哪一步，以及下一步该按哪个按钮。</div>
+                    </div>
+                  </section>
+                </section>
               </div>
-              <div class="meta">
-                <span id="view-desc">当前视图：监控首页</span>
-                <a id="open-direct" href="/admin/console" target="_blank" rel="noreferrer">新窗口打开当前视图</a>
-              </div>
-              <iframe id="frame" title="统一后台视图" src="/admin/console"></iframe>
-            </section>
+            </div>
           </main>
 
           <script>
-            const VIEWS = {{
-              monitor: {{
-                label: "监控首页",
-                desc: "任务进度、自动轮询、历史筛选和聚合详情",
-                src: "/admin/console",
-              }},
-              review: {{
-                label: "审核台",
-                desc: "人工通过 / 驳回、推草稿开关和手动推稿",
-                src: "/admin/phase5",
-              }},
-              feedback: {{
-                label: "反馈台",
-                desc: "反馈导入、Prompt 实验榜和风格资产",
-                src: "/admin/phase6",
-              }},
-              settings: {{
-                label: "设置",
-                desc: "网页修改运行参数，密钥和基础设施配置仍然留在 .env",
-                src: "/admin/settings",
-              }},
+            const INITIAL_TASK_ID = {json.dumps(task_id, ensure_ascii=False)};
+            const ACTIVE = new Set([
+              "queued",
+              "deduping",
+              "fetching_source",
+              "source_ready",
+              "analyzing_source",
+              "searching_related",
+              "fetching_related",
+              "building_brief",
+              "brief_ready",
+              "generating",
+              "reviewing",
+              "pushing_wechat_draft",
+            ]);
+            const WAITING = new Set(["needs_manual_review", "needs_regenerate", "review_passed"]);
+            const FAILED = new Set([
+              "fetch_failed",
+              "analyze_failed",
+              "search_failed",
+              "brief_failed",
+              "generate_failed",
+              "review_failed",
+              "push_failed",
+              "needs_manual_source",
+            ]);
+            const DONE = new Set(["draft_saved"]);
+            const STATUS_LABELS = {{
+              queued: "排队中",
+              deduping: "去重中",
+              fetching_source: "抓原文",
+              source_ready: "原文就绪",
+              analyzing_source: "分析原文",
+              searching_related: "搜同题",
+              fetching_related: "抓参考",
+              building_brief: "做 brief",
+              brief_ready: "brief 就绪",
+              generating: "写稿中",
+              reviewing: "审稿中",
+              review_passed: "已通过",
+              pushing_wechat_draft: "推草稿",
+              draft_saved: "已进草稿",
+              fetch_failed: "抓取失败",
+              analyze_failed: "分析失败",
+              search_failed: "搜索失败",
+              brief_failed: "brief 失败",
+              generate_failed: "写稿失败",
+              review_failed: "审稿失败",
+              push_failed: "推稿失败",
+              needs_manual_source: "等人工补原文",
+              needs_manual_review: "等人工判断",
+              needs_regenerate: "需要重写",
             }};
 
-            const frameEl = document.getElementById("frame");
-            const descEl = document.getElementById("view-desc");
-            const openDirectEl = document.getElementById("open-direct");
-            const buttons = Array.from(document.querySelectorAll(".tab"));
-            let currentView = "{initial_view}";
+            const state = {{
+              snapshot: null,
+              selectedTaskId: INITIAL_TASK_ID,
+              filter: "all",
+              search: "",
+            }};
 
-            const renderView = (view) => {{
-              const config = VIEWS[view] || VIEWS.monitor;
-              currentView = view in VIEWS ? view : "monitor";
-              frameEl.src = config.src;
-              descEl.textContent = `当前视图：${{config.label}} · ${{config.desc}}`;
-              openDirectEl.href = config.src;
-              buttons.forEach((button) => {{
-                button.classList.toggle("active", button.dataset.view === currentView);
-              }});
+            const elements = {{
+              flashMessage: document.getElementById("flash-message"),
+              autoRefresh: document.getElementById("auto-refresh"),
+              ingestUrl: document.getElementById("ingest-url"),
+              ingestButton: document.getElementById("ingest-button"),
+              pasteButton: document.getElementById("paste-button"),
+              taskSearch: document.getElementById("task-search"),
+              taskCount: document.getElementById("task-count"),
+              taskList: document.getElementById("task-list"),
+              selectedTaskCode: document.getElementById("selected-task-code"),
+              taskDetail: document.getElementById("task-detail"),
+              generatedAt: document.getElementById("generated-at"),
+              metricActive: document.getElementById("metric-active"),
+              metricManual: document.getElementById("metric-manual"),
+              metricDraft: document.getElementById("metric-draft"),
+              metricFailed: document.getElementById("metric-failed"),
+              filterButtons: Array.from(document.querySelectorAll("[data-filter]")),
+            }};
+
+            const escapeHtml = (value) => (value || "")
+              .replaceAll("&", "&amp;")
+              .replaceAll("<", "&lt;")
+              .replaceAll(">", "&gt;")
+              .replaceAll('"', "&quot;")
+              .replaceAll("'", "&#39;");
+
+            const formatDateTime = (value) => {{
+              if (!value) return "刚刚";
+              const date = new Date(value);
+              if (Number.isNaN(date.getTime())) return "刚刚";
+              return new Intl.DateTimeFormat("zh-CN", {{
+                month: "2-digit",
+                day: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+              }}).format(date);
+            }};
+
+            const statusLabel = (status) => STATUS_LABELS[status] || status || "未知";
+
+            const statusTone = (status) => {{
+              if (DONE.has(status)) return "done";
+              if (FAILED.has(status)) return "fail";
+              if (WAITING.has(status)) return "waiting";
+              return "";
+            }};
+
+            const setFlashMessage = (message, tone = "") => {{
+              elements.flashMessage.textContent = message;
+              elements.autoRefresh.className = `status-chip ${{tone}}`.trim();
+            }};
+
+            const nextStepText = (task) => {{
+              if (!task) return "先在左边点一条任务。";
+              if (task.error) return `先处理这个报错：${{task.error}}`;
+              switch (task.status) {{
+                case "queued":
+                case "deduping":
+                case "fetching_source":
+                case "analyzing_source":
+                case "searching_related":
+                case "fetching_related":
+                case "building_brief":
+                case "generating":
+                case "reviewing":
+                case "pushing_wechat_draft":
+                  return "系统在跑，你先等一下。";
+                case "brief_ready":
+                case "source_ready":
+                  return "刚到中间态，系统会继续往下走。";
+                case "needs_manual_review":
+                  return "现在轮到你。点“通过”或“驳回重写”。";
+                case "needs_regenerate":
+                  return "点“重新跑一版”，再来一稿。";
+                case "review_passed":
+                  return "已经合格。点“推草稿”就会进公众号后台。";
+                case "draft_saved":
+                  return "已经进草稿箱，去公众号后台发布。";
+                case "needs_manual_source":
+                  return "原文没抓到，先看高级页面补原文。";
+                default:
+                  if (FAILED.has(task.status)) return "先点“重新跑一版”。还不行再看高级页面。";
+                  return "看左边状态，系统会继续更新。";
+              }}
+            }};
+
+            const currentTasks = () => state.snapshot?.tasks || [];
+
+            const findSelectedTask = () => {{
+              const workspace = state.snapshot?.workspace;
+              if (workspace && workspace.task_id === state.selectedTaskId) return workspace;
+              return currentTasks().find((item) => item.task_id === state.selectedTaskId) || workspace || null;
+            }};
+
+            const matchesFilter = (task) => {{
+              if (state.filter === "doing" && !ACTIVE.has(task.status)) return false;
+              if (state.filter === "waiting" && !WAITING.has(task.status)) return false;
+              if (state.filter === "done" && !DONE.has(task.status)) return false;
+              if (state.filter === "failed" && !FAILED.has(task.status)) return false;
+              if (!state.search) return true;
+              const needle = state.search.toLowerCase();
+              return [
+                task.title || "",
+                task.source_url || "",
+                task.task_code || "",
+              ].some((value) => value.toLowerCase().includes(needle));
+            }};
+
+            const filteredTasks = () => currentTasks().filter(matchesFilter);
+
+            const syncUrl = () => {{
               const url = new URL(window.location.href);
-              url.searchParams.set("view", currentView);
+              if (state.selectedTaskId) {{
+                url.searchParams.set("task_id", state.selectedTaskId);
+              }} else {{
+                url.searchParams.delete("task_id");
+              }}
               window.history.replaceState({{}}, "", url);
             }};
 
-            buttons.forEach((button) => {{
-              button.addEventListener("click", () => renderView(button.dataset.view));
+            const renderSummary = () => {{
+              const summary = state.snapshot?.summary;
+              if (!summary) return;
+              elements.metricActive.textContent = summary.filtered_active;
+              elements.metricManual.textContent = summary.filtered_manual;
+              elements.metricDraft.textContent = summary.filtered_draft_saved;
+              elements.metricFailed.textContent = summary.filtered_failed;
+              elements.generatedAt.textContent = `${{formatDateTime(summary.generated_at)}} 更新`;
+            }};
+
+            const renderTaskList = () => {{
+              const tasks = filteredTasks();
+              elements.taskCount.textContent = `${{tasks.length}} 个`;
+              if (!tasks.length) {{
+                elements.taskList.innerHTML = '<div class="empty">这里还没有符合筛选的任务。</div>';
+                return;
+              }}
+              elements.taskList.innerHTML = tasks.map((task) => {{
+                const selected = task.task_id === state.selectedTaskId ? "selected" : "";
+                const title = escapeHtml(task.title || task.source_url || "未命名任务");
+                const meta = escapeHtml(task.source_url || task.task_code);
+                return `
+                  <article class="task-card ${{selected}}" data-task-id="${{task.task_id}}">
+                    <div class="status-line">
+                      <span class="status-chip ${{statusTone(task.status)}}">${{statusLabel(task.status)}}</span>
+                      <span class="mini">${{task.progress}}%</span>
+                    </div>
+                    <div class="task-title">${{title}}</div>
+                    <div class="progress-track"><div class="progress-fill" style="width:${{Math.max(task.progress || 0, 4)}}%"></div></div>
+                    <div class="task-meta">${{meta}}</div>
+                    <div class="task-meta">任务号：${{escapeHtml(task.task_code)}} · 更新：${{formatDateTime(task.updated_at)}}</div>
+                  </article>
+                `;
+              }}).join("");
+            }};
+
+            const renderTaskDetail = () => {{
+              const task = findSelectedTask();
+              if (!task) {{
+                elements.selectedTaskCode.textContent = "先点左边任意一条";
+                elements.taskDetail.innerHTML = '<div class="empty">选中一条任务后，这里会告诉你现在到了哪一步，以及下一步该按哪个按钮。</div>';
+                return;
+              }}
+              elements.selectedTaskCode.textContent = task.task_code || task.task_id;
+              const workspace = state.snapshot?.workspace && state.snapshot.workspace.task_id === task.task_id
+                ? state.snapshot.workspace
+                : null;
+              const latestGeneration = workspace?.generations?.[0] || null;
+              const sourceUrl = escapeHtml(task.source_url || "");
+              const title = escapeHtml(task.title || workspace?.source_article?.title || "未命名任务");
+              const hint = escapeHtml(nextStepText(task));
+              const digest = escapeHtml(latestGeneration?.digest || "");
+              const mediaId = escapeHtml(task.wechat_media_id || workspace?.wechat_media_id || "还没有");
+              const canRetry = !DONE.has(task.status);
+              const canApprove = task.status === "needs_manual_review";
+              const canReject = ["needs_manual_review", "review_passed"].includes(task.status);
+              const canPush = task.status === "review_passed";
+              elements.taskDetail.innerHTML = `
+                <div class="summary-block">
+                  <div class="summary-title">
+                    <div class="status-line">
+                      <span class="status-chip ${{statusTone(task.status)}}">${{statusLabel(task.status)}}</span>
+                      <span class="mini">进度 ${{task.progress}}%</span>
+                    </div>
+                    <h3>${{title}}</h3>
+                    <a href="${{sourceUrl}}" target="_blank" rel="noreferrer">${{sourceUrl}}</a>
+                  </div>
+                  <div class="big-hint">
+                    <strong>现在该做什么</strong>
+                    <span>${{hint}}</span>
+                  </div>
+                </div>
+
+                <div class="kv-grid">
+                  <div class="kv"><strong>任务状态</strong><span>${{statusLabel(task.status)}}</span></div>
+                  <div class="kv"><strong>更新时间</strong><span>${{formatDateTime(task.updated_at)}}</span></div>
+                  <div class="kv"><strong>参考文章</strong><span>${{task.related_article_count || 0}} 篇</span></div>
+                  <div class="kv"><strong>微信草稿</strong><span>${{mediaId}}</span></div>
+                </div>
+
+                <div class="action-grid">
+                  <button type="button" id="retry-button" class="secondary" ${{canRetry ? "" : "disabled"}}>重新跑一版</button>
+                  <button type="button" id="approve-button" ${{canApprove ? "" : "disabled"}}>通过</button>
+                  <button type="button" id="reject-button" class="warn" ${{canReject ? "" : "disabled"}}>驳回重写</button>
+                  <button type="button" id="push-button" class="ghost" ${{canPush ? "" : "disabled"}}>推草稿</button>
+                </div>
+
+                <div class="latest-box">
+                  <strong>最新一稿</strong>
+                  <p>${{escapeHtml(latestGeneration?.title || "还没有生成稿件")}}</p>
+                  <p class="mini">${{escapeHtml(latestGeneration?.prompt_version || "")}}</p>
+                  <p>${{digest || "这里会显示最新一稿的摘要。"}}</p>
+                </div>
+
+                ${{task.error ? `<div class="latest-box"><strong>报错</strong><p>${{escapeHtml(task.error)}}</p></div>` : ""}}
+              `;
+
+              document.getElementById("retry-button")?.addEventListener("click", () => runAction("retry", task.task_id));
+              document.getElementById("approve-button")?.addEventListener("click", () => runAction("approve", task.task_id));
+              document.getElementById("reject-button")?.addEventListener("click", () => runAction("reject", task.task_id));
+              document.getElementById("push-button")?.addEventListener("click", () => runAction("push-draft", task.task_id));
+            }};
+
+            const render = () => {{
+              renderSummary();
+              renderTaskList();
+              renderTaskDetail();
+              elements.filterButtons.forEach((button) => {{
+                button.classList.toggle("active", button.dataset.filter === state.filter);
+              }});
+            }};
+
+            const loadSnapshot = async () => {{
+              const params = new URLSearchParams({{ limit: "18" }});
+              if (state.selectedTaskId) params.set("selected_task_id", state.selectedTaskId);
+              const response = await fetch(`/admin/api/home-snapshot?${{params.toString()}}`, {{
+                headers: {{ Accept: "application/json" }},
+              }});
+              if (!response.ok) {{
+                throw new Error("加载任务列表失败。");
+              }}
+              state.snapshot = await response.json();
+              if (!state.selectedTaskId && state.snapshot.tasks.length) {{
+                state.selectedTaskId = state.snapshot.tasks[0].task_id;
+              }}
+              if (
+                state.selectedTaskId &&
+                !state.snapshot.workspace &&
+                !state.snapshot.tasks.some((item) => item.task_id === state.selectedTaskId)
+              ) {{
+                state.selectedTaskId = state.snapshot.tasks[0]?.task_id || null;
+              }}
+              syncUrl();
+              render();
+            }};
+
+            const apiPost = async (url, payload) => {{
+              const response = await fetch(url, {{
+                method: "POST",
+                headers: {{
+                  "Content-Type": "application/json",
+                  Accept: "application/json",
+                }},
+                body: payload ? JSON.stringify(payload) : JSON.stringify({{}}),
+              }});
+              const text = await response.text();
+              let data = {{}};
+              if (text) {{
+                try {{
+                  data = JSON.parse(text);
+                }} catch (_error) {{
+                  data = {{ detail: text }};
+                }}
+              }}
+              if (!response.ok) {{
+                throw new Error(data.detail || "操作失败。");
+              }}
+              return data;
+            }};
+
+            const runAction = async (action, taskId) => {{
+              const labels = {{
+                retry: "已重新入队。",
+                approve: "已通过。",
+                reject: "已改成重写。",
+                "push-draft": "已推送到微信草稿箱。",
+              }};
+              try {{
+                setFlashMessage("正在处理…");
+                await apiPost(`/admin/api/tasks/${{taskId}}/${{action}}`);
+                state.selectedTaskId = taskId;
+                await loadSnapshot();
+                setFlashMessage(labels[action] || "完成了。", action === "push-draft" ? "done" : "");
+              }} catch (error) {{
+                setFlashMessage(error.message || "操作失败。", "fail");
+              }}
+            }};
+
+            const ingestTask = async () => {{
+              const url = elements.ingestUrl.value.trim();
+              if (!url) {{
+                setFlashMessage("先贴一个微信文章链接。", "waiting");
+                elements.ingestUrl.focus();
+                return;
+              }}
+              try {{
+                elements.ingestButton.disabled = true;
+                setFlashMessage("任务已提交，开始排队。");
+                const data = await apiPost("/admin/api/ingest", {{ url }});
+                state.selectedTaskId = data.task_id;
+                elements.ingestUrl.value = "";
+                await loadSnapshot();
+                setFlashMessage("任务已收到，左边会自己刷新。");
+              }} catch (error) {{
+                setFlashMessage(error.message || "提交失败。", "fail");
+              }} finally {{
+                elements.ingestButton.disabled = false;
+              }}
+            }};
+
+            elements.filterButtons.forEach((button) => {{
+              button.addEventListener("click", () => {{
+                state.filter = button.dataset.filter;
+                render();
+              }});
             }});
 
-            renderView(currentView);
+            elements.taskSearch.addEventListener("input", (event) => {{
+              state.search = event.target.value.trim();
+              render();
+            }});
+
+            elements.taskList.addEventListener("click", (event) => {{
+              const card = event.target.closest("[data-task-id]");
+              if (!card) return;
+              state.selectedTaskId = card.dataset.taskId;
+              syncUrl();
+              loadSnapshot().catch((error) => setFlashMessage(error.message || "加载任务失败。", "fail"));
+            }});
+
+            elements.ingestButton.addEventListener("click", ingestTask);
+            elements.ingestUrl.addEventListener("keydown", (event) => {{
+              if (event.key === "Enter") {{
+                event.preventDefault();
+                ingestTask();
+              }}
+            }});
+
+            elements.pasteButton.addEventListener("click", async () => {{
+              try {{
+                const text = await navigator.clipboard.readText();
+                if (text) {{
+                  elements.ingestUrl.value = text.trim();
+                  setFlashMessage("已粘贴。");
+                }}
+              }} catch (_error) {{
+                setFlashMessage("请手动粘贴链接。", "waiting");
+              }}
+            }});
+
+            const boot = async () => {{
+              try {{
+                await loadSnapshot();
+                setFlashMessage("自动刷新中。");
+              }} catch (error) {{
+                setFlashMessage(error.message || "页面初始化失败。", "fail");
+              }}
+              window.setInterval(() => {{
+                loadSnapshot().catch(() => setFlashMessage("刷新失败，稍后会再试。", "fail"));
+              }}, 4000);
+            }};
+
+            boot();
           </script>
         </body>
         </html>
