@@ -643,6 +643,10 @@ def phase5_console() -> str:
             button.danger {
               background: var(--danger);
             }
+            button[aria-busy="true"] {
+              opacity: 0.82;
+              cursor: progress;
+            }
             .actions {
               display: grid;
               grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1222,6 +1226,27 @@ def phase5_console() -> str:
               if (!token) throw new Error("请先输入 Bearer Token");
               return token;
             };
+            const setButtonBusy = (button, busy, pendingLabel = "处理中...") => {
+              if (!button) return;
+              if (!button.dataset.defaultLabel) {
+                button.dataset.defaultLabel = button.textContent.trim();
+              }
+              button.disabled = busy;
+              button.setAttribute("aria-busy", busy ? "true" : "false");
+              button.textContent = busy ? pendingLabel : button.dataset.defaultLabel;
+            };
+            const withButtonBusy = async (button, pendingLabel, work) => {
+              if (!button || button.disabled) return;
+              setButtonBusy(button, true, pendingLabel);
+              try {
+                await work();
+              } catch (error) {
+                setStatus("失败");
+                renderOutput(error.message || String(error));
+              } finally {
+                setButtonBusy(button, false);
+              }
+            };
             const apiUrl = (path) => new URL(path, window.location.origin).toString();
 
             const request = async (method, path, body) => {
@@ -1635,45 +1660,36 @@ def phase5_console() -> str:
               note: reviewNoteEl.value.trim() || null,
             });
 
-            document.getElementById("queue-url").addEventListener("click", async () => {
-              try {
+            document.getElementById("queue-url").addEventListener("click", (event) => {
+              withButtonBusy(event.currentTarget, "入队中...", async () => {
                 setStatus("入队中");
                 const result = await request("POST", "/internal/v1/phase4/ingest-and-enqueue", buildIngestPayload());
                 setTaskId(result.task_id);
                 renderOutput(result);
                 await refreshRecent();
                 setStatus(result.status || "queued");
-              } catch (error) {
-                setStatus("失败");
-                renderOutput(error.message || String(error));
-              }
+              });
             });
 
-            document.getElementById("run-url").addEventListener("click", async () => {
-              try {
+            document.getElementById("run-url").addEventListener("click", (event) => {
+              withButtonBusy(event.currentTarget, "执行中...", async () => {
                 setStatus("执行中");
                 const result = await request("POST", "/internal/v1/phase4/ingest-and-run", buildIngestPayload());
                 setTaskId(result.task_id);
                 renderOutput(result);
                 await refreshRecent();
                 await fetchWorkspace(result.task_id);
-              } catch (error) {
-                setStatus("失败");
-                renderOutput(error.message || String(error));
-              }
+              });
             });
 
-            document.getElementById("load-workspace").addEventListener("click", async () => {
-              try {
+            document.getElementById("load-workspace").addEventListener("click", (event) => {
+              withButtonBusy(event.currentTarget, "加载中...", async () => {
                 await fetchWorkspace(taskEl.value.trim());
-              } catch (error) {
-                setStatus("失败");
-                renderOutput(error.message || String(error));
-              }
+              });
             });
 
-            document.getElementById("queue-phase3").addEventListener("click", async () => {
-              try {
+            document.getElementById("queue-phase3").addEventListener("click", (event) => {
+              withButtonBusy(event.currentTarget, "入队中...", async () => {
                 const taskId = taskEl.value.trim();
                 if (!taskId) throw new Error("请先输入 task_id");
                 setStatus("入队 Phase3");
@@ -1681,14 +1697,11 @@ def phase5_console() -> str:
                 renderOutput(result);
                 await refreshRecent();
                 await fetchWorkspace(taskId);
-              } catch (error) {
-                setStatus("失败");
-                renderOutput(error.message || String(error));
-              }
+              });
             });
 
-            document.getElementById("run-phase4").addEventListener("click", async () => {
-              try {
+            document.getElementById("run-phase4").addEventListener("click", (event) => {
+              withButtonBusy(event.currentTarget, "执行中...", async () => {
                 const taskId = taskEl.value.trim();
                 if (!taskId) throw new Error("请先输入 task_id");
                 setStatus("执行 Phase4");
@@ -1696,14 +1709,11 @@ def phase5_console() -> str:
                 renderOutput(result);
                 await refreshRecent();
                 await fetchWorkspace(taskId);
-              } catch (error) {
-                setStatus("失败");
-                renderOutput(error.message || String(error));
-              }
+              });
             });
 
-            document.getElementById("queue-phase4").addEventListener("click", async () => {
-              try {
+            document.getElementById("queue-phase4").addEventListener("click", (event) => {
+              withButtonBusy(event.currentTarget, "入队中...", async () => {
                 const taskId = taskEl.value.trim();
                 if (!taskId) throw new Error("请先输入 task_id");
                 setStatus("入队 Phase4");
@@ -1711,14 +1721,11 @@ def phase5_console() -> str:
                 renderOutput(result);
                 await refreshRecent();
                 await fetchWorkspace(taskId);
-              } catch (error) {
-                setStatus("失败");
-                renderOutput(error.message || String(error));
-              }
+              });
             });
 
-            document.getElementById("approve-generation").addEventListener("click", async () => {
-              try {
+            document.getElementById("approve-generation").addEventListener("click", (event) => {
+              withButtonBusy(event.currentTarget, "通过中...", async () => {
                 const taskId = taskEl.value.trim();
                 if (!taskId) throw new Error("请先输入 task_id");
                 setStatus("人工通过");
@@ -1726,14 +1733,11 @@ def phase5_console() -> str:
                 renderOutput(result);
                 await refreshRecent();
                 await fetchWorkspace(taskId);
-              } catch (error) {
-                setStatus("失败");
-                renderOutput(error.message || String(error));
-              }
+              });
             });
 
-            document.getElementById("reject-generation").addEventListener("click", async () => {
-              try {
+            document.getElementById("reject-generation").addEventListener("click", (event) => {
+              withButtonBusy(event.currentTarget, "退回中...", async () => {
                 const taskId = taskEl.value.trim();
                 if (!taskId) throw new Error("请先输入 task_id");
                 setStatus("人工驳回重写");
@@ -1741,14 +1745,11 @@ def phase5_console() -> str:
                 renderOutput(result);
                 await refreshRecent();
                 await fetchWorkspace(taskId);
-              } catch (error) {
-                setStatus("失败");
-                renderOutput(error.message || String(error));
-              }
+              });
             });
 
-            document.getElementById("allow-push").addEventListener("click", async () => {
-              try {
+            document.getElementById("allow-push").addEventListener("click", (event) => {
+              withButtonBusy(event.currentTarget, "放行中...", async () => {
                 const taskId = taskEl.value.trim();
                 if (!taskId) throw new Error("请先输入 task_id");
                 setStatus("允许推稿");
@@ -1756,14 +1757,11 @@ def phase5_console() -> str:
                 renderOutput(result);
                 await refreshRecent();
                 await fetchWorkspace(taskId);
-              } catch (error) {
-                setStatus("失败");
-                renderOutput(error.message || String(error));
-              }
+              });
             });
 
-            document.getElementById("block-push").addEventListener("click", async () => {
-              try {
+            document.getElementById("block-push").addEventListener("click", (event) => {
+              withButtonBusy(event.currentTarget, "禁止中...", async () => {
                 const taskId = taskEl.value.trim();
                 if (!taskId) throw new Error("请先输入 task_id");
                 setStatus("禁止推草稿");
@@ -1771,14 +1769,11 @@ def phase5_console() -> str:
                 renderOutput(result);
                 await refreshRecent();
                 await fetchWorkspace(taskId);
-              } catch (error) {
-                setStatus("失败");
-                renderOutput(error.message || String(error));
-              }
+              });
             });
 
-            document.getElementById("push-draft").addEventListener("click", async () => {
-              try {
+            document.getElementById("push-draft").addEventListener("click", (event) => {
+              withButtonBusy(event.currentTarget, "推送中...", async () => {
                 const taskId = taskEl.value.trim();
                 if (!taskId) throw new Error("请先输入 task_id");
                 setStatus("推送草稿中");
@@ -1786,10 +1781,7 @@ def phase5_console() -> str:
                 renderOutput(result);
                 await refreshRecent();
                 await fetchWorkspace(taskId);
-              } catch (error) {
-                setStatus("失败");
-                renderOutput(error.message || String(error));
-              }
+              });
             });
 
             document.getElementById("clear").addEventListener("click", () => {
@@ -1798,15 +1790,12 @@ def phase5_console() -> str:
               workspaceEl.innerHTML = '<div class="hint">工作台已清空。</div>';
             });
 
-            document.getElementById("refresh-recent").addEventListener("click", async () => {
-              try {
+            document.getElementById("refresh-recent").addEventListener("click", (event) => {
+              withButtonBusy(event.currentTarget, "刷新中...", async () => {
                 setStatus("刷新列表中");
                 await refreshRecent();
                 setStatus("空闲");
-              } catch (error) {
-                setStatus("失败");
-                renderOutput(error.message || String(error));
-              }
+              });
             });
 
             [recentStatusEl, recentLimitEl, recentActiveEl].forEach((element) => {
@@ -1830,7 +1819,7 @@ def phase5_console() -> str:
               if (!taskId || !action) return;
               setTaskId(taskId);
 
-              try {
+              withButtonBusy(button, "处理中...", async () => {
                 if (action === "workspace") {
                   await fetchWorkspace(taskId);
                   return;
@@ -1890,10 +1879,7 @@ def phase5_console() -> str:
                   await refreshRecent();
                   await fetchWorkspace(taskId);
                 }
-              } catch (error) {
-                setStatus("失败");
-                renderOutput(error.message || String(error));
-              }
+              });
             });
 
             loadDraft();
@@ -2043,6 +2029,10 @@ def phase6_console() -> str:
             button:hover { background: var(--accent-dark); transform: translateY(-1px); }
             button.secondary { background: #d2e1d5; color: var(--ink); }
             button.danger { background: var(--danger); color: #fff7f3; }
+            button[aria-busy="true"] {
+              opacity: 0.82;
+              cursor: progress;
+            }
             .actions {
               display: flex;
               flex-wrap: wrap;
@@ -2396,6 +2386,27 @@ def phase6_console() -> str:
               outputEl.textContent = typeof value === "string" ? value : JSON.stringify(value, null, 2);
             };
             const apiUrl = (path) => new URL(path, window.location.origin).toString();
+            const setButtonBusy = (button, busy, pendingLabel = "处理中...") => {
+              if (!button) return;
+              if (!button.dataset.defaultLabel) {
+                button.dataset.defaultLabel = button.textContent.trim();
+              }
+              button.disabled = busy;
+              button.setAttribute("aria-busy", busy ? "true" : "false");
+              button.textContent = busy ? pendingLabel : button.dataset.defaultLabel;
+            };
+            const withButtonBusy = async (button, pendingLabel, work) => {
+              if (!button || button.disabled) return;
+              setButtonBusy(button, true, pendingLabel);
+              try {
+                await work();
+              } catch (error) {
+                setStatus("失败");
+                renderOutput(error.message || String(error));
+              } finally {
+                setButtonBusy(button, false);
+              }
+            };
 
             const loadDraft = () => {
               tokenEl.value = localStorage.getItem("phase6_console_token") || "";
@@ -2586,47 +2597,38 @@ def phase6_console() -> str:
               return items;
             };
 
-            document.getElementById("query-feedback").addEventListener("click", async () => {
-              try {
+            document.getElementById("query-feedback").addEventListener("click", (event) => {
+              withButtonBusy(event.currentTarget, "查询中...", async () => {
                 saveDraft();
                 setStatus("查反馈");
                 const payload = await queryTaskFeedback();
                 renderOutput(payload);
                 setStatus("完成");
-              } catch (error) {
-                setStatus("失败");
-                renderOutput(error.message || String(error));
-              }
+              });
             });
 
-            document.getElementById("refresh-experiments").addEventListener("click", async () => {
-              try {
+            document.getElementById("refresh-experiments").addEventListener("click", (event) => {
+              withButtonBusy(event.currentTarget, "查询中...", async () => {
                 saveDraft();
                 setStatus("查实验");
                 const items = await refreshExperiments();
                 renderOutput(items);
                 setStatus("完成");
-              } catch (error) {
-                setStatus("失败");
-                renderOutput(error.message || String(error));
-              }
+              });
             });
 
-            document.getElementById("refresh-assets").addEventListener("click", async () => {
-              try {
+            document.getElementById("refresh-assets").addEventListener("click", (event) => {
+              withButtonBusy(event.currentTarget, "查询中...", async () => {
                 saveDraft();
                 setStatus("查资产");
                 const items = await refreshStyleAssets();
                 renderOutput(items);
                 setStatus("完成");
-              } catch (error) {
-                setStatus("失败");
-                renderOutput(error.message || String(error));
-              }
+              });
             });
 
-            document.getElementById("import-feedback").addEventListener("click", async () => {
-              try {
+            document.getElementById("import-feedback").addEventListener("click", (event) => {
+              withButtonBusy(event.currentTarget, "导入中...", async () => {
                 saveDraft();
                 const taskId = taskIdEl.value.trim();
                 if (!taskId) throw new Error("请先输入 task_id");
@@ -2636,14 +2638,11 @@ def phase6_console() -> str:
                 await queryTaskFeedback();
                 await refreshExperiments();
                 setStatus("导入完成");
-              } catch (error) {
-                setStatus("失败");
-                renderOutput(error.message || String(error));
-              }
+              });
             });
 
-            document.getElementById("run-feedback-sync").addEventListener("click", async () => {
-              try {
+            document.getElementById("run-feedback-sync").addEventListener("click", (event) => {
+              withButtonBusy(event.currentTarget, "同步中...", async () => {
                 saveDraft();
                 const taskId = taskIdEl.value.trim();
                 if (!taskId) throw new Error("请先输入 task_id");
@@ -2653,14 +2652,11 @@ def phase6_console() -> str:
                 await queryTaskFeedback();
                 await refreshExperiments();
                 setStatus(`自动同步完成 (${result.imported_count})`);
-              } catch (error) {
-                setStatus("失败");
-                renderOutput(error.message || String(error));
-              }
+              });
             });
 
-            document.getElementById("queue-feedback-sync").addEventListener("click", async () => {
-              try {
+            document.getElementById("queue-feedback-sync").addEventListener("click", (event) => {
+              withButtonBusy(event.currentTarget, "入队中...", async () => {
                 saveDraft();
                 const taskId = taskIdEl.value.trim();
                 if (!taskId) throw new Error("请先输入 task_id");
@@ -2668,27 +2664,21 @@ def phase6_console() -> str:
                 const result = await request("POST", `/internal/v1/tasks/${taskId}/enqueue-feedback-sync`, buildFeedbackSyncPayload());
                 renderOutput(result);
                 setStatus(result.enqueued ? "已入队" : "已在队列中");
-              } catch (error) {
-                setStatus("失败");
-                renderOutput(error.message || String(error));
-              }
+              });
             });
 
-            document.getElementById("queue-recent-feedback-sync").addEventListener("click", async () => {
-              try {
+            document.getElementById("queue-recent-feedback-sync").addEventListener("click", (event) => {
+              withButtonBusy(event.currentTarget, "扫描中...", async () => {
                 saveDraft();
                 setStatus("扫描最近草稿中");
                 const result = await request("POST", "/internal/v1/feedback/enqueue-recent-sync", buildRecentFeedbackSyncPayload());
                 renderOutput(result);
                 setStatus(`已扫描 ${result.requested_count} 个任务，入队 ${result.enqueued_count} 个`);
-              } catch (error) {
-                setStatus("失败");
-                renderOutput(error.message || String(error));
-              }
+              });
             });
 
-            document.getElementById("import-feedback-csv").addEventListener("click", async () => {
-              try {
+            document.getElementById("import-feedback-csv").addEventListener("click", (event) => {
+              withButtonBusy(event.currentTarget, "导入中...", async () => {
                 saveDraft();
                 if (!feedbackCsvEl.value.trim()) throw new Error("请先粘贴 CSV 内容");
                 setStatus("批量导入中");
@@ -2699,14 +2689,11 @@ def phase6_console() -> str:
                 }
                 await refreshExperiments();
                 setStatus(`批量导入完成 (${result.imported_count})`);
-              } catch (error) {
-                setStatus("失败");
-                renderOutput(error.message || String(error));
-              }
+              });
             });
 
-            document.getElementById("create-asset").addEventListener("click", async () => {
-              try {
+            document.getElementById("create-asset").addEventListener("click", (event) => {
+              withButtonBusy(event.currentTarget, "创建中...", async () => {
                 saveDraft();
                 if (!assetTypeEl.value.trim() || !assetTitleEl.value.trim() || !assetContentEl.value.trim()) {
                   throw new Error("请填写资产类型、标题和内容");
@@ -2716,10 +2703,7 @@ def phase6_console() -> str:
                 renderOutput(result);
                 await refreshStyleAssets();
                 setStatus("创建完成");
-              } catch (error) {
-                setStatus("失败");
-                renderOutput(error.message || String(error));
-              }
+              });
             });
 
             document.getElementById("clear-output").addEventListener("click", () => {

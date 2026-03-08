@@ -427,6 +427,10 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               cursor: not-allowed;
               transform: none;
             }}
+            button[aria-busy="true"] {{
+              opacity: 0.82;
+              cursor: progress;
+            }}
             .status-line {{
               display: flex;
               flex-wrap: wrap;
@@ -923,6 +927,10 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               filter: "all",
               search: "",
               filterPinned: false,
+              detailExpandedByTask: {{}},
+              pendingAction: null,
+              isIngesting: false,
+              isRefreshing: false,
             }};
 
             const elements = {{
@@ -1002,6 +1010,50 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               elements.flashMessage.textContent = message;
               elements.autoRefresh.className = `status-chip ${{tone}}`.trim();
             }};
+            const setButtonBusy = (button, busy, pendingLabel = "处理中…") => {{
+              if (!button) return;
+              if (!button.dataset.defaultLabel) {{
+                button.dataset.defaultLabel = button.textContent.trim();
+              }}
+              button.disabled = busy;
+              button.setAttribute("aria-busy", busy ? "true" : "false");
+              button.textContent = busy ? pendingLabel : button.dataset.defaultLabel;
+            }};
+            const withStaticButtonBusy = async (button, pendingLabel, work) => {{
+              if (!button || button.disabled) return;
+              setButtonBusy(button, true, pendingLabel);
+              try {{
+                await work();
+              }} finally {{
+                setButtonBusy(button, false);
+              }}
+            }};
+            const actionBusyLabel = (action, fallback) => {{
+              const labels = {{
+                retry: "重跑中…",
+                approve: "通过中…",
+                reject: "退回中…",
+                "push-draft": "推送中…",
+              }};
+              return labels[action] || `${{fallback}}中…`;
+            }};
+            const setPendingAction = (action, taskId) => {{
+              state.pendingAction = {{ action, taskId }};
+              renderTaskDetail();
+            }};
+            const clearPendingAction = () => {{
+              state.pendingAction = null;
+              renderTaskDetail();
+            }};
+            const setDetailExpanded = (taskId, expanded) => {{
+              if (!taskId) return;
+              if (expanded) {{
+                state.detailExpandedByTask[taskId] = true;
+                return;
+              }}
+              delete state.detailExpandedByTask[taskId];
+            }};
+            const isDetailExpanded = (taskId) => Boolean(taskId && state.detailExpandedByTask[taskId]);
             const scrollTaskDetailIntoView = () => {{
               if (!window.matchMedia("(max-width: 1080px)").matches) return;
               const panel = elements.taskDetail.closest(".panel");
@@ -1249,7 +1301,13 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               }}
               const actionHtml = actionButtons.length
                 ? `<div class="action-grid">${{actionButtons.map((button) => `
-                    <button type="button" id="${{button.id}}" class="${{button.klass}}">${{button.label}}</button>
+                    <button
+                      type="button"
+                      id="${{button.id}}"
+                      class="${{button.klass}}"
+                      ${{state.pendingAction?.taskId === task.task_id ? "disabled" : ""}}
+                      aria-busy="${{state.pendingAction?.taskId === task.task_id && state.pendingAction?.action === button.action ? "true" : "false"}}"
+                    >${{state.pendingAction?.taskId === task.task_id && state.pendingAction?.action === button.action ? actionBusyLabel(button.action, button.label) : button.label}}</button>
                   `).join("")}}</div>`
                 : '<div class="action-empty">现在先不用点按钮，等系统自己跑完就行。</div>';
               const utilityButtons = [
@@ -1288,7 +1346,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
 
                 ${{actionHtml}}
 
-                <details class="detail-more">
+                <details class="detail-more" ${{isDetailExpanded(task.task_id) ? "open" : ""}}>
                   <summary>更多信息</summary>
                   <div class="detail-more-grid">
                     <div class="kv-grid">
@@ -1316,6 +1374,9 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
 
               actionButtons.forEach((button) => {{
                 document.getElementById(button.id)?.addEventListener("click", () => runAction(button.action, task.task_id));
+              }});
+              elements.taskDetail.querySelector(".detail-more")?.addEventListener("toggle", (event) => {{
+                setDetailExpanded(task.task_id, event.currentTarget.open);
               }});
               document.getElementById("copy-task-id")?.addEventListener("click", () => copyText("任务号", task.task_code || task.task_id));
               if (rawMediaId) {{
@@ -1399,8 +1460,16 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                 reject: "已改成重写。",
                 "push-draft": "已推送到微信草稿箱。",
               }};
+              const pendingMessages = {{
+                retry: "正在重新跑一版…",
+                approve: "正在人工通过…",
+                reject: "正在退回重写…",
+                "push-draft": "正在推送到微信草稿箱…",
+              }};
+              if (state.pendingAction) return;
               try {{
-                setFlashMessage("正在处理…");
+                setPendingAction(action, taskId);
+                setFlashMessage(pendingMessages[action] || "正在处理…", "waiting");
                 await apiPost(appUrl(`/admin/api/tasks/${{taskId}}/${{action}}`));
                 state.selectedTaskId = taskId;
                 await loadSnapshot();
@@ -1408,6 +1477,8 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                 setFlashMessage(labels[action] || "完成了。", action === "push-draft" ? "done" : "");
               }} catch (error) {{
                 setFlashMessage(error.message || "操作失败。", "fail");
+              }} finally {{
+                clearPendingAction();
               }}
             }};
 
@@ -1423,9 +1494,12 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                 elements.ingestUrl.focus();
                 return;
               }}
+              if (state.isIngesting) return;
               try {{
-                elements.ingestButton.disabled = true;
-                setFlashMessage("任务已提交，开始排队。");
+                state.isIngesting = true;
+                setButtonBusy(elements.ingestButton, true, "提交中…");
+                setButtonBusy(elements.pasteButton, true, "处理中…");
+                setFlashMessage("任务已提交，开始排队。", "waiting");
                 const data = await apiPost(appUrl("/admin/api/ingest"), {{ url }});
                 state.selectedTaskId = data.task_id;
                 elements.ingestUrl.value = "";
@@ -1439,7 +1513,9 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               }} catch (error) {{
                 setFlashMessage(error.message || "提交失败。", "fail");
               }} finally {{
-                elements.ingestButton.disabled = false;
+                state.isIngesting = false;
+                setButtonBusy(elements.ingestButton, false);
+                setButtonBusy(elements.pasteButton, false);
               }}
             }};
 
@@ -1502,10 +1578,17 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             }});
 
             elements.refreshButton.addEventListener("click", () => {{
-              setFlashMessage("正在刷新…");
-              loadSnapshot()
-                .then(() => setFlashMessage("已经刷新。"))
-                .catch((error) => setFlashMessage(error.message || "刷新失败。", "fail"));
+              if (state.isRefreshing) return;
+              withStaticButtonBusy(elements.refreshButton, "刷新中…", async () => {{
+                state.isRefreshing = true;
+                setFlashMessage("正在刷新…", "waiting");
+                try {{
+                  await loadSnapshot();
+                  setFlashMessage("已经刷新。");
+                }} finally {{
+                  state.isRefreshing = false;
+                }}
+              }}).catch((error) => setFlashMessage(error.message || "刷新失败。", "fail"));
             }});
 
             const boot = async () => {{
@@ -1516,6 +1599,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                 setFlashMessage(error.message || "页面初始化失败。", "fail");
               }}
               window.setInterval(() => {{
+                if (state.pendingAction || state.isIngesting || state.isRefreshing) return;
                 loadSnapshot().catch(() => setFlashMessage("刷新失败，稍后会再试。", "fail"));
               }}, 4000);
             }};
@@ -2716,6 +2800,10 @@ def settings_console() -> str:
               color: var(--accent-dark);
               border: 1px solid var(--line);
             }
+            button[aria-busy="true"] {
+              opacity: 0.82;
+              cursor: progress;
+            }
             .actions {
               display: flex;
               flex-wrap: wrap;
@@ -3037,6 +3125,27 @@ def settings_console() -> str:
               }
               return body;
             };
+            const setButtonBusy = (button, busy, pendingLabel = "处理中...") => {
+              if (!button) return;
+              if (!button.dataset.defaultLabel) {
+                button.dataset.defaultLabel = button.textContent.trim();
+              }
+              button.disabled = busy;
+              button.setAttribute("aria-busy", busy ? "true" : "false");
+              button.textContent = busy ? pendingLabel : button.dataset.defaultLabel;
+            };
+            const withButtonBusy = async (button, pendingLabel, work) => {
+              if (!button || button.disabled) return;
+              setButtonBusy(button, true, pendingLabel);
+              try {
+                await work();
+              } catch (error) {
+                setStatus("操作失败");
+                renderOutput(error.message || String(error));
+              } finally {
+                setButtonBusy(button, false);
+              }
+            };
 
             const buildInput = (setting) => {
               const inputId = `setting-${setting.key}`;
@@ -3206,29 +3315,26 @@ def settings_console() -> str:
               setStatus(resetToDefault ? "已恢复默认" : "已保存");
             };
 
-            document.getElementById("refresh").addEventListener("click", () => {
-              loadAll().catch((error) => {
-                setStatus("加载失败");
-                renderOutput(error.message || String(error));
+            document.getElementById("refresh").addEventListener("click", (event) => {
+              withButtonBusy(event.currentTarget, "刷新中...", async () => {
+                await loadAll();
               });
             });
 
-            document.getElementById("send-alert").addEventListener("click", () => {
-              saveDraft();
-              setStatus("发送测试");
-              request("/api/v1/admin/alerts/test", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  operator: operatorEl.value.trim() || "admin-console",
-                  note: noteEl.value.trim() || null,
-                }),
-              }).then((result) => {
+            document.getElementById("send-alert").addEventListener("click", (event) => {
+              withButtonBusy(event.currentTarget, "发送中...", async () => {
+                saveDraft();
+                setStatus("发送测试");
+                const result = await request("/api/v1/admin/alerts/test", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    operator: operatorEl.value.trim() || "admin-console",
+                    note: noteEl.value.trim() || null,
+                  }),
+                });
                 renderOutput(result);
                 setStatus("测试告警已发送");
-              }).catch((error) => {
-                setStatus("测试告警失败");
-                renderOutput(error.message || String(error));
               });
             });
 
@@ -3249,9 +3355,8 @@ def settings_console() -> str:
               const settingKey = card.dataset.key;
               const setting = currentSettings.find((item) => item.key === settingKey);
               if (!setting) return;
-              updateSetting(setting, card, button.dataset.action === "reset").catch((error) => {
-                setStatus("操作失败");
-                renderOutput(error.message || String(error));
+              withButtonBusy(button, button.dataset.action === "reset" ? "恢复中..." : "保存中...", async () => {
+                await updateSetting(setting, card, button.dataset.action === "reset");
               });
             });
 
