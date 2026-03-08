@@ -648,6 +648,30 @@ def phase5_console() -> str:
               gap: 10px;
               margin-top: 14px;
             }
+            .action-blocks {
+              display: grid;
+              gap: 10px;
+              margin-top: 14px;
+            }
+            .action-block {
+              border: 1px solid var(--line);
+              border-radius: 18px;
+              padding: 12px;
+              background: rgba(255, 253, 249, 0.84);
+            }
+            .action-block h3 {
+              margin: 0 0 10px;
+              font-size: 13px;
+              color: var(--muted);
+            }
+            .action-grid {
+              display: grid;
+              grid-template-columns: repeat(2, minmax(0, 1fr));
+              gap: 10px;
+            }
+            .action-grid button {
+              width: 100%;
+            }
             .status {
               display: inline-flex;
               padding: 7px 12px;
@@ -935,6 +959,7 @@ def phase5_console() -> str:
             @media (max-width: 720px) {
               .hero h1 { font-size: 30px; }
               .actions { grid-template-columns: 1fr; }
+              .action-grid { grid-template-columns: 1fr; }
               .task-actions { flex-direction: column; }
               .task-actions button { width: 100%; }
             }
@@ -974,19 +999,34 @@ def phase5_console() -> str:
                       <textarea id="review-note" placeholder="会写入 audit log，例如：结构已达标，可人工放行；或：观点重复，退回重写。"></textarea>
                     </div>
                   </div>
-                  <div class="actions">
-                    <button id="queue-url">提交链接并入队 Phase4</button>
-                    <button id="run-url">提交链接并同步执行 Phase4</button>
-                    <button id="load-workspace" class="secondary">加载工作台</button>
-                    <button id="queue-phase3" class="secondary">入队 Phase3</button>
-                    <button id="run-phase4" class="secondary">同步执行 Phase4</button>
-                    <button id="queue-phase4" class="secondary">入队 Phase4</button>
-                    <button id="approve-generation" class="secondary">人工确认通过</button>
-                    <button id="reject-generation" class="danger">人工驳回重写</button>
-                    <button id="allow-push" class="secondary">允许推草稿</button>
-                    <button id="block-push" class="danger">禁止推草稿</button>
-                    <button id="push-draft" class="warn">推送微信草稿</button>
-                    <button id="clear" class="danger">清空输出</button>
+                  <div class="action-blocks">
+                    <div class="action-block">
+                      <h3>开始</h3>
+                      <div class="action-grid">
+                        <button id="queue-url">提交链接并入队 Phase4</button>
+                        <button id="run-url">提交链接并同步执行 Phase4</button>
+                        <button id="load-workspace" class="secondary">加载工作台</button>
+                        <button id="clear" class="danger">清空输出</button>
+                      </div>
+                    </div>
+                    <div class="action-block">
+                      <h3>继续任务</h3>
+                      <div class="action-grid">
+                        <button id="queue-phase3" class="secondary">入队 Phase3</button>
+                        <button id="run-phase4" class="secondary">同步执行 Phase4</button>
+                        <button id="queue-phase4" class="secondary">入队 Phase4</button>
+                        <button id="push-draft" class="warn">推送微信草稿</button>
+                      </div>
+                    </div>
+                    <div class="action-block">
+                      <h3>人工处理</h3>
+                      <div class="action-grid">
+                        <button id="approve-generation" class="secondary">人工确认通过</button>
+                        <button id="reject-generation" class="danger">人工驳回重写</button>
+                        <button id="allow-push" class="secondary">允许推草稿</button>
+                        <button id="block-push" class="danger">禁止推草稿</button>
+                      </div>
+                    </div>
                   </div>
                   <p class="hint">先加载工作台，再决定：重跑、通过、驳回，或者推草稿。</p>
                 </section>
@@ -2067,6 +2107,23 @@ def phase6_console() -> str:
               font-size: 12px;
               overflow-wrap: anywhere;
             }
+            .fold {
+              border: 1px dashed var(--line);
+              border-radius: 18px;
+              padding: 14px;
+              background: rgba(255, 254, 251, 0.72);
+            }
+            .fold + .fold {
+              margin-top: 12px;
+            }
+            .fold summary {
+              cursor: pointer;
+              color: var(--muted);
+              font-size: 13px;
+            }
+            .tool-note {
+              margin-top: 10px;
+            }
             @media (max-width: 980px) {
               .layout { grid-template-columns: 1fr; }
             }
@@ -2186,48 +2243,51 @@ def phase6_console() -> str:
                 </section>
 
                 <section class="panel">
-                  <h2>批量导入 CSV</h2>
-                  <div style="margin-top: 12px;">
-                    <label for="feedback-csv">CSV 内容</label>
-                    <textarea id="feedback-csv" placeholder="task_id,generation_id,day_offset,read_count,like_count,share_count,comment_count,click_rate,notes&#10;f703c3ef-e358-48ab-936d-187418c584c5,,1,1666,101,18,6,0.2031,第一批回填"></textarea>
-                  </div>
-                  <div class="actions">
-                    <button id="import-feedback-csv" class="secondary">批量导入 CSV</button>
-                  </div>
-                  <p class="hint">支持列：`task_id,generation_id,day_offset,snapshot_at,wechat_media_id,read_count,like_count,share_count,comment_count,click_rate,prompt_type,prompt_version,source_type,imported_by,notes`。如果不带 `task_id`，会默认使用上面的当前 `task_id`。</p>
-                </section>
-
-                <section class="panel">
-                  <h2>新建风格资产</h2>
-                  <div class="grid">
-                    <div>
-                      <label for="asset-type">资产类型</label>
-                      <input id="asset-type" type="text" value="opening_hook" />
+                  <h2>更多工具</h2>
+                  <details class="fold">
+                    <summary>批量导入 CSV</summary>
+                    <div style="margin-top: 12px;">
+                      <label for="feedback-csv">CSV 内容</label>
+                      <textarea id="feedback-csv" placeholder="task_id,generation_id,day_offset,read_count,like_count,share_count,comment_count,click_rate,notes&#10;f703c3ef-e358-48ab-936d-187418c584c5,,1,1666,101,18,6,0.2031,第一批回填"></textarea>
                     </div>
-                    <div>
-                      <label for="asset-title">标题</label>
-                      <input id="asset-title" type="text" placeholder="反直觉开头模板" />
+                    <div class="actions">
+                      <button id="import-feedback-csv" class="secondary">批量导入 CSV</button>
                     </div>
-                    <div>
-                      <label for="asset-tags">标签（逗号分隔）</label>
-                      <input id="asset-tags" type="text" placeholder="技术科普,误区纠偏" />
+                    <p class="hint tool-note">支持常用列；不带 `task_id` 时，会默认使用上面的当前 `task_id`。</p>
+                  </details>
+                  <details class="fold">
+                    <summary>新建风格资产</summary>
+                    <div class="grid" style="margin-top: 12px;">
+                      <div>
+                        <label for="asset-type">资产类型</label>
+                        <input id="asset-type" type="text" value="opening_hook" />
+                      </div>
+                      <div>
+                        <label for="asset-title">标题</label>
+                        <input id="asset-title" type="text" placeholder="反直觉开头模板" />
+                      </div>
+                      <div>
+                        <label for="asset-tags">标签（逗号分隔）</label>
+                        <input id="asset-tags" type="text" placeholder="技术科普,误区纠偏" />
+                      </div>
+                      <div>
+                        <label for="asset-weight">权重</label>
+                        <input id="asset-weight" type="number" min="0.1" step="0.1" value="1.0" />
+                      </div>
                     </div>
-                    <div>
-                      <label for="asset-weight">权重</label>
-                      <input id="asset-weight" type="number" min="0.1" step="0.1" value="1.0" />
+                    <div style="margin-top: 12px;">
+                      <label for="asset-content">资产内容</label>
+                      <textarea id="asset-content" placeholder="写下经过验证的标题模板、开头结构、段落骨架或转场句式"></textarea>
                     </div>
-                  </div>
-                  <div style="margin-top: 12px;">
-                    <label for="asset-content">资产内容</label>
-                    <textarea id="asset-content" placeholder="写下经过验证的标题模板、开头结构、段落骨架或转场句式"></textarea>
-                  </div>
-                  <div style="margin-top: 12px;">
-                    <label for="asset-notes">备注</label>
-                    <textarea id="asset-notes" placeholder="可记录来源任务、适用题材、风险提醒"></textarea>
-                  </div>
-                  <div class="actions">
-                    <button id="create-asset">新建风格资产</button>
-                  </div>
+                    <div style="margin-top: 12px;">
+                      <label for="asset-notes">备注</label>
+                      <textarea id="asset-notes" placeholder="可记录来源任务、适用题材、风险提醒"></textarea>
+                    </div>
+                    <div class="actions">
+                      <button id="create-asset">新建风格资产</button>
+                    </div>
+                    <p class="hint tool-note">只把已经验证过、会重复用到的写法沉淀下来。</p>
+                  </details>
                 </section>
               </div>
 

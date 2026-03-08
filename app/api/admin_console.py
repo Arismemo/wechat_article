@@ -2733,6 +2733,10 @@ def settings_console() -> str:
               display: grid;
               gap: 12px;
             }
+            .setting-card > div:first-child {
+              display: grid;
+              gap: 6px;
+            }
             .env-grid {
               display: grid;
               grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -2809,6 +2813,12 @@ def settings_console() -> str:
               display: flex;
               flex-wrap: wrap;
               gap: 10px;
+            }
+            .card-note {
+              margin: 0;
+              font-size: 12px;
+              color: var(--muted);
+              line-height: 1.6;
             }
             pre {
               margin: 0;
@@ -2900,7 +2910,7 @@ def settings_console() -> str:
               <div class="stack">
                 <section class="panel">
                   <h2>当前设置</h2>
-                  <div class="hint" style="margin-bottom: 14px;">保存后新任务生效；恢复默认会回退到环境变量。</div>
+                  <div class="hint" style="margin-bottom: 14px;">改完只影响新任务；恢复默认会回退到环境变量。</div>
                   <div id="categories" class="categories">
                     <div class="empty">请输入 Bearer Token 后点击“刷新设置”。</div>
                   </div>
@@ -3055,12 +3065,16 @@ def settings_console() -> str:
                         <div>
                           ${buildInput(setting)}
                         </div>
-                        <div class="setting-meta">
-                          <div><strong>环境默认：</strong> ${escapeHtml(formatValue(setting.default_value, setting.value_type))}</div>
-                          <div><strong>数据库覆盖：</strong> ${setting.has_override ? escapeHtml(formatValue(setting.stored_value, setting.value_type)) : "无"}</div>
-                          <div><strong>实际生效：</strong> ${escapeHtml(formatValue(setting.effective_value, setting.value_type))}</div>
-                          <div><strong>最后更新时间：</strong> ${setting.updated_at || "无"}</div>
-                        </div>
+                        <p class="card-note">当前看到的是实际生效值。想看来源和覆盖关系，再展开下面这块。</p>
+                        <details class="fold">
+                          <summary>查看来源与生效值</summary>
+                          <div class="setting-meta">
+                            <div><strong>环境默认：</strong> ${escapeHtml(formatValue(setting.default_value, setting.value_type))}</div>
+                            <div><strong>数据库覆盖：</strong> ${setting.has_override ? escapeHtml(formatValue(setting.stored_value, setting.value_type)) : "无"}</div>
+                            <div><strong>实际生效：</strong> ${escapeHtml(formatValue(setting.effective_value, setting.value_type))}</div>
+                            <div><strong>最后更新时间：</strong> ${setting.updated_at || "无"}</div>
+                          </div>
+                        </details>
                         <div class="setting-actions">
                           <button data-action="save">保存</button>
                           <button data-action="reset" class="ghost">恢复默认</button>
