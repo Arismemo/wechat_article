@@ -167,6 +167,7 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("开始处理", response.text)
         self.assertIn("网页端是主入口，手机快捷指令只是附加入口。", response.text)
         self.assertIn("更多工具", response.text)
+        self.assertIn("更多信息", response.text)
         self.assertIn("清空", response.text)
         self.assertIn("这里只收微信公众号文章链接。", response.text)
         self.assertIn("alignSelectedTaskToVisibleTasks", response.text)

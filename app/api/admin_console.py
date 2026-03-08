@@ -616,6 +616,21 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               grid-template-columns: repeat(2, minmax(0, 1fr));
               gap: 10px;
             }}
+            .quick-facts {{
+              display: flex;
+              flex-wrap: wrap;
+              gap: 8px;
+            }}
+            .fact-pill {{
+              display: inline-flex;
+              align-items: center;
+              padding: 8px 12px;
+              border-radius: 999px;
+              border: 1px solid var(--line);
+              background: #fffdf9;
+              color: var(--muted);
+              font-size: 12px;
+            }}
             .kv {{
               padding: 14px;
               border-radius: 18px;
@@ -661,6 +676,27 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               border: 1px dashed rgba(65, 48, 27, 0.18);
               color: var(--muted);
               background: rgba(255, 253, 249, 0.82);
+            }}
+            .detail-more {{
+              border-radius: 20px;
+              border: 1px dashed rgba(65, 48, 27, 0.18);
+              padding: 12px 14px;
+              background: rgba(255, 253, 249, 0.82);
+            }}
+            .detail-more summary {{
+              cursor: pointer;
+              color: var(--muted);
+              font-size: 13px;
+            }}
+            .detail-more[open] {{
+              background: #fffdf9;
+            }}
+            .detail-more[open] .detail-more-grid {{
+              margin-top: 12px;
+            }}
+            .detail-more-grid {{
+              display: grid;
+              gap: 14px;
             }}
             .utility-grid {{
               display: flex;
@@ -782,6 +818,16 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                 <section class="stack detail-column">
                   <section class="panel">
                     <div class="panel-head">
+                      <h2>任务详情</h2>
+                      <span class="mini" id="selected-task-code">先点左边任意一条</span>
+                    </div>
+                    <div class="detail-grid" id="task-detail">
+                      <div class="empty">选中一条任务后，这里会告诉你现在到了哪一步，以及下一步该按哪个按钮。</div>
+                    </div>
+                  </section>
+
+                  <section class="panel">
+                    <div class="panel-head">
                       <h2>现在</h2>
                       <span class="mini" id="generated-at">刚刚更新</span>
                     </div>
@@ -790,16 +836,6 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                       <div class="metric"><strong>等你处理</strong><span id="metric-manual">0</span></div>
                       <div class="metric"><strong>已进草稿</strong><span id="metric-draft">0</span></div>
                       <div class="metric"><strong>失败</strong><span id="metric-failed">0</span></div>
-                    </div>
-                  </section>
-
-                  <section class="panel">
-                    <div class="panel-head">
-                      <h2>任务详情</h2>
-                      <span class="mini" id="selected-task-code">先点左边任意一条</span>
-                    </div>
-                    <div class="detail-grid" id="task-detail">
-                      <div class="empty">选中一条任务后，这里会告诉你现在到了哪一步，以及下一步该按哪个按钮。</div>
                     </div>
                   </section>
                 </section>
@@ -1198,6 +1234,11 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               const sourceLink = rawSourceUrl
                 ? `<a href="${{sourceUrl}}" title="${{sourceUrl}}" target="_blank" rel="noreferrer">${{sourceLabel}}</a>`
                 : "";
+              const quickFacts = [
+                `更新时间：${{formatDateTime(task.updated_at)}}`,
+                `参考：${{task.related_article_count || 0}} 篇`,
+                rawMediaId ? "草稿已生成" : "还没进草稿",
+              ];
               elements.taskDetail.innerHTML = `
                 <div class="summary-block">
                   <div class="summary-title">
@@ -1214,25 +1255,34 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                   </div>
                 </div>
 
-                <div class="kv-grid">
-                  <div class="kv"><strong>任务状态</strong><span>${{statusLabel(task.status)}}</span></div>
-                  <div class="kv"><strong>更新时间</strong><span>${{formatDateTime(task.updated_at)}}</span></div>
-                  <div class="kv"><strong>参考文章</strong><span>${{task.related_article_count || 0}} 篇</span></div>
-                  <div class="kv"><strong>微信草稿</strong><span>${{mediaId}}</span></div>
+                <div class="quick-facts">
+                  ${{quickFacts.map((item) => `<span class="fact-pill">${{escapeHtml(item)}}</span>`).join("")}}
                 </div>
 
                 ${{actionHtml}}
 
-                <div class="utility-grid">
-                  ${{utilityButtons}}
-                </div>
+                <details class="detail-more">
+                  <summary>更多信息</summary>
+                  <div class="detail-more-grid">
+                    <div class="kv-grid">
+                      <div class="kv"><strong>任务状态</strong><span>${{statusLabel(task.status)}}</span></div>
+                      <div class="kv"><strong>微信草稿</strong><span>${{mediaId}}</span></div>
+                      <div class="kv"><strong>任务号</strong><span>${{escapeHtml(task.task_code || task.task_id)}}</span></div>
+                      <div class="kv"><strong>原文链接</strong><span>${{sourceLabel || "还没有"}}</span></div>
+                    </div>
 
-                <div class="latest-box">
-                  <strong>最新一稿</strong>
-                  <p>${{escapeHtml(latestGeneration?.title || "还没有生成稿件")}}</p>
-                  <p class="mini">${{escapeHtml(latestGeneration?.prompt_version || "")}}</p>
-                  <p>${{digest || "这里会显示最新一稿的摘要。"}}</p>
-                </div>
+                    <div class="utility-grid">
+                      ${{utilityButtons}}
+                    </div>
+
+                    <div class="latest-box">
+                      <strong>最新一稿</strong>
+                      <p>${{escapeHtml(latestGeneration?.title || "还没有生成稿件")}}</p>
+                      <p class="mini">${{escapeHtml(latestGeneration?.prompt_version || "")}}</p>
+                      <p>${{digest || "这里会显示最新一稿的摘要。"}}</p>
+                    </div>
+                  </div>
+                </details>
 
                 ${{task.error ? `<div class="latest-box"><strong>报错</strong><p>${{visibleError}}</p></div>` : ""}}
               `;
@@ -1253,6 +1303,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               renderSummary();
               renderTaskList();
               renderTaskDetail();
+              elements.clearSearchButton.disabled = !state.search;
               elements.filterButtons.forEach((button) => {{
                 button.classList.toggle("active", button.dataset.filter === state.filter);
               }});
