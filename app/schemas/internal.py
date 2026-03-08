@@ -143,6 +143,45 @@ class FeedbackCsvImportResponse(APIModel):
     results: list[FeedbackCsvImportRowResponse]
 
 
+class FeedbackSyncRequest(APIModel):
+    day_offsets: list[int] = Field(default_factory=list)
+    operator: Optional[str] = None
+
+
+class FeedbackSyncResponse(APIModel):
+    task_id: str
+    status: str
+    generation_id: str
+    wechat_media_id: str
+    provider: str
+    requested_day_offsets: list[int]
+    imported_count: int
+    imported_day_offsets: list[int]
+    skipped_day_offsets: list[int]
+    metric_ids: list[str]
+
+
+class FeedbackSyncEnqueueResponse(APIModel):
+    task_id: str
+    enqueued: bool
+    queue_depth: int
+    day_offsets: list[int]
+
+
+class FeedbackSyncRecentEnqueueRequest(APIModel):
+    limit: int = Field(default=20, ge=1, le=100)
+    day_offsets: list[int] = Field(default_factory=list)
+    operator: Optional[str] = None
+
+
+class FeedbackSyncRecentEnqueueResponse(APIModel):
+    requested_count: int
+    enqueued_count: int
+    queue_depth: int
+    task_ids: list[str]
+    day_offsets: list[int]
+
+
 class StyleAssetCreateRequest(APIModel):
     asset_type: str
     title: str

@@ -5,6 +5,8 @@ from sqlalchemy.orm import Session
 
 from app.core.security import verify_bearer_token
 from app.db.session import get_db_session
+from app.services.feedback_service import FeedbackService
+from app.services.feedback_sync_service import FeedbackSyncProviderError, FeedbackSyncService
 from app.services.manual_review_service import ManualReviewConflictError, ManualReviewService
 from app.services.phase2_pipeline_service import Phase2PipelineService
 from app.services.phase2_queue_service import Phase2QueueService
@@ -22,6 +24,11 @@ from app.schemas.internal import (
     FeedbackCsvImportRowResponse,
     FeedbackImportRequest,
     FeedbackImportResponse,
+    FeedbackSyncEnqueueResponse,
+    FeedbackSyncRecentEnqueueRequest,
+    FeedbackSyncRecentEnqueueResponse,
+    FeedbackSyncRequest,
+    FeedbackSyncResponse,
     ManualReviewActionRequest,
     ManualReviewActionResponse,
     Phase2EnqueueResponse,
@@ -36,9 +43,14 @@ from app.schemas.internal import (
     WechatPushPolicyActionResponse,
     WechatPushResponse,
 )
-from app.services.feedback_service import FeedbackService
 
 router = APIRouter()
+
+
+def _raise_value_error_for_internal(exc: ValueError) -> None:
+    detail = str(exc)
+    status_code = status.HTTP_404_NOT_FOUND if detail == "Task not found." else status.HTTP_400_BAD_REQUEST
+    raise HTTPException(status_code=status_code, detail=detail) from exc
 
 
 @router.post("/tasks/{task_id}/run-phase2", response_model=Phase2RunResponse, dependencies=[Depends(verify_bearer_token)])
@@ -328,6 +340,101 @@ def import_feedback_csv(
             )
             for item in result.results
         ],
+    )
+
+
+@router.post(
+    "/tasks/{task_id}/run-feedback-sync",
+    response_model=FeedbackSyncResponse,
+    dependencies=[Depends(verify_bearer_token)],
+)
+def run_feedback_sync(
+    task_id: str,
+    payload: FeedbackSyncRequest,
+    session: Session = Depends(get_db_session),
+) -> FeedbackSyncResponse:
+    try:
+        result = FeedbackSyncService(session).run(
+            task_id,
+            day_offsets=payload.day_offsets,
+            operator=payload.operator,
+        )
+    except ValueError as exc:
+        _raise_value_error_for_internal(exc)
+    except FeedbackSyncProviderError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+
+    return FeedbackSyncResponse(
+        task_id=result.task_id,
+        status=result.status,
+        generation_id=result.generation_id,
+        wechat_media_id=result.wechat_media_id,
+        provider=result.provider,
+        requested_day_offsets=result.requested_day_offsets,
+        imported_count=result.imported_count,
+        imported_day_offsets=result.imported_day_offsets,
+        skipped_day_offsets=result.skipped_day_offsets,
+        metric_ids=[item.metric_id for item in result.results],
+    )
+
+
+@router.post(
+    "/tasks/{task_id}/enqueue-feedback-sync",
+    response_model=FeedbackSyncEnqueueResponse,
+    dependencies=[Depends(verify_bearer_token)],
+)
+def enqueue_feedback_sync(
+    task_id: str,
+    payload: FeedbackSyncRequest,
+    session: Session = Depends(get_db_session),
+) -> FeedbackSyncEnqueueResponse:
+    try:
+        result = FeedbackSyncService(session).enqueue(
+            task_id,
+            day_offsets=payload.day_offsets,
+            operator=payload.operator,
+        )
+    except ValueError as exc:
+        _raise_value_error_for_internal(exc)
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+
+    return FeedbackSyncEnqueueResponse(
+        task_id=result.task_id,
+        enqueued=result.enqueued,
+        queue_depth=result.queue_depth,
+        day_offsets=result.day_offsets,
+    )
+
+
+@router.post(
+    "/feedback/enqueue-recent-sync",
+    response_model=FeedbackSyncRecentEnqueueResponse,
+    dependencies=[Depends(verify_bearer_token)],
+)
+def enqueue_recent_feedback_sync(
+    payload: FeedbackSyncRecentEnqueueRequest,
+    session: Session = Depends(get_db_session),
+) -> FeedbackSyncRecentEnqueueResponse:
+    try:
+        result = FeedbackSyncService(session).enqueue_recent(
+            limit=payload.limit,
+            day_offsets=payload.day_offsets,
+            operator=payload.operator,
+        )
+    except ValueError as exc:
+        _raise_value_error_for_internal(exc)
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+
+    return FeedbackSyncRecentEnqueueResponse(
+        requested_count=result.requested_count,
+        enqueued_count=result.enqueued_count,
+        queue_depth=result.queue_depth,
+        task_ids=result.task_ids,
+        day_offsets=result.day_offsets,
     )
 
 

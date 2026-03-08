@@ -66,6 +66,9 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("/internal/v1/tasks/{task_id}/push-wechat-draft", routes)
         self.assertIn("/internal/v1/tasks/{task_id}/import-feedback", routes)
         self.assertIn("/internal/v1/feedback/import-csv", routes)
+        self.assertIn("/internal/v1/tasks/{task_id}/run-feedback-sync", routes)
+        self.assertIn("/internal/v1/tasks/{task_id}/enqueue-feedback-sync", routes)
+        self.assertIn("/internal/v1/feedback/enqueue-recent-sync", routes)
         self.assertIn("/internal/v1/style-assets", routes)
         self.assertIn("/api/v1/ingest/link", routes)
         self.assertIn("/api/v1/tasks/{task_id}", routes)
@@ -115,10 +118,12 @@ class AppRouteTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("Phase 6 反馈台", response.text)
+        self.assertIn("自动同步", response.text)
         self.assertIn("导入反馈", response.text)
         self.assertIn("批量导入 CSV", response.text)
         self.assertIn("Prompt 实验榜", response.text)
         self.assertIn("风格资产库", response.text)
+        self.assertIn("同步当前任务", response.text)
 
     def test_admin_pages_require_basic_auth_when_configured(self) -> None:
         with patch.dict(os.environ, {"ADMIN_USERNAME": "admin", "ADMIN_PASSWORD": "secret-pass"}, clear=False):

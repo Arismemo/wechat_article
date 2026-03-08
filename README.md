@@ -8,7 +8,7 @@
 - `app/` 中维护 FastAPI 后端、数据模型和服务逻辑
 - `migrations/` 中维护数据库迁移
 - `docker-compose.yml` 中维护 API、数据库、Redis 以及阶段 2 / 阶段 3 worker 的容器化运行方式
-  - 当前也已纳入 `phase4_worker`
+  - 当前也已纳入 `phase4_worker` 和 `feedback_worker`
 - 阶段 2 最小闭环及补充项已完成并通过服务器验收：`原文抓取 -> 固定模板稿 -> 图片重写 -> 微信草稿箱`
 - 阶段 3 初版研究层已完成并通过服务器验收：`原文分析 -> 同题搜索 -> 差异矩阵 -> content_brief`
 - 阶段 4 已完成并通过服务器验收：`content_brief -> generation -> review -> 手动或按开关自动推送微信草稿箱`
@@ -19,6 +19,7 @@
 - 阶段 6 第一版已完成并通过服务器 smoke test：`手工反馈导入 -> Prompt 实验榜 -> 风格资产库`
   - 当前不依赖微信分析接口，已支持从后台手工录入 T+1 / T+3 / T+7 数据
   - 当前已支持 Phase 6 后台页：`GET /admin/phase6`
+  - 当前已支持自动反馈入口：`HTTP Provider -> feedback_worker -> publication_metrics`
 
 ## 当前已完成范围
 
@@ -78,12 +79,19 @@
   - `GET /admin/phase6`
   - `POST /internal/v1/tasks/{task_id}/import-feedback`
   - `POST /internal/v1/feedback/import-csv`
+  - `POST /internal/v1/tasks/{task_id}/run-feedback-sync`
+  - `POST /internal/v1/tasks/{task_id}/enqueue-feedback-sync`
+  - `POST /internal/v1/feedback/enqueue-recent-sync`
   - `POST /internal/v1/style-assets`
   - `GET /api/v1/tasks/{task_id}/feedback`
   - `GET /api/v1/feedback/experiments`
   - `GET /api/v1/feedback/style-assets`
   - `publication_metrics`、`prompt_experiments`、`style_assets` 落库
   - 手工录入或批量 CSV 回填 T+1 / T+3 / T+7 数据会自动回刷 Prompt 实验聚合
+  - 自动反馈同步支持两种 Provider：
+    - `FEEDBACK_SYNC_PROVIDER=mock`：本地和测试环境联调
+    - `FEEDBACK_SYNC_PROVIDER=http`：向外部 HTTP 数据源请求反馈快照
+  - 自动反馈 worker：`scripts/run_feedback_worker.py`
   - `style_assets` 已接回 Phase 4 写稿 Prompt，新 generation 会落 `prompt_type/prompt_version`
   - 服务器已验证反馈导入、实验榜聚合和 `/admin/phase6`
 
@@ -104,6 +112,7 @@
 - `phase2_worker`
 - `phase3_worker`
 - `phase4_worker`
+- `feedback_worker`
 
 ## 部署方式
 
@@ -118,5 +127,54 @@
   - 加载后会 `--force-recreate` 目标服务，确保同名 tag 更新后容器实际切到新镜像
   - 如果本机已经有可复用镜像，可加：`SKIP_LOCAL_BUILD=1 BASE_IMAGE=...`
 - `scripts/deploy_from_git.sh` 支持：
-  - `SERVICES="api phase4_worker"` 只部署部分服务
+  - `SERVICES="api phase4_worker feedback_worker"` 只部署部分服务
   - `SKIP_BUILD=1` 跳过镜像构建，仅做 `git pull + migration + compose up`
+
+## 自动反馈 Provider 协议
+
+如果要接真实自动反馈数据源，当前后端约定：
+
+- 配置 `FEEDBACK_SYNC_PROVIDER=http`
+- 配置 `FEEDBACK_SYNC_HTTP_URL=https://your-provider.example/sync`
+- 可选配置 `FEEDBACK_SYNC_API_KEY`
+- 任务级同步入口：
+  - `POST /internal/v1/tasks/{task_id}/run-feedback-sync`
+  - `POST /internal/v1/tasks/{task_id}/enqueue-feedback-sync`
+- 批量扫描最近已推草稿任务并入队：
+  - `POST /internal/v1/feedback/enqueue-recent-sync`
+
+HTTP Provider 请求体示例：
+
+```json
+{
+  "task_id": "f703c3ef-e358-48ab-936d-187418c584c5",
+  "task_status": "draft_saved",
+  "task_source_url": "https://mp.weixin.qq.com/s/...",
+  "generation_id": "71c6bc73-a527-4e4a-be42-31b02b542008",
+  "generation_version": 5,
+  "prompt_type": "phase4_write",
+  "prompt_version": "phase4-v2",
+  "wechat_media_id": "PyYQ74Y...",
+  "draft_created_at": "2026-03-08T10:00:00+08:00",
+  "day_offsets": [1, 3, 7]
+}
+```
+
+HTTP Provider 响应体示例：
+
+```json
+{
+  "provider": "wechat-analytics-proxy",
+  "snapshots": [
+    {
+      "day_offset": 1,
+      "snapshot_at": "2026-03-09T09:00:00+08:00",
+      "read_count": 1666,
+      "like_count": 101,
+      "share_count": 18,
+      "comment_count": 6,
+      "click_rate": 0.2031
+    }
+  ]
+}
+```

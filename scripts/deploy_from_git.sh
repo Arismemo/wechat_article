@@ -3,7 +3,7 @@
 set -euo pipefail
 
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
-SERVICES="${SERVICES:-api phase2_worker phase3_worker phase4_worker}"
+SERVICES="${SERVICES:-api phase2_worker phase3_worker phase4_worker feedback_worker}"
 SKIP_BUILD="${SKIP_BUILD:-0}"
 CURRENT_BRANCH="${CURRENT_BRANCH:-$(git -C "${PROJECT_DIR}" rev-parse --abbrev-ref HEAD)}"
 

@@ -7,7 +7,7 @@ SERVER="${SERVER:-liukun@100.112.123.6}"
 REMOTE_DIR="${REMOTE_DIR:-/home/liukun/j/code/wechat_artical}"
 PLATFORM="${PLATFORM:-linux/amd64}"
 BASE_IMAGE="${BASE_IMAGE:-wechat_artical-prebuilt:amd64}"
-SERVICES="${SERVICES:-api phase2_worker phase3_worker phase4_worker}"
+SERVICES="${SERVICES:-api phase2_worker phase3_worker phase4_worker feedback_worker}"
 CURRENT_BRANCH="${CURRENT_BRANCH:-$(git -C "${PROJECT_DIR}" branch --show-current)}"
 SKIP_LOCAL_BUILD="${SKIP_LOCAL_BUILD:-0}"
 
@@ -21,6 +21,7 @@ service_image() {
     phase2_worker) echo "wechat_artical-phase2_worker" ;;
     phase3_worker) echo "wechat_artical-phase3_worker" ;;
     phase4_worker) echo "wechat_artical-phase4_worker" ;;
+    feedback_worker) echo "wechat_artical-feedback_worker" ;;
     *)
       echo "Unsupported service: $1" >&2
       return 1

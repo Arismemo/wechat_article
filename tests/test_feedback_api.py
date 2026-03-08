@@ -17,6 +17,7 @@ from app.models.content_brief import ContentBrief
 from app.models.generation import Generation
 from app.models.task import Task
 from app.models.wechat_draft import WechatDraft
+from app.services.feedback_queue_service import FeedbackSyncEnqueueResult
 from app.settings import get_settings
 
 
@@ -44,6 +45,7 @@ class FeedbackApiTests(unittest.TestCase):
                 "SEARCH_PROVIDER": "ZHIPU_MCP",
                 "WECHAT_APP_ID": "wx-test",
                 "WECHAT_APP_SECRET": "secret-test",
+                "FEEDBACK_SYNC_PROVIDER": "mock",
                 "LOCAL_STORAGE_ROOT": self.temp_dir.name,
             },
             clear=False,
@@ -269,6 +271,54 @@ class FeedbackApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("Row 2", response.json()["detail"])
+
+    def test_run_feedback_sync_imports_mock_snapshots(self) -> None:
+        response = self.client.post(
+            f"/internal/v1/tasks/{self.task_id}/run-feedback-sync",
+            headers={"Authorization": "Bearer test-token"},
+            json={"day_offsets": [1, 3], "operator": "sync-bot"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["provider"], "mock")
+        self.assertEqual(body["imported_count"], 2)
+        self.assertEqual(body["imported_day_offsets"], [1, 3])
+
+        feedback = self.client.get(
+            f"/api/v1/tasks/{self.task_id}/feedback",
+            headers={"Authorization": "Bearer test-token"},
+        )
+        self.assertEqual(feedback.status_code, 200)
+        metrics = feedback.json()["metrics"]
+        self.assertEqual(len(metrics), 2)
+        self.assertEqual({item["source_type"] for item in metrics}, {"auto:mock"})
+
+    def test_enqueue_recent_feedback_sync_queues_recent_drafts(self) -> None:
+        class DummyQueue:
+            def enqueue(self, task_id: str, *, day_offsets: list[int], operator: str) -> FeedbackSyncEnqueueResult:
+                self.task_id = task_id
+                self.day_offsets = day_offsets
+                self.operator = operator
+                return FeedbackSyncEnqueueResult(
+                    task_id=task_id,
+                    enqueued=True,
+                    queue_depth=1,
+                    day_offsets=day_offsets,
+                )
+
+        with patch("app.services.feedback_sync_service.FeedbackQueueService", return_value=DummyQueue()):
+            response = self.client.post(
+                "/internal/v1/feedback/enqueue-recent-sync",
+                headers={"Authorization": "Bearer test-token"},
+                json={"limit": 1, "day_offsets": [1, 7], "operator": "ops-auto"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["requested_count"], 1)
+        self.assertEqual(body["enqueued_count"], 1)
+        self.assertEqual(body["day_offsets"], [1, 7])
 
 
 if __name__ == "__main__":

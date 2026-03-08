@@ -94,6 +94,17 @@ class Settings(BaseSettings):
     phase4_factual_risk_max: float = Field(default=0.40, alias="PHASE4_FACTUAL_RISK_MAX")
     phase4_max_auto_revisions: int = Field(default=1, alias="PHASE4_MAX_AUTO_REVISIONS")
     phase4_auto_push_wechat_draft: bool = Field(default=False, alias="PHASE4_AUTO_PUSH_WECHAT_DRAFT")
+    feedback_sync_provider: str = Field(default="disabled", alias="FEEDBACK_SYNC_PROVIDER")
+    feedback_sync_http_url: Optional[str] = Field(default=None, alias="FEEDBACK_SYNC_HTTP_URL")
+    feedback_sync_api_key: Optional[str] = Field(default=None, alias="FEEDBACK_SYNC_API_KEY")
+    feedback_sync_timeout_seconds: int = Field(default=30, alias="FEEDBACK_SYNC_TIMEOUT_SECONDS")
+    feedback_sync_day_offsets: str = Field(default="1,3,7", alias="FEEDBACK_SYNC_DAY_OFFSETS")
+    feedback_sync_queue_key: str = Field(default="feedback:queue", alias="FEEDBACK_SYNC_QUEUE_KEY")
+    feedback_sync_processing_key: str = Field(default="feedback:processing", alias="FEEDBACK_SYNC_PROCESSING_KEY")
+    feedback_sync_pending_set_key: str = Field(default="feedback:pending", alias="FEEDBACK_SYNC_PENDING_SET_KEY")
+    feedback_sync_worker_poll_timeout_seconds: int = Field(default=5, alias="FEEDBACK_SYNC_WORKER_POLL_TIMEOUT_SECONDS")
+    feedback_sync_worker_idle_sleep_seconds: int = Field(default=1, alias="FEEDBACK_SYNC_WORKER_IDLE_SLEEP_SECONDS")
+    feedback_sync_recent_limit: int = Field(default=20, alias="FEEDBACK_SYNC_RECENT_LIMIT")
 
     local_storage_root: Path = Field(default=Path("./data"), alias="LOCAL_STORAGE_ROOT")
 

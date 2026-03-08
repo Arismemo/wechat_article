@@ -2038,7 +2038,7 @@ def phase6_console() -> str:
             <section class="hero">
               <span class="eyebrow">PHASE 6 FEEDBACK LOOP</span>
               <h1>Phase 6 反馈台</h1>
-              <p>这个页面处理发布后的手工反馈导入、Prompt 实验榜和风格资产沉淀。当前实现以手工录入为主，不依赖微信分析接口也能开始回收效果数据。</p>
+              <p>这个页面处理发布后的手工反馈导入、自动同步、Prompt 实验榜和风格资产沉淀。即使暂时没有微信官方分析接口，也可以先接入任意 HTTP 数据源，把 T+1 / T+3 / T+7 快照自动回收到系统。</p>
             </section>
 
             <section class="layout">
@@ -2069,6 +2069,26 @@ def phase6_console() -> str:
                     <button id="refresh-assets" class="secondary">刷新风格资产</button>
                     <button id="clear-output" class="danger">清空输出</button>
                   </div>
+                </section>
+
+                <section class="panel">
+                  <h2>自动同步</h2>
+                  <div class="grid">
+                    <div>
+                      <label for="sync-day-offsets">同步窗口（逗号分隔）</label>
+                      <input id="sync-day-offsets" type="text" value="1,3,7" />
+                    </div>
+                    <div>
+                      <label for="sync-limit">扫描最近草稿数</label>
+                      <input id="sync-limit" type="number" min="1" max="100" value="20" />
+                    </div>
+                  </div>
+                  <div class="actions">
+                    <button id="run-feedback-sync">同步当前任务</button>
+                    <button id="queue-feedback-sync" class="secondary">当前任务入队</button>
+                    <button id="queue-recent-feedback-sync" class="secondary">扫描最近草稿并入队</button>
+                  </div>
+                  <p class="hint">自动同步会按 `wechat_media_id` 调上游反馈 Provider 拉取可用快照，并复用当前的反馈落库逻辑。当前任务同步需要已存在成功草稿；批量扫描只会处理最近已推送草稿的任务。</p>
                 </section>
 
                 <section class="panel">
@@ -2206,6 +2226,8 @@ def phase6_console() -> str:
             const taskIdEl = document.getElementById("task-id");
             const generationIdEl = document.getElementById("generation-id");
             const operatorEl = document.getElementById("operator");
+            const syncDayOffsetsEl = document.getElementById("sync-day-offsets");
+            const syncLimitEl = document.getElementById("sync-limit");
             const dayOffsetEl = document.getElementById("day-offset");
             const snapshotAtEl = document.getElementById("snapshot-at");
             const readCountEl = document.getElementById("read-count");
@@ -2251,6 +2273,8 @@ def phase6_console() -> str:
               taskIdEl.value = localStorage.getItem("phase6_console_task_id") || "";
               generationIdEl.value = localStorage.getItem("phase6_console_generation_id") || "";
               operatorEl.value = localStorage.getItem("phase6_console_operator") || "admin-console";
+              syncDayOffsetsEl.value = localStorage.getItem("phase6_console_sync_day_offsets") || "1,3,7";
+              syncLimitEl.value = localStorage.getItem("phase6_console_sync_limit") || "20";
             };
 
             const saveDraft = () => {
@@ -2258,6 +2282,8 @@ def phase6_console() -> str:
               localStorage.setItem("phase6_console_task_id", taskIdEl.value.trim());
               localStorage.setItem("phase6_console_generation_id", generationIdEl.value.trim());
               localStorage.setItem("phase6_console_operator", operatorEl.value.trim());
+              localStorage.setItem("phase6_console_sync_day_offsets", syncDayOffsetsEl.value.trim());
+              localStorage.setItem("phase6_console_sync_limit", syncLimitEl.value.trim());
             };
 
             const request = async (method, path, body) => {
@@ -2287,6 +2313,11 @@ def phase6_console() -> str:
               return Number.isFinite(parsed) ? parsed : undefined;
             };
 
+            const parseDayOffsets = () => String(syncDayOffsetsEl.value || "")
+              .split(",")
+              .map((item) => Number(item.trim()))
+              .filter((value) => Number.isInteger(value) && value >= 0);
+
             const buildFeedbackPayload = () => ({
               generation_id: generationIdEl.value.trim() || undefined,
               day_offset: Number(dayOffsetEl.value),
@@ -2314,10 +2345,21 @@ def phase6_console() -> str:
               operator: operatorEl.value.trim() || "admin-console"
             });
 
+            const buildFeedbackSyncPayload = () => ({
+              day_offsets: parseDayOffsets(),
+              operator: operatorEl.value.trim() || "admin-console"
+            });
+
             const buildFeedbackCsvPayload = () => ({
               csv_text: feedbackCsvEl.value,
               default_task_id: taskIdEl.value.trim() || undefined,
               imported_by: operatorEl.value.trim() || "admin-console",
+              operator: operatorEl.value.trim() || "admin-console"
+            });
+
+            const buildRecentFeedbackSyncPayload = () => ({
+              limit: parseNumber(syncLimitEl.value) || 20,
+              day_offsets: parseDayOffsets(),
               operator: operatorEl.value.trim() || "admin-console"
             });
 
@@ -2465,6 +2507,51 @@ def phase6_console() -> str:
                 await queryTaskFeedback();
                 await refreshExperiments();
                 setStatus("导入完成");
+              } catch (error) {
+                setStatus("失败");
+                renderOutput(error.message || String(error));
+              }
+            });
+
+            document.getElementById("run-feedback-sync").addEventListener("click", async () => {
+              try {
+                saveDraft();
+                const taskId = taskIdEl.value.trim();
+                if (!taskId) throw new Error("请先输入 task_id");
+                setStatus("自动同步反馈中");
+                const result = await request("POST", `/internal/v1/tasks/${taskId}/run-feedback-sync`, buildFeedbackSyncPayload());
+                renderOutput(result);
+                await queryTaskFeedback();
+                await refreshExperiments();
+                setStatus(`自动同步完成 (${result.imported_count})`);
+              } catch (error) {
+                setStatus("失败");
+                renderOutput(error.message || String(error));
+              }
+            });
+
+            document.getElementById("queue-feedback-sync").addEventListener("click", async () => {
+              try {
+                saveDraft();
+                const taskId = taskIdEl.value.trim();
+                if (!taskId) throw new Error("请先输入 task_id");
+                setStatus("反馈同步入队中");
+                const result = await request("POST", `/internal/v1/tasks/${taskId}/enqueue-feedback-sync`, buildFeedbackSyncPayload());
+                renderOutput(result);
+                setStatus(result.enqueued ? "已入队" : "已在队列中");
+              } catch (error) {
+                setStatus("失败");
+                renderOutput(error.message || String(error));
+              }
+            });
+
+            document.getElementById("queue-recent-feedback-sync").addEventListener("click", async () => {
+              try {
+                saveDraft();
+                setStatus("扫描最近草稿中");
+                const result = await request("POST", "/internal/v1/feedback/enqueue-recent-sync", buildRecentFeedbackSyncPayload());
+                renderOutput(result);
+                setStatus(`已扫描 ${result.requested_count} 个任务，入队 ${result.enqueued_count} 个`);
               } catch (error) {
                 setStatus("失败");
                 renderOutput(error.message || String(error));

@@ -30,6 +30,16 @@ class WechatDraftRepository:
         )
         return self.session.scalar(statement)
 
+    def list_recent_successful(self, limit: int = 20) -> list[WechatDraft]:
+        statement = (
+            select(WechatDraft)
+            .where(WechatDraft.push_status == "success")
+            .where(WechatDraft.media_id.is_not(None))
+            .order_by(WechatDraft.created_at.desc())
+            .limit(limit)
+        )
+        return list(self.session.scalars(statement))
+
     def create(self, draft: WechatDraft) -> WechatDraft:
         self.session.add(draft)
         self.session.flush()

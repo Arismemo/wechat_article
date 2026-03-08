@@ -4,7 +4,7 @@
 
 ## 当前目标
 
-Phase 6 第一刀先不接微信官方分析接口，先把“手工反馈导入 -> Prompt 实验聚合 -> 风格资产沉淀”打通。这样即使外部分析能力还没确认，系统也已经能开始积累效果数据。
+Phase 6 先不强依赖微信官方分析接口，优先把“手工反馈导入 / 自动反馈同步 -> Prompt 实验聚合 -> 风格资产沉淀”打通。这样即使外部分析能力还没完全确认，系统也已经能开始积累效果数据。
 
 ## 本轮已完成
 
@@ -23,7 +23,12 @@ Phase 6 第一刀先不接微信官方分析接口，先把“手工反馈导入
 - 新增写入接口：
   - `POST /internal/v1/tasks/{task_id}/import-feedback`
   - `POST /internal/v1/feedback/import-csv`
+  - `POST /internal/v1/tasks/{task_id}/run-feedback-sync`
+  - `POST /internal/v1/tasks/{task_id}/enqueue-feedback-sync`
+  - `POST /internal/v1/feedback/enqueue-recent-sync`
   - `POST /internal/v1/style-assets`
+- 新增自动反馈 worker：
+  - `scripts/run_feedback_worker.py`
 - 新增后台页：
   - `GET /admin/phase6`
 
@@ -122,6 +127,48 @@ Phase 6 第一刀先不接微信官方分析接口，先把“手工反馈导入
 3. 如果请求里提供了 `default_task_id`，CSV 可省略 `task_id`
 4. 全量导入采用单事务；任何一行非法会整批回滚并返回 `400`
 
+### 自动反馈同步
+
+调用 `POST /internal/v1/tasks/{task_id}/run-feedback-sync` 或由 `feedback_worker` 消费队列时：
+
+1. 解析 `FEEDBACK_SYNC_PROVIDER`
+2. 当前支持：
+   - `disabled`：关闭自动同步
+   - `mock`：本地联调和测试用 Provider
+   - `http`：向外部 HTTP Provider 拉取反馈快照
+3. 服务端会自动定位：
+   - 最新 `accepted` generation
+   - 该 generation 最近一次成功草稿的 `wechat_media_id`
+4. 请求上游 Provider 时会发送：
+   - `task_id`
+   - `generation_id`
+   - `prompt_type`
+   - `prompt_version`
+   - `wechat_media_id`
+   - `draft_created_at`
+   - `day_offsets`
+5. Provider 返回的快照会复用现有 `import_publication_metric(...)` 幂等落库
+6. 同一 `generation_id + day_offset` 仍然只保留一条快照；重复自动同步会覆盖更新，不会重复累计样本
+7. 会写入审计日志：
+   - `phase6.feedback.sync.enqueued`
+   - `phase6.feedback.sync.completed`
+   - `phase6.feedback.sync.failed`
+
+### 自动同步队列
+
+新增 Redis 队列：
+
+- `FEEDBACK_SYNC_QUEUE_KEY`
+- `FEEDBACK_SYNC_PROCESSING_KEY`
+- `FEEDBACK_SYNC_PENDING_SET_KEY`
+
+内部入口：
+
+- `POST /internal/v1/tasks/{task_id}/enqueue-feedback-sync`
+- `POST /internal/v1/feedback/enqueue-recent-sync`
+
+当前批量扫描逻辑只会从最近成功推送草稿的任务里挑选候选，适合配合外部 cron / automation 每天触发一次。
+
 ### 新建风格资产
 
 调用 `POST /internal/v1/style-assets` 时：
@@ -132,9 +179,11 @@ Phase 6 第一刀先不接微信官方分析接口，先把“手工反馈导入
 
 ## 后台页
 
-`/admin/phase6` 当前提供三块能力：
+`/admin/phase6` 当前提供四块能力：
 
 - 手工录入 T+1 / T+3 / T+7 指标
+- 自动同步当前任务反馈
+- 扫描最近草稿并批量入队自动同步
 - 批量粘贴 CSV 回填多条反馈
 - 查看任务反馈快照
 - 查看 Prompt 实验榜
@@ -155,6 +204,8 @@ Phase 6 第一刀先不接微信官方分析接口，先把“手工反馈导入
 - `/admin/phase6` 页面渲染与 Basic Auth
 - 手工导入反馈
 - CSV 批量导入反馈
+- 自动反馈同步
+- 自动反馈批量入队
 - CSV 非法行返回 `400`
 - 同观察窗口重复导入覆盖更新
 - Prompt 实验聚合
@@ -163,16 +214,16 @@ Phase 6 第一刀先不接微信官方分析接口，先把“手工反馈导入
 ## 当前未做
 
 - 微信官方分析接口对接
-- 自动反馈 worker
 - Excel 文件上传与解析
 - Prompt 版本进一步接入 `prompt_versions` 表，而不只是 generation 上的字符串字段
 - 增长优化器与自动策略推荐
 
 ## 下一步建议
 
-1. 先在服务器部署这版 Phase 6，并用真实任务录一组 T+1 数据。
-2. 再决定数据入口路线：
-   - 微信分析接口
-   - 后台 Excel 导入
-   - 继续手工 / CSV 粘贴录入
-3. 等样本量足够后，再把 `prompt_experiments` 真正接回生成链路。
+1. 先在服务器部署这版自动反馈入口，并为 `feedback_worker` 配好 Provider 环境变量。
+2. 再决定真实生产 Provider：
+   - 微信分析接口代理
+   - 第三方统计服务
+   - 内部手工维护的 HTTP 转换层
+3. 如果运营更习惯文件流，再补 Excel 上传导入。
+4. 等样本量足够后，再把 `prompt_experiments` 真正接回生成链路。

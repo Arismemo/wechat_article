@@ -138,6 +138,17 @@
 | `PHASE4_FACTUAL_RISK_MAX` | 否 | 阶段 4 事实风险上限 |
 | `PHASE4_MAX_AUTO_REVISIONS` | 否 | 阶段 4 自动修订最大次数，当前默认 1 |
 | `PHASE4_AUTO_PUSH_WECHAT_DRAFT` | 否 | 阶段 4 审稿通过后是否自动推送微信草稿箱，默认关闭 |
+| `FEEDBACK_SYNC_PROVIDER` | 否 | 自动反馈同步 Provider，支持 `disabled/mock/http` |
+| `FEEDBACK_SYNC_HTTP_URL` | 否 | 自动反馈 HTTP Provider 地址，`FEEDBACK_SYNC_PROVIDER=http` 时必填 |
+| `FEEDBACK_SYNC_API_KEY` | 否 | 自动反馈 HTTP Provider 的 Bearer Token |
+| `FEEDBACK_SYNC_TIMEOUT_SECONDS` | 否 | 自动反馈 HTTP Provider 请求超时 |
+| `FEEDBACK_SYNC_DAY_OFFSETS` | 否 | 自动反馈默认同步窗口，逗号分隔，默认 `1,3,7` |
+| `FEEDBACK_SYNC_QUEUE_KEY` | 否 | feedback worker 主队列 Redis key |
+| `FEEDBACK_SYNC_PROCESSING_KEY` | 否 | feedback worker processing 队列 Redis key |
+| `FEEDBACK_SYNC_PENDING_SET_KEY` | 否 | feedback worker 去重集合 Redis key |
+| `FEEDBACK_SYNC_WORKER_POLL_TIMEOUT_SECONDS` | 否 | feedback worker 阻塞拉取超时 |
+| `FEEDBACK_SYNC_WORKER_IDLE_SLEEP_SECONDS` | 否 | feedback worker 空闲 sleep 时间 |
+| `FEEDBACK_SYNC_RECENT_LIMIT` | 否 | 自动扫描最近已推草稿任务时的默认数量 |
 
 当前确认值：
 
@@ -146,6 +157,7 @@
 - 当前后台白名单：`117.72.155.136,222.79.178.127`
 - Tailscale 管理入口：`100.112.123.6`
 - 真实公网出口 IP：`117.72.155.136`
+- 本地或测试环境如需验证自动反馈链路，可设：`FEEDBACK_SYNC_PROVIDER=mock`
 
 ## 9. 抓取与渲染
 
