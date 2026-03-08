@@ -364,6 +364,12 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               gap: 12px;
               margin-bottom: 14px;
             }}
+            .panel-tools {{
+              display: flex;
+              align-items: center;
+              gap: 10px;
+              flex-wrap: wrap;
+            }}
             .panel h2 {{
               margin: 0;
               font-size: 19px;
@@ -500,6 +506,13 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               color: #f7faf8;
               border-color: transparent;
             }}
+            .tiny-button {{
+              width: auto;
+              padding: 9px 13px;
+              font-size: 13px;
+              background: #efe3ce;
+              color: #342a20;
+            }}
             .advanced-links a {{
               color: var(--accent-strong);
               text-decoration: none;
@@ -628,6 +641,22 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               grid-template-columns: repeat(4, minmax(0, 1fr));
               gap: 10px;
             }}
+            .action-empty {{
+              padding: 14px 16px;
+              border-radius: 18px;
+              border: 1px dashed rgba(65, 48, 27, 0.18);
+              color: var(--muted);
+              background: rgba(255, 253, 249, 0.82);
+            }}
+            .utility-grid {{
+              display: flex;
+              flex-wrap: wrap;
+              gap: 10px;
+            }}
+            .utility-grid button {{
+              width: auto;
+              min-width: 132px;
+            }}
             .latest-box {{
               display: grid;
               gap: 8px;
@@ -716,15 +745,18 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                   <section class="panel">
                     <div class="panel-head">
                       <h2>最近任务</h2>
-                      <span class="mini" id="task-count">0 个</span>
+                      <div class="panel-tools">
+                        <span class="mini" id="task-count">0 个</span>
+                        <button id="refresh-button" class="tiny-button" type="button">刷新列表</button>
+                      </div>
                     </div>
                     <div class="task-toolbar">
                       <div class="filter-row">
-                        <button class="pill active" data-filter="all" type="button">全部</button>
-                        <button class="pill" data-filter="doing" type="button">处理中</button>
-                        <button class="pill" data-filter="waiting" type="button">等我处理</button>
-                        <button class="pill" data-filter="done" type="button">已进草稿</button>
-                        <button class="pill" data-filter="failed" type="button">失败</button>
+                        <button class="pill active" data-filter="all" data-label="全部" type="button">全部</button>
+                        <button class="pill" data-filter="doing" data-label="处理中" type="button">处理中</button>
+                        <button class="pill" data-filter="waiting" data-label="等我处理" type="button">等我处理</button>
+                        <button class="pill" data-filter="done" data-label="已进草稿" type="button">已进草稿</button>
+                        <button class="pill" data-filter="failed" data-label="失败" type="button">失败</button>
                       </div>
                       <input id="task-search" type="search" placeholder="搜标题、链接或任务号" autocomplete="off" />
                       <div class="advanced-links">
@@ -828,6 +860,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               selectedTaskId: INITIAL_TASK_ID,
               filter: "all",
               search: "",
+              filterPinned: false,
             }};
 
             const elements = {{
@@ -836,6 +869,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               ingestUrl: document.getElementById("ingest-url"),
               ingestButton: document.getElementById("ingest-button"),
               pasteButton: document.getElementById("paste-button"),
+              refreshButton: document.getElementById("refresh-button"),
               taskSearch: document.getElementById("task-search"),
               taskCount: document.getElementById("task-count"),
               taskList: document.getElementById("task-list"),
@@ -877,9 +911,23 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               return "";
             }};
 
+            const shorten = (value, limit = 220) => {{
+              if (!value) return "";
+              return value.length > limit ? `${{value.slice(0, limit)}}…` : value;
+            }};
+
             const setFlashMessage = (message, tone = "") => {{
               elements.flashMessage.textContent = message;
               elements.autoRefresh.className = `status-chip ${{tone}}`.trim();
+            }};
+
+            const copyText = async (label, value) => {{
+              try {{
+                await navigator.clipboard.writeText(value);
+                setFlashMessage(`${{label}}已复制。`);
+              }} catch (_error) {{
+                setFlashMessage(`复制${{label}}失败，请手动复制。`, "waiting");
+              }}
             }};
 
             const nextStepText = (task) => {{
@@ -940,6 +988,15 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
 
             const filteredTasks = () => currentTasks().filter(matchesFilter);
 
+            const suggestFilter = (summary) => {{
+              if (!summary) return "all";
+              if (summary.filtered_manual > 0) return "waiting";
+              if (summary.filtered_active > 0) return "doing";
+              if (summary.filtered_failed > 0) return "failed";
+              if (summary.filtered_draft_saved > 0) return "done";
+              return "all";
+            }};
+
             const appUrl = (path, params = null) => {{
               const url = new URL(path, window.location.origin);
               if (params) {{
@@ -974,13 +1031,28 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               elements.metricDraft.textContent = summary.filtered_draft_saved;
               elements.metricFailed.textContent = summary.filtered_failed;
               elements.generatedAt.textContent = `${{formatDateTime(summary.generated_at)}} 更新`;
+              const counts = {{
+                all: summary.filtered_total,
+                doing: summary.filtered_active,
+                waiting: summary.filtered_manual,
+                done: summary.filtered_draft_saved,
+                failed: summary.filtered_failed,
+              }};
+              elements.filterButtons.forEach((button) => {{
+                const label = button.dataset.label || button.textContent || "";
+                const count = counts[button.dataset.filter] ?? 0;
+                button.textContent = `${{label}} ${{count}}`;
+              }});
             }};
 
             const renderTaskList = () => {{
               const tasks = filteredTasks();
               elements.taskCount.textContent = `${{tasks.length}} 个`;
               if (!tasks.length) {{
-                elements.taskList.innerHTML = '<div class="empty">这里还没有符合筛选的任务。</div>';
+                const emptyText = state.filter === "all"
+                  ? "这里还没有任务。"
+                  : "当前筛选下没有任务。可以点“全部”看看。";
+                elements.taskList.innerHTML = `<div class="empty">${{emptyText}}</div>`;
                 return;
               }}
               elements.taskList.innerHTML = tasks.map((task) => {{
@@ -1014,15 +1086,61 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                 ? state.snapshot.workspace
                 : null;
               const latestGeneration = workspace?.generations?.[0] || null;
-              const sourceUrl = escapeHtml(task.source_url || "");
+              const rawSourceUrl = task.source_url || "";
+              const sourceUrl = escapeHtml(rawSourceUrl);
               const title = escapeHtml(task.title || workspace?.source_article?.title || "未命名任务");
               const hint = escapeHtml(nextStepText(task));
               const digest = escapeHtml(latestGeneration?.digest || "");
-              const mediaId = escapeHtml(task.wechat_media_id || workspace?.wechat_media_id || "还没有");
-              const canRetry = !DONE.has(task.status);
+              const rawMediaId = task.wechat_media_id || workspace?.wechat_media_id || "";
+              const mediaId = escapeHtml(rawMediaId || "还没有");
+              const canRetry = !ACTIVE.has(task.status);
               const canApprove = task.status === "needs_manual_review";
               const canReject = ["needs_manual_review", "review_passed"].includes(task.status);
               const canPush = task.status === "review_passed";
+              const actionButtons = [];
+              if (canRetry) {{
+                actionButtons.push({{
+                  id: "retry-button",
+                  action: "retry",
+                  klass: "secondary",
+                  label: task.status === "draft_saved" ? "再来一版" : "重新跑一版",
+                }});
+              }}
+              if (canApprove) {{
+                actionButtons.push({{
+                  id: "approve-button",
+                  action: "approve",
+                  klass: "",
+                  label: "通过",
+                }});
+              }}
+              if (canReject) {{
+                actionButtons.push({{
+                  id: "reject-button",
+                  action: "reject",
+                  klass: "warn",
+                  label: "驳回重写",
+                }});
+              }}
+              if (canPush) {{
+                actionButtons.push({{
+                  id: "push-button",
+                  action: "push-draft",
+                  klass: "ghost",
+                  label: "推草稿",
+                }});
+              }}
+              const actionHtml = actionButtons.length
+                ? `<div class="action-grid">${{actionButtons.map((button) => `
+                    <button type="button" id="${{button.id}}" class="${{button.klass}}">${{button.label}}</button>
+                  `).join("")}}</div>`
+                : '<div class="action-empty">现在先不用点按钮，等系统自己跑完就行。</div>';
+              const utilityButtons = [
+                `<button type="button" id="copy-task-id" class="tiny-button">复制任务号</button>`,
+                rawMediaId ? `<button type="button" id="copy-media-id" class="tiny-button">复制草稿号</button>` : "",
+                rawSourceUrl ? `<button type="button" id="copy-source-url" class="tiny-button">复制原文链接</button>` : "",
+              ].filter(Boolean).join("");
+              const visibleError = escapeHtml(shorten(task.error || "", 280));
               elements.taskDetail.innerHTML = `
                 <div class="summary-block">
                   <div class="summary-title">
@@ -1046,11 +1164,10 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                   <div class="kv"><strong>微信草稿</strong><span>${{mediaId}}</span></div>
                 </div>
 
-                <div class="action-grid">
-                  <button type="button" id="retry-button" class="secondary" ${{canRetry ? "" : "disabled"}}>重新跑一版</button>
-                  <button type="button" id="approve-button" ${{canApprove ? "" : "disabled"}}>通过</button>
-                  <button type="button" id="reject-button" class="warn" ${{canReject ? "" : "disabled"}}>驳回重写</button>
-                  <button type="button" id="push-button" class="ghost" ${{canPush ? "" : "disabled"}}>推草稿</button>
+                ${{actionHtml}}
+
+                <div class="utility-grid">
+                  ${{utilityButtons}}
                 </div>
 
                 <div class="latest-box">
@@ -1060,13 +1177,19 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                   <p>${{digest || "这里会显示最新一稿的摘要。"}}</p>
                 </div>
 
-                ${{task.error ? `<div class="latest-box"><strong>报错</strong><p>${{escapeHtml(task.error)}}</p></div>` : ""}}
+                ${{task.error ? `<div class="latest-box"><strong>报错</strong><p>${{visibleError}}</p></div>` : ""}}
               `;
 
-              document.getElementById("retry-button")?.addEventListener("click", () => runAction("retry", task.task_id));
-              document.getElementById("approve-button")?.addEventListener("click", () => runAction("approve", task.task_id));
-              document.getElementById("reject-button")?.addEventListener("click", () => runAction("reject", task.task_id));
-              document.getElementById("push-button")?.addEventListener("click", () => runAction("push-draft", task.task_id));
+              actionButtons.forEach((button) => {{
+                document.getElementById(button.id)?.addEventListener("click", () => runAction(button.action, task.task_id));
+              }});
+              document.getElementById("copy-task-id")?.addEventListener("click", () => copyText("任务号", task.task_code || task.task_id));
+              if (rawMediaId) {{
+                document.getElementById("copy-media-id")?.addEventListener("click", () => copyText("草稿号", rawMediaId));
+              }}
+              if (rawSourceUrl) {{
+                document.getElementById("copy-source-url")?.addEventListener("click", () => copyText("原文链接", rawSourceUrl));
+              }}
             }};
 
             const render = () => {{
@@ -1089,6 +1212,9 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                 throw new Error("加载任务列表失败。");
               }}
               state.snapshot = await response.json();
+              if (!state.filterPinned) {{
+                state.filter = suggestFilter(state.snapshot.summary);
+              }}
               if (!state.selectedTaskId && state.snapshot.tasks.length) {{
                 state.selectedTaskId = state.snapshot.tasks[0].task_id;
               }}
@@ -1169,6 +1295,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
 
             elements.filterButtons.forEach((button) => {{
               button.addEventListener("click", () => {{
+                state.filterPinned = true;
                 state.filter = button.dataset.filter;
                 render();
               }});
@@ -1205,6 +1332,13 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               }} catch (_error) {{
                 setFlashMessage("请手动粘贴链接。", "waiting");
               }}
+            }});
+
+            elements.refreshButton.addEventListener("click", () => {{
+              setFlashMessage("正在刷新…");
+              loadSnapshot()
+                .then(() => setFlashMessage("已经刷新。"))
+                .catch((error) => setFlashMessage(error.message || "刷新失败。", "fail"));
             }});
 
             const boot = async () => {{
