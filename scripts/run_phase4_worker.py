@@ -22,14 +22,18 @@ def main() -> None:
     recovered = queue.requeue_processing_jobs()
     if recovered:
         logger.info("recovered %s in-flight phase4 job(s) back to the queue", recovered)
+    queue.mark_worker_heartbeat()
 
     session_factory = get_session_factory()
     while True:
+        queue.mark_worker_heartbeat()
         task_id = queue.pop_next()
         if not task_id:
+            queue.mark_worker_heartbeat()
             queue.idle_sleep()
             continue
 
+        queue.mark_worker_heartbeat(task_id)
         logger.info("processing task %s", task_id)
         session = session_factory()
         try:
@@ -40,6 +44,7 @@ def main() -> None:
         finally:
             session.close()
             queue.acknowledge(task_id)
+            queue.mark_worker_heartbeat()
 
 
 if __name__ == "__main__":

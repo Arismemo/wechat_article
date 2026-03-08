@@ -22,14 +22,18 @@ def main() -> None:
     recovered = queue.requeue_processing_jobs()
     if recovered:
         logger.info("recovered %s in-flight feedback job(s) back to the queue", recovered)
+    queue.mark_worker_heartbeat()
 
     session_factory = get_session_factory()
     while True:
+        queue.mark_worker_heartbeat()
         job = queue.pop_next()
         if job is None:
+            queue.mark_worker_heartbeat()
             queue.idle_sleep()
             continue
 
+        queue.mark_worker_heartbeat(job.task_id)
         logger.info("syncing feedback for task %s day_offsets=%s", job.task_id, job.day_offsets)
         session = session_factory()
         try:
@@ -44,6 +48,7 @@ def main() -> None:
         finally:
             session.close()
             queue.acknowledge(job)
+            queue.mark_worker_heartbeat()
 
 
 if __name__ == "__main__":

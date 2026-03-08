@@ -454,6 +454,67 @@ def unified_console() -> str:
               font-size: 28px;
               line-height: 1;
             }
+            .ops-grid {
+              display: grid;
+              grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+              gap: 12px;
+            }
+            .ops-card {
+              background: #fffdf9;
+              border: 1px solid var(--line);
+              border-radius: 18px;
+              padding: 14px;
+              display: grid;
+              gap: 8px;
+            }
+            .ops-top {
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              gap: 10px;
+            }
+            .ops-top h3 {
+              margin: 0;
+              font-size: 15px;
+            }
+            .ops-badge {
+              display: inline-flex;
+              align-items: center;
+              border-radius: 999px;
+              padding: 4px 8px;
+              font-size: 12px;
+              background: rgba(37, 93, 82, 0.12);
+              color: var(--accent-dark);
+            }
+            .ops-badge.warn {
+              background: rgba(176, 122, 24, 0.16);
+              color: #8a5c12;
+            }
+            .ops-badge.danger {
+              background: rgba(158, 64, 50, 0.12);
+              color: var(--danger);
+            }
+            .ops-metrics {
+              display: grid;
+              grid-template-columns: repeat(3, minmax(0, 1fr));
+              gap: 8px;
+            }
+            .ops-metrics div {
+              border-radius: 12px;
+              background: rgba(37, 93, 82, 0.06);
+              padding: 8px;
+              display: grid;
+              gap: 4px;
+            }
+            .ops-metrics strong {
+              font-size: 12px;
+              color: var(--muted);
+              font-weight: 500;
+            }
+            .ops-metrics span {
+              font-size: 22px;
+              line-height: 1;
+            }
             .board {
               display: grid;
               gap: 12px;
@@ -611,7 +672,7 @@ def unified_console() -> str:
             <section class="hero">
               <span class="eyebrow">UNIFIED OPERATIONS CONSOLE</span>
               <h1>统一任务监控首页</h1>
-              <p>这一页只负责监控和检索，不替代 Phase 5 审核台或 Phase 6 反馈台。当前已接入 Phase 7C 的实时任务流和统计卡片，优先通过 SSE 持续推送最新状态，掉线时再回退到手动刷新或轮询。</p>
+              <p>这一页只负责监控和检索，不替代 Phase 5 审核台或 Phase 6 反馈台。当前已接入 Phase 7C 的实时任务流和统计卡片，以及 Phase 7E 的队列与 worker 观测；优先通过 SSE 持续推送最新状态，掉线时再回退到手动刷新或轮询。</p>
               <div class="hero-links">
                 <a href="/admin/phase5" target="_blank" rel="noreferrer">打开 Phase 5 审核台</a>
                 <a href="/admin/phase6" target="_blank" rel="noreferrer">打开 Phase 6 反馈台</a>
@@ -708,6 +769,14 @@ def unified_console() -> str:
                 </section>
 
                 <section class="panel">
+                  <h2>队列与 Worker 观测</h2>
+                  <div class="hint" style="margin-bottom: 14px;">实时显示四条队列的 backlog、处理中任务和 worker 心跳。worker 超过阈值未上报时，会标为 stale 或 offline。</div>
+                  <div class="ops-grid" id="operations">
+                    <div class="hint">等待监控快照。</div>
+                  </div>
+                </section>
+
+                <section class="panel">
                   <h2>状态分组看板</h2>
                   <div class="board" id="board">
                     <div class="hint">先输入 Bearer Token，再点“立即刷新”。</div>
@@ -736,6 +805,7 @@ def unified_console() -> str:
             const activeOnlyEl = document.getElementById("active-only");
             const boardEl = document.getElementById("board");
             const metricsEl = document.getElementById("metrics");
+            const operationsEl = document.getElementById("operations");
             const workspaceEl = document.getElementById("workspace");
             const statusEl = document.getElementById("status");
             const outputEl = document.getElementById("output");
@@ -973,6 +1043,49 @@ def unified_console() -> str:
               `).join("");
             };
 
+            const renderOperations = (operations) => {
+              if (!operations || !operations.available) {
+                operationsEl.innerHTML = `<div class="hint">${escapeHtml(operations?.note || "当前无法获取队列与 worker 观测信息。")}</div>`;
+                return;
+              }
+              if (!Array.isArray(operations.workers) || operations.workers.length === 0) {
+                operationsEl.innerHTML = '<div class="hint">当前没有 worker 观测数据。</div>';
+                return;
+              }
+              const statusLabels = {
+                idle: "运行中",
+                busy: "处理中",
+                stale: "堆积 / 超时",
+                offline: "离线",
+                unknown: "未上报",
+              };
+              operationsEl.innerHTML = operations.workers.map((item) => {
+                const badgeClass = item.status === "busy"
+                  ? ""
+                  : item.status === "idle"
+                    ? ""
+                    : item.status === "unknown"
+                      ? "warn"
+                      : "danger";
+                return `
+                  <article class="ops-card">
+                    <div class="ops-top">
+                      <h3>${escapeHtml(item.label)}</h3>
+                      <span class="ops-badge ${badgeClass}">${escapeHtml(statusLabels[item.status] || item.status)}</span>
+                    </div>
+                    <div class="ops-metrics">
+                      <div><strong>队列</strong><span>${escapeHtml(item.queue_depth)}</span></div>
+                      <div><strong>处理中</strong><span>${escapeHtml(item.processing_depth)}</span></div>
+                      <div><strong>待确认</strong><span>${escapeHtml(item.pending_count)}</span></div>
+                    </div>
+                    <div class="hint">最近心跳：${escapeHtml(item.last_seen_at ? formatDate(item.last_seen_at) : "暂无")}</div>
+                    <div class="hint">当前任务：${escapeHtml(item.current_task_id || "无")}</div>
+                    <div class="hint">超时阈值：${escapeHtml(item.stale_after_seconds)} 秒</div>
+                  </article>
+                `;
+              }).join("");
+            };
+
             const renderWorkspace = (workspace) => {
               const latestGeneration = workspace.generations[0] || null;
               const latestReview = latestGeneration?.review || null;
@@ -1034,6 +1147,7 @@ def unified_console() -> str:
 
             const renderMonitorSnapshot = (snapshot, { updateOutput = true, source = "manual" } = {}) => {
               renderMetrics(snapshot.summary);
+              renderOperations(snapshot.operations);
               renderBoard(snapshot.tasks || []);
               if (snapshot.workspace) {
                 renderWorkspace(snapshot.workspace);

@@ -7,6 +7,7 @@ from typing import Optional
 from redis import Redis
 
 from app.db.redis_client import get_redis_client
+from app.services.queue_observability_service import QueueRuntimeSnapshot, mark_worker_heartbeat, read_queue_runtime
 from app.settings import get_settings
 
 
@@ -52,3 +53,23 @@ class Phase4QueueService:
 
     def idle_sleep(self) -> None:
         sleep(self.settings.phase4_worker_idle_sleep_seconds)
+
+    def mark_worker_heartbeat(self, current_task_id: Optional[str] = None) -> None:
+        mark_worker_heartbeat(
+            self.redis,
+            heartbeat_key=self.settings.phase4_worker_heartbeat_key,
+            stale_after_seconds=self.settings.worker_heartbeat_stale_seconds,
+            current_task_id=current_task_id,
+        )
+
+    def runtime_snapshot(self) -> QueueRuntimeSnapshot:
+        return read_queue_runtime(
+            self.redis,
+            name="phase4",
+            label="Phase 4 写稿与审稿",
+            queue_key=self.settings.phase4_queue_key,
+            processing_key=self.settings.phase4_processing_key,
+            pending_key=self.settings.phase4_pending_set_key,
+            heartbeat_key=self.settings.phase4_worker_heartbeat_key,
+            stale_after_seconds=self.settings.worker_heartbeat_stale_seconds,
+        )

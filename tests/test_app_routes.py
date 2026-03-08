@@ -130,6 +130,7 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("统一控制台", response.text)
         self.assertIn("统一任务监控首页", response.text)
         self.assertIn("自动实时更新（优先 SSE，失败时回退轮询）", response.text)
+        self.assertIn("队列与 Worker 观测", response.text)
         self.assertIn("打开 Phase 5 审核台", response.text)
 
     def test_admin_settings_page_renders(self) -> None:

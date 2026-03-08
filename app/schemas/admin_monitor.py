@@ -28,7 +28,27 @@ class AdminMonitorSummaryResponse(APIModel):
     generated_at: datetime
 
 
+class QueueWorkerStatusResponse(APIModel):
+    name: str
+    label: str
+    queue_depth: int
+    processing_depth: int
+    pending_count: int
+    last_seen_at: Optional[datetime] = None
+    current_task_id: Optional[str] = None
+    healthy: bool
+    status: str
+    stale_after_seconds: int
+
+
+class AdminMonitorOperationsResponse(APIModel):
+    available: bool
+    workers: list[QueueWorkerStatusResponse] = Field(default_factory=list)
+    note: Optional[str] = None
+
+
 class AdminMonitorSnapshotResponse(APIModel):
     summary: AdminMonitorSummaryResponse
     tasks: list[TaskSummaryResponse]
+    operations: AdminMonitorOperationsResponse
     workspace: Optional[TaskWorkspaceResponse] = None

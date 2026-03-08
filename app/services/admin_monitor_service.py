@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.core.enums import ACTIVE_TASK_STATUSES, FINAL_FAILURE_STATUSES, TaskStatus
 from app.core.progress import get_progress
 from app.core.prompt_versions import resolve_generation_prompt_metadata, resolve_generation_prompt_version
+from app.db.redis_client import get_redis_client
 from app.models.task import Task
 from app.repositories.article_analysis_repository import ArticleAnalysisRepository
 from app.repositories.audit_log_repository import AuditLogRepository
@@ -20,7 +21,12 @@ from app.repositories.review_report_repository import ReviewReportRepository
 from app.repositories.source_article_repository import SourceArticleRepository
 from app.repositories.task_repository import TaskRepository
 from app.repositories.wechat_draft_repository import WechatDraftRepository
-from app.schemas.admin_monitor import AdminMonitorSnapshotResponse, AdminMonitorSummaryResponse
+from app.schemas.admin_monitor import (
+    AdminMonitorOperationsResponse,
+    AdminMonitorSnapshotResponse,
+    AdminMonitorSummaryResponse,
+    QueueWorkerStatusResponse,
+)
 from app.schemas.tasks import (
     ArticleAnalysisResponse,
     AuditLogResponse,
@@ -32,6 +38,10 @@ from app.schemas.tasks import (
     TaskWorkspaceResponse,
     WechatPushPolicyResponse,
 )
+from app.services.feedback_queue_service import FeedbackQueueService
+from app.services.phase2_queue_service import Phase2QueueService
+from app.services.phase3_queue_service import Phase3QueueService
+from app.services.phase4_queue_service import Phase4QueueService
 from app.services.task_service import TaskService
 from app.services.wechat_push_policy_service import WechatPushPolicyService
 from app.settings import get_settings
@@ -84,6 +94,7 @@ class AdminMonitorService:
         return AdminMonitorSnapshotResponse(
             summary=self._build_summary(filters, task_summaries),
             tasks=task_summaries,
+            operations=self._build_operations(),
             workspace=workspace,
         )
 
@@ -360,6 +371,40 @@ class AdminMonitorService:
             created_at=item.created_at,
             updated_at=item.updated_at,
         )
+
+    def _build_operations(self) -> AdminMonitorOperationsResponse:
+        try:
+            redis_client = get_redis_client()
+            workers = [
+                Phase2QueueService(redis_client).runtime_snapshot(),
+                Phase3QueueService(redis_client).runtime_snapshot(),
+                Phase4QueueService(redis_client).runtime_snapshot(),
+                FeedbackQueueService(redis_client).runtime_snapshot(),
+            ]
+            return AdminMonitorOperationsResponse(
+                available=True,
+                workers=[
+                    QueueWorkerStatusResponse(
+                        name=item.name,
+                        label=item.label,
+                        queue_depth=item.queue_depth,
+                        processing_depth=item.processing_depth,
+                        pending_count=item.pending_count,
+                        last_seen_at=item.last_seen_at,
+                        current_task_id=item.current_task_id,
+                        healthy=item.healthy,
+                        status=item.status,
+                        stale_after_seconds=item.stale_after_seconds,
+                    )
+                    for item in workers
+                ],
+            )
+        except Exception as exc:  # noqa: BLE001
+            return AdminMonitorOperationsResponse(
+                available=False,
+                workers=[],
+                note=f"worker observability unavailable: {exc}",
+            )
 
     def _start_of_today_utc(self) -> datetime:
         timezone_name = self.settings.timezone or "Asia/Shanghai"

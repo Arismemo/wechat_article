@@ -140,10 +140,34 @@ class AdminMonitorApiTests(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def test_admin_monitor_snapshot_returns_summary_tasks_and_workspace(self) -> None:
-        response = self.client.get(
-            f"/api/v1/admin/monitor/snapshot?limit=20&selected_task_id={self.draft_task_id}",
-            headers={"Authorization": "Bearer test-token"},
-        )
+        running_task_id = self.running_task_id
+        draft_task_id = self.draft_task_id
+
+        class FakeRedis:
+            def llen(self, key):
+                return {"phase2:queue": 1, "phase2:processing": 0, "phase3:queue": 0, "phase3:processing": 1}.get(key, 0)
+
+            def scard(self, key):
+                return {"phase2:pending": 1, "phase3:pending": 1}.get(key, 0)
+
+            def hgetall(self, key):
+                if key == "phase2:worker:heartbeat":
+                    return {
+                        "last_seen_at": datetime.now(timezone.utc).isoformat(),
+                        "current_task_id": running_task_id,
+                    }
+                if key == "phase3:worker:heartbeat":
+                    return {
+                        "last_seen_at": datetime.now(timezone.utc).isoformat(),
+                        "current_task_id": draft_task_id,
+                    }
+                return {}
+
+        with patch("app.services.admin_monitor_service.get_redis_client", return_value=FakeRedis()):
+            response = self.client.get(
+                f"/api/v1/admin/monitor/snapshot?limit=20&selected_task_id={self.draft_task_id}",
+                headers={"Authorization": "Bearer test-token"},
+            )
 
         self.assertEqual(response.status_code, 200)
         body = response.json()
@@ -154,6 +178,9 @@ class AdminMonitorApiTests(unittest.TestCase):
         self.assertEqual(body["summary"]["today_submitted"], 2)
         self.assertEqual(body["summary"]["today_review_success_rate"], 100.0)
         self.assertEqual(len(body["tasks"]), 2)
+        self.assertTrue(body["operations"]["available"])
+        self.assertEqual(len(body["operations"]["workers"]), 4)
+        self.assertEqual(body["operations"]["workers"][0]["name"], "phase2")
         self.assertEqual(body["workspace"]["task_id"], self.draft_task_id)
         self.assertEqual(body["workspace"]["wechat_media_id"], "media-monitor-1")
 
