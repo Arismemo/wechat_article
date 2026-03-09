@@ -1232,6 +1232,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                         <button class="pill active" data-filter="all" data-label="全部" type="button">全部</button>
                         <button class="pill" data-filter="doing" data-label="处理中" type="button">处理中</button>
                         <button class="pill" data-filter="waiting" data-label="等我处理" type="button">等我处理</button>
+                        <button class="pill" data-filter="ready" data-label="待推草稿" type="button">待推草稿</button>
                         <button class="pill" data-filter="done" data-label="已进草稿" type="button">已进草稿</button>
                         <button class="pill" data-filter="failed" data-label="失败" type="button">失败</button>
                       </div>
@@ -1571,6 +1572,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             const matchesFilter = (task, filter = state.filter) => {{
               if (filter === "doing" && !ACTIVE.has(task.status)) return false;
               if (filter === "waiting" && !WAITING.has(task.status)) return false;
+              if (filter === "ready" && !READY_TO_PUSH.has(task.status)) return false;
               if (filter === "done" && !DONE.has(task.status)) return false;
               if (filter === "failed" && !FAILED.has(task.status)) return false;
               return matchesSearch(task);
@@ -1583,6 +1585,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                 all: searchableTasks.length,
                 doing: searchableTasks.filter((task) => ACTIVE.has(task.status)).length,
                 waiting: searchableTasks.filter((task) => WAITING.has(task.status)).length,
+                ready: searchableTasks.filter((task) => READY_TO_PUSH.has(task.status)).length,
                 done: searchableTasks.filter((task) => DONE.has(task.status)).length,
                 failed: searchableTasks.filter((task) => FAILED.has(task.status)).length,
               }};
@@ -1613,11 +1616,13 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             const suggestFilter = (summary) => {{
               const visibleCounts = filterCountsFromVisibleTasks();
               if (visibleCounts.waiting > 0) return "waiting";
+              if (visibleCounts.ready > 0) return "ready";
               if (visibleCounts.doing > 0) return "doing";
               if (visibleCounts.failed > 0) return "failed";
               if (visibleCounts.done > 0) return "done";
               if (!summary) return "all";
               if (summary.filtered_manual > 0) return "waiting";
+              if (summary.filtered_review_passed > 0) return "ready";
               if (summary.filtered_active > 0) return "doing";
               if (summary.filtered_failed > 0) return "failed";
               if (summary.filtered_draft_saved > 0) return "done";
@@ -1634,6 +1639,12 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                 return {{
                   headline: `先处理 ${{summary.filtered_manual}} 条等你判断的任务`,
                   note: "优先看“等我处理”，避免已写完的任务卡在人工审核或重写环节。",
+                }};
+              }}
+              if (summary.filtered_review_passed > 0) {{
+                return {{
+                  headline: `有 ${{summary.filtered_review_passed}} 条待推草稿任务`,
+                  note: "这些任务已经审稿通过，下一步是推到微信草稿箱，不再算进“等我处理”。",
                 }};
               }}
               if (summary.filtered_failed > 0) {{
