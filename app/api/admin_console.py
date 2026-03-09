@@ -1278,7 +1278,8 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               "reviewing",
               "pushing_wechat_draft",
             ]);
-            const WAITING = new Set(["needs_manual_review", "needs_regenerate", "review_passed"]);
+            const WAITING = new Set(["needs_manual_review", "needs_regenerate", "needs_manual_source"]);
+            const READY_TO_PUSH = new Set(["review_passed"]);
             const FAILED = new Set([
               "fetch_failed",
               "analyze_failed",
@@ -1394,6 +1395,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               if (DONE.has(status)) return "done";
               if (FAILED.has(status)) return "fail";
               if (WAITING.has(status)) return "waiting";
+              if (READY_TO_PUSH.has(status)) return "waiting";
               return "";
             }};
 
@@ -1716,7 +1718,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                 const selectedAttr = task.task_id === state.selectedTaskId ? "true" : "false";
                 const summaryTone = WAITING.has(task.status)
                   ? "需要你处理"
-                  : (FAILED.has(task.status) ? "需要修复" : (DONE.has(task.status) ? "已完成" : "自动处理中"));
+                  : (READY_TO_PUSH.has(task.status) ? "待推草稿" : (FAILED.has(task.status) ? "需要修复" : (DONE.has(task.status) ? "已完成" : "自动处理中")));
                 return `
                   <button
                     type="button"
@@ -1859,12 +1861,16 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                   <article class="workspace-overview-card strong">
                     <strong>当前动作</strong>
                     <span>${{hint}}</span>
-                    <p>${{WAITING.has(task.status) ? "这条任务已经等你处理，右侧动作区只保留当前最相关的按钮。" : "系统还会继续往下推进，先关注状态变化和成稿内容。"}}</p>
+                    <p>${{WAITING.has(task.status)
+                      ? "这条任务已经等你处理，右侧动作区只保留当前最相关的按钮。"
+                      : (READY_TO_PUSH.has(task.status)
+                        ? "这条任务已经审稿通过，下一步是推到微信草稿箱。"
+                        : "系统还会继续往下推进，先关注状态变化和成稿内容。")}}</p>
                   </article>
                   <article class="workspace-overview-card">
                     <strong>任务状态</strong>
                     <span>${{statusLabel(task.status)}}</span>
-                    <p>进度 ${{task.progress}}%${{WAITING.has(task.status) ? "，当前需要人工介入。" : "，当前不用额外操作。"}}</p>
+                    <p>进度 ${{task.progress}}%${{WAITING.has(task.status) ? "，当前需要人工介入。" : (READY_TO_PUSH.has(task.status) ? "，当前可以推草稿。" : "，当前不用额外操作。")}}</p>
                   </article>
                   <article class="workspace-overview-card">
                     <strong>最近更新</strong>
@@ -2024,8 +2030,11 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               }});
             }};
 
-            const loadSnapshot = async () => {{
-              setRegionsBusy(true);
+            const loadSnapshot = async (options = {{}}) => {{
+              const {{ showBusy = true }} = options;
+              if (showBusy) {{
+                setRegionsBusy(true);
+              }}
               try {{
                 const requestedTaskId = state.selectedTaskId;
                 const response = await fetch(appUrl("/admin/api/home-snapshot", {{
@@ -2045,7 +2054,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                   state.selectedTaskId = state.snapshot.tasks[0].task_id;
                 }}
                 if (!requestedTaskId && state.selectedTaskId && !state.snapshot.workspace) {{
-                  await loadSnapshot();
+                  await loadSnapshot(options);
                   return;
                 }}
                 if (
@@ -2063,13 +2072,15 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                 }}
                 const selectionAlignment = alignSelectedTaskToVisibleTasks();
                 if (selectionAlignment.needsReload && state.selectedTaskId) {{
-                  await loadSnapshot();
+                  await loadSnapshot(options);
                   return;
                 }}
                 syncUrl();
                 render();
               }} finally {{
-                setRegionsBusy(false);
+                if (showBusy) {{
+                  setRegionsBusy(false);
+                }}
               }}
             }};
 
@@ -2265,7 +2276,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               }}
               window.setInterval(() => {{
                 if (state.pendingAction || state.isIngesting || state.isRefreshing) return;
-                loadSnapshot().catch(() => setFlashMessage("刷新失败，稍后会再试。", "fail"));
+                loadSnapshot({{ showBusy: false }}).catch(() => setFlashMessage("刷新失败，稍后会再试。", "fail"));
               }}, 4000);
             }};
 
@@ -2284,7 +2295,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
 
 @router.get("/admin/console", response_class=HTMLResponse, tags=["admin"], dependencies=[Depends(verify_admin_basic_auth)])
 def unified_console() -> str:
-    return dedent(
+    html = dedent(
         """\
         <!DOCTYPE html>
         <html lang="zh-CN">
@@ -2309,6 +2320,7 @@ def unified_console() -> str:
             * { box-sizing: border-box; }
             body {
               margin: 0;
+              line-height: 1.5;
               color: var(--text);
               font-family: "PingFang SC", "Noto Serif SC", serif;
               min-height: 100vh;
@@ -2317,6 +2329,22 @@ def unified_console() -> str:
                 radial-gradient(circle at bottom right, rgba(178, 222, 208, 0.42), transparent 28%),
                 linear-gradient(140deg, #efe8dd 0%, #f6f2ea 44%, #ebe1d2 100%);
             }
+            .skip-link {
+              position: absolute;
+              top: 16px;
+              left: 16px;
+              transform: translateY(-180%);
+              padding: 10px 14px;
+              border-radius: 999px;
+              background: var(--accent-dark);
+              color: #f7faf8;
+              text-decoration: none;
+              z-index: 20;
+              transition: transform 120ms ease;
+            }
+            .skip-link:focus-visible {
+              transform: translateY(0);
+            }
             main {
               max-width: 1440px;
               margin: 0 auto;
@@ -2324,8 +2352,25 @@ def unified_console() -> str:
             }
             .hero {
               display: grid;
+              gap: 14px;
+              padding: 24px;
+              border: 1px solid var(--line);
+              border-radius: 28px;
+              background: linear-gradient(135deg, rgba(255, 248, 239, 0.94), rgba(249, 244, 236, 0.9));
+              box-shadow: var(--shadow);
+              backdrop-filter: blur(10px);
+              margin-bottom: 20px;
+            }
+            .hero-grid {
+              display: grid;
+              grid-template-columns: minmax(0, 1.28fr) minmax(320px, 0.92fr);
+              gap: 18px;
+              align-items: stretch;
+            }
+            .hero-copy {
+              display: grid;
               gap: 10px;
-              margin-bottom: 18px;
+              align-content: start;
             }
             .eyebrow {
               display: inline-flex;
@@ -2358,6 +2403,81 @@ def unified_console() -> str:
               color: var(--accent-dark);
               border-bottom: 1px solid rgba(23, 63, 56, 0.25);
             }
+            .hero-status-card {
+              display: grid;
+              gap: 14px;
+              padding: 18px;
+              border-radius: 24px;
+              border: 1px solid rgba(37, 93, 82, 0.12);
+              background: linear-gradient(160deg, rgba(255, 252, 247, 0.95), rgba(249, 245, 237, 0.9));
+            }
+            .hero-status-copy {
+              margin: 0;
+              font-size: 15px;
+              line-height: 1.7;
+            }
+            .hero-summary {
+              display: grid;
+              grid-template-columns: repeat(2, minmax(0, 1fr));
+              gap: 10px;
+            }
+            .hero-summary-card {
+              display: grid;
+              gap: 6px;
+              padding: 12px 14px;
+              border-radius: 18px;
+              border: 1px solid rgba(65, 48, 27, 0.1);
+              background: rgba(255, 253, 249, 0.78);
+            }
+            .hero-summary-card strong {
+              color: var(--muted);
+              font-size: 12px;
+              font-weight: 500;
+            }
+            .hero-summary-card span {
+              font-size: 16px;
+              line-height: 1.55;
+            }
+            .hero-summary-card.wide {
+              grid-column: 1 / -1;
+              background: linear-gradient(135deg, rgba(37, 93, 82, 0.1), rgba(255, 249, 242, 0.95));
+            }
+            .overview-strip {
+              display: grid;
+              grid-template-columns: repeat(4, minmax(0, 1fr));
+              gap: 12px;
+              margin-bottom: 20px;
+            }
+            .overview-card {
+              display: grid;
+              gap: 8px;
+              min-width: 0;
+              padding: 16px;
+              border-radius: 20px;
+              border: 1px solid var(--line);
+              background: rgba(255, 251, 246, 0.9);
+              box-shadow: 0 14px 32px rgba(58, 40, 18, 0.08);
+            }
+            .overview-card.highlight {
+              grid-column: span 2;
+              background: linear-gradient(135deg, rgba(37, 93, 82, 0.1), rgba(255, 249, 242, 0.96));
+            }
+            .overview-card strong {
+              color: var(--muted);
+              font-size: 12px;
+              font-weight: 500;
+            }
+            .overview-card span {
+              display: block;
+              font-size: 28px;
+              line-height: 1.1;
+            }
+            .overview-card p {
+              margin: 0;
+              color: var(--muted);
+              font-size: 13px;
+              line-height: 1.7;
+            }
             .layout {
               display: grid;
               grid-template-columns: 360px minmax(0, 1fr);
@@ -2380,6 +2500,12 @@ def unified_console() -> str:
               margin: 0 0 14px;
               font-size: 18px;
             }
+            .panel-intro {
+              margin: 0 0 14px;
+              color: var(--muted);
+              font-size: 13px;
+              line-height: 1.7;
+            }
             .status {
               display: inline-flex;
               padding: 7px 12px;
@@ -2400,6 +2526,16 @@ def unified_console() -> str:
             .grid.two {
               grid-template-columns: repeat(2, minmax(0, 1fr));
             }
+            .field {
+              display: grid;
+              gap: 6px;
+            }
+            .field-hint {
+              margin: 0;
+              color: var(--muted);
+              font-size: 13px;
+              line-height: 1.7;
+            }
             label {
               display: block;
               margin-bottom: 6px;
@@ -2417,19 +2553,33 @@ def unified_console() -> str:
               color: var(--text);
               border: 1px solid var(--line);
             }
+            input:focus-visible,
+            select:focus-visible,
+            button:focus-visible,
+            a:focus-visible,
+            summary:focus-visible {
+              outline: 2px solid rgba(37, 93, 82, 0.18);
+              outline-offset: 3px;
+            }
             button {
               border: none;
               padding: 12px 16px;
               cursor: pointer;
               background: var(--accent);
               color: #f8fbf7;
+              transition: transform 0.12s ease, background 0.12s ease;
             }
             button:hover {
               background: var(--accent-dark);
+              transform: translateY(-1px);
             }
             button.secondary {
               background: #d8c8aa;
               color: #2c241a;
+            }
+            button[aria-busy="true"] {
+              opacity: 0.82;
+              cursor: progress;
             }
             .check-row {
               display: flex;
@@ -2456,10 +2606,24 @@ def unified_console() -> str:
               font-size: 13px;
               line-height: 1.7;
             }
+            .task-note {
+              padding: 10px 12px;
+              border-radius: 14px;
+              background: rgba(37, 93, 82, 0.06);
+              color: var(--muted);
+              font-size: 13px;
+              line-height: 1.7;
+            }
             .metrics {
               display: grid;
               grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
               gap: 10px;
+            }
+            .metrics[aria-busy="true"],
+            .ops-grid[aria-busy="true"],
+            .board[aria-busy="true"],
+            .workspace[aria-busy="true"] {
+              opacity: 0.8;
             }
             .metric-card, .task-card, .detail-card, .audit-card {
               background: #fffdf9;
@@ -2569,6 +2733,10 @@ def unified_console() -> str:
             .task-card {
               display: grid;
               gap: 10px;
+            }
+            .task-card.selected {
+              border-color: rgba(37, 93, 82, 0.55);
+              box-shadow: 0 0 0 2px rgba(37, 93, 82, 0.14);
             }
             .task-card h3, .detail-card h3 {
               margin: 0;
@@ -2694,45 +2862,113 @@ def unified_console() -> str:
             .article-preview-shell section {
               margin: 0 auto;
             }
+            __ADMIN_NAV_STYLES__
             @media (max-width: 1040px) {
+              .hero-grid {
+                grid-template-columns: 1fr;
+              }
+              .overview-strip {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+              }
+              .overview-card.highlight {
+                grid-column: span 2;
+              }
               .layout {
                 grid-template-columns: 1fr;
               }
             }
             @media (max-width: 720px) {
               .hero h1 { font-size: 30px; }
-              .actions { grid-template-columns: 1fr; }
-              .grid.two, .detail-grid, .task-grid { grid-template-columns: 1fr; }
+              .hero-summary,
+              .overview-strip,
+              .actions,
+              .grid.two,
+              .detail-grid,
+              .task-grid {
+                grid-template-columns: 1fr;
+              }
+              .overview-card.highlight {
+                grid-column: span 1;
+              }
             }
           </style>
         </head>
         <body>
+          <a class="skip-link" href="#monitor-region">跳到监控主区</a>
           <main>
             <section class="hero">
-              <span class="eyebrow">UNIFIED OPERATIONS CONSOLE</span>
-              <h1>统一任务监控首页</h1>
-              <p>这一页只负责监控和检索，不替代 Phase 5 审核台或 Phase 6 反馈台。当前已接入 Phase 7C 的实时任务流和统计卡片，以及 Phase 7E 的队列与 worker 观测；优先通过 SSE 持续推送最新状态，掉线时再回退到手动刷新或轮询。</p>
-              <div class="hero-links">
-                <a href="/admin/phase5" target="_blank" rel="noreferrer">打开 Phase 5 审核台</a>
-                <a href="/admin/phase6" target="_blank" rel="noreferrer">打开 Phase 6 反馈台</a>
+              <div class="hero-grid">
+                <div class="hero-copy">
+                  <span class="eyebrow">UNIFIED OPERATIONS CONSOLE</span>
+                  <h1>统一任务监控首页</h1>
+                  <p>这一页只负责监控、筛选和定位问题，不替代 Phase 5 审核台或 Phase 6 反馈台。先看概览，再缩小筛选范围，最后点任务详情决定下一步去哪里处理。</p>
+                  <div class="hero-links">
+                    <a href="/admin/phase5" target="_blank" rel="noreferrer">打开 Phase 5 审核台</a>
+                    <a href="/admin/phase6" target="_blank" rel="noreferrer">打开 Phase 6 反馈台</a>
+                  </div>
+                </div>
+                <aside class="hero-status-card" aria-label="监控页状态">
+                  <span class="status" id="status">等待连接</span>
+                  <p class="hero-status-copy" id="flash-message" role="status" aria-live="polite" aria-atomic="true">先填 Bearer Token，再决定是否开启自动实时更新。</p>
+                  <div class="hero-summary" aria-label="首屏提示">
+                    <div class="hero-summary-card">
+                      <strong>这页负责什么</strong>
+                      <span>看任务流、队列与 worker 健康，快速定位哪一批任务最需要你介入。</span>
+                    </div>
+                    <div class="hero-summary-card">
+                      <strong>不在这里做什么</strong>
+                      <span>不直接审核、不直接补反馈；具体动作分别去 Phase 5 和 Phase 6 完成。</span>
+                    </div>
+                    <div class="hero-summary-card wide">
+                      <strong>当前建议</strong>
+                      <span id="hero-focus">先填 Bearer Token，再拉一次总览，确认今天有哪些任务需要人工介入。</span>
+                    </div>
+                  </div>
+                </aside>
               </div>
+              __ADMIN_SECTION_NAV__
             </section>
 
-            <section class="layout">
+            <section class="overview-strip" aria-label="监控概览">
+              <article class="overview-card">
+                <strong>当前筛选</strong>
+                <span id="overview-filtered-count">0</span>
+                <p>当前筛选条件下能看到的任务总量。</p>
+              </article>
+              <article class="overview-card">
+                <strong>待人工处理</strong>
+                <span id="overview-manual-count">0</span>
+                <p>优先关注需要人工审核或重写的任务。</p>
+              </article>
+              <article class="overview-card">
+                <strong>队列健康</strong>
+                <span id="overview-ops-state">等待快照</span>
+                <p>基于 worker 心跳、堆积和处理深度判断。</p>
+              </article>
+              <article class="overview-card highlight">
+                <strong>当前优先</strong>
+                <span id="overview-focus">先填 Bearer Token，再拉一次总览，确认今天有哪些任务需要人工介入。</span>
+                <p id="overview-focus-note">这页先判断“哪里有问题”，真正的审核和反馈动作仍然分别去 Phase 5 与 Phase 6 完成。</p>
+              </article>
+            </section>
+
+            <section class="layout" id="monitor-region">
               <div class="stack">
                 <section class="panel">
-                  <h2>认证与刷新</h2>
+                  <h2>先准备监控</h2>
+                  <p class="panel-intro">这里控制鉴权、刷新策略和当前选中任务。SSE 优先，断开时自动回退轮询；如果只是临时排查，可以关掉自动更新，手动刷新即可。</p>
                   <div class="grid">
-                    <div>
+                    <div class="field">
                       <label for="token">Bearer Token</label>
-                      <input id="token" type="password" placeholder="输入 API_BEARER_TOKEN" />
+                      <input id="token" type="password" placeholder="输入 API_BEARER_TOKEN" aria-describedby="token-hint" />
                     </div>
+                    <p class="field-hint" id="token-hint">第一次打开时填一次就行，页面会先记住。没有 Token 时无法拉监控快照。</p>
                     <div class="grid two">
-                      <div>
+                      <div class="field">
                         <label for="poll-seconds">轮询秒数</label>
                         <input id="poll-seconds" type="number" min="3" max="60" value="5" />
                       </div>
-                      <div>
+                      <div class="field">
                         <label for="limit">拉取数量</label>
                         <input id="limit" type="number" min="10" max="100" value="36" />
                       </div>
@@ -2751,8 +2987,9 @@ def unified_console() -> str:
 
                 <section class="panel">
                   <h2>筛选条件</h2>
+                  <p class="panel-intro">先按状态和来源收缩范围，再决定要不要按关键词或起始时间继续压缩。看板按状态分组后，优先处理待人工、失败和待推草稿任务。</p>
                   <div class="grid">
-                    <div>
+                    <div class="field">
                       <label for="status-filter">状态</label>
                       <select id="status-filter">
                         <option value="">全部状态</option>
@@ -2768,7 +3005,7 @@ def unified_console() -> str:
                         <option value="push_failed">push_failed</option>
                       </select>
                     </div>
-                    <div>
+                    <div class="field">
                       <label for="source-filter">来源</label>
                       <select id="source-filter">
                         <option value="">全部来源</option>
@@ -2777,11 +3014,11 @@ def unified_console() -> str:
                         <option value="other">other</option>
                       </select>
                     </div>
-                    <div>
+                    <div class="field">
                       <label for="query-filter">搜索</label>
                       <input id="query-filter" type="text" placeholder="task_code / URL 关键词" />
                     </div>
-                    <div>
+                    <div class="field">
                       <label for="created-after">起始时间</label>
                       <input id="created-after" type="datetime-local" />
                     </div>
@@ -2793,8 +3030,8 @@ def unified_console() -> str:
                 </section>
 
                 <section class="panel">
-                  <span class="status" id="status">空闲</span>
-                  <h2>输出</h2>
+                  <h2>最近响应</h2>
+                  <p class="panel-intro">这里保留最近一次完整响应，方便复制排障、核对筛选是否生效，或确认某次实时更新到底推了什么。</p>
                   <pre id="output">等待刷新...</pre>
                 </section>
               </div>
@@ -2802,29 +3039,32 @@ def unified_console() -> str:
               <div class="stack">
                 <section class="panel">
                   <h2>任务总览</h2>
-                  <div class="metrics" id="metrics">
+                  <p class="panel-intro">先看今天的总体趋势，再判断是问题集中在人工审核、失败恢复，还是队列堆积。</p>
+                  <div class="metrics" id="metrics" aria-busy="false">
                     <div class="metric-card"><strong>当前筛选</strong><span>0</span></div>
                   </div>
                 </section>
 
                 <section class="panel">
                   <h2>队列与 Worker 观测</h2>
-                  <div class="hint" style="margin-bottom: 14px;">实时显示四条队列的 backlog、处理中任务和 worker 心跳。worker 超过阈值未上报时，会标为 stale 或 offline。</div>
-                  <div class="ops-grid" id="operations">
+                  <p class="panel-intro">实时显示四条队列的 backlog、处理中任务和 worker 心跳。worker 超过阈值未上报时，会标为 stale 或 offline。</p>
+                  <div class="ops-grid" id="operations" aria-busy="false">
                     <div class="hint">等待监控快照。</div>
                   </div>
                 </section>
 
                 <section class="panel">
                   <h2>状态分组看板</h2>
-                  <div class="board" id="board">
+                  <p class="panel-intro">看板按状态分组，卡片里会给出“下一步”提示。这里只负责定位任务，不直接执行审核或反馈动作。</p>
+                  <div class="board" id="board" aria-busy="false">
                     <div class="hint">先输入 Bearer Token，再点“立即刷新”。</div>
                   </div>
                 </section>
 
                 <section class="panel">
                   <h2>任务详情</h2>
-                  <div id="workspace">
+                  <p class="panel-intro">点开任务后，这里显示聚合信息、最新 generation 和审计轨迹，帮助你判断接下来该去 Phase 5 还是 Phase 6。</p>
+                  <div id="workspace" class="workspace" aria-busy="false">
                     <div class="hint">从看板点“查看详情”后，这里会显示聚合任务信息。</div>
                   </div>
                 </section>
@@ -2847,8 +3087,15 @@ def unified_console() -> str:
             const operationsEl = document.getElementById("operations");
             const workspaceEl = document.getElementById("workspace");
             const statusEl = document.getElementById("status");
+            const flashMessageEl = document.getElementById("flash-message");
+            const heroFocusEl = document.getElementById("hero-focus");
             const outputEl = document.getElementById("output");
             const liveHintEl = document.getElementById("live-hint");
+            const overviewFilteredCountEl = document.getElementById("overview-filtered-count");
+            const overviewManualCountEl = document.getElementById("overview-manual-count");
+            const overviewOpsStateEl = document.getElementById("overview-ops-state");
+            const overviewFocusEl = document.getElementById("overview-focus");
+            const overviewFocusNoteEl = document.getElementById("overview-focus-note");
 
             const STATUS_LABELS = {
               queued: "待执行",
@@ -2897,6 +3144,7 @@ def unified_console() -> str:
             let selectedTaskId = "";
             let refreshTimer = null;
             let monitorStream = null;
+            let lastSnapshot = null;
 
             const escapeHtml = (value) => {
               return String(value ?? "")
@@ -2915,8 +3163,12 @@ def unified_console() -> str:
               });
             };
 
-            const setStatus = (text) => {
+            const setStatus = (text, tone = "", message = text) => {
               statusEl.textContent = text;
+              statusEl.className = `status ${tone}`.trim();
+              if (flashMessageEl) {
+                flashMessageEl.textContent = message;
+              }
             };
 
             const setLiveHint = (text) => {
@@ -2946,6 +3198,111 @@ def unified_console() -> str:
               if (status === "needs_manual_review" || status === "needs_regenerate" || status === "pushing_wechat_draft") return "pill warn";
               if (String(status || "").endsWith("_failed")) return "pill danger";
               return "pill";
+            };
+            const setDataBusy = (busy) => {
+              const value = busy ? "true" : "false";
+              metricsEl.setAttribute("aria-busy", value);
+              operationsEl.setAttribute("aria-busy", value);
+              boardEl.setAttribute("aria-busy", value);
+              workspaceEl.setAttribute("aria-busy", value);
+            };
+            const setButtonBusy = (button, busy, pendingLabel = "处理中...") => {
+              if (!button) return;
+              if (!button.dataset.defaultLabel) {
+                button.dataset.defaultLabel = button.textContent.trim();
+              }
+              button.disabled = busy;
+              button.setAttribute("aria-busy", busy ? "true" : "false");
+              button.textContent = busy ? pendingLabel : button.dataset.defaultLabel;
+            };
+            const withButtonBusy = async (button, pendingLabel, work) => {
+              if (!button || button.disabled) return;
+              setButtonBusy(button, true, pendingLabel);
+              try {
+                await work();
+              } catch (error) {
+                setStatus("失败", "danger", "最近一次操作失败，详见输出区域。");
+                renderOutput(error.message || String(error));
+              } finally {
+                setButtonBusy(button, false);
+              }
+            };
+            const nextActionText = (task) => {
+              if (!task) return "先从看板里选一个任务。";
+              if (task.status === "needs_manual_review") return "去 Phase 5 做人工审核。";
+              if (task.status === "needs_regenerate") return "去 Phase 5 看驳回原因，再决定是否重写。";
+              if (task.status === "review_passed") return "关注推草稿阶段，必要时去 Phase 5 复核。";
+              if (task.status === "draft_saved") return "如需回收表现，去 Phase 6 补录反馈或做同步。";
+              if (String(task.status || "").endsWith("_failed")) return "先看错误和审计轨迹，再决定是否重试。";
+              return "继续观察状态推进，必要时点开详情确认卡点。";
+            };
+            const summarizeOpsHealth = (operations) => {
+              if (!operations || !operations.available) {
+                return {
+                  label: "暂无监控",
+                  note: operations?.note || "当前拿不到队列与 worker 观测信息。",
+                };
+              }
+              const workers = Array.isArray(operations.workers) ? operations.workers : [];
+              if (!workers.length) {
+                return {
+                  label: "暂无 worker",
+                  note: "当前没有 worker 观测数据。",
+                };
+              }
+              const abnormalCount = workers.filter((item) => item.status === "offline" || item.status === "stale").length;
+              const busyCount = workers.filter((item) => item.status === "busy").length;
+              if (abnormalCount > 0) {
+                return {
+                  label: `${abnormalCount} 个异常`,
+                  note: "优先排查离线或堆积 worker，确认是不是队列卡住。",
+                };
+              }
+              if (busyCount > 0) {
+                return {
+                  label: `${busyCount} 个处理中`,
+                  note: "当前有 worker 正在消化队列，先结合 backlog 判断是否需要介入。",
+                };
+              }
+              return {
+                label: "队列稳定",
+                note: "暂无离线或堆积 worker，可以把注意力放在任务状态本身。",
+              };
+            };
+            const renderOverview = (snapshot = lastSnapshot) => {
+              const summary = snapshot?.summary || null;
+              const opsHealth = summarizeOpsHealth(snapshot?.operations);
+              overviewFilteredCountEl.textContent = summary ? String(summary.filtered_total) : "0";
+              overviewManualCountEl.textContent = summary ? String(summary.filtered_manual) : "0";
+              overviewOpsStateEl.textContent = opsHealth.label;
+              let focus = "先填 Bearer Token，再拉一次总览，确认今天有哪些任务需要人工介入。";
+              let note = "这页先判断哪里有问题，真正的审核和反馈动作仍然分别去 Phase 5 与 Phase 6 完成。";
+              if (!tokenEl.value.trim()) {
+                focus = "先填 Bearer Token，再决定是否开启自动实时更新。";
+                note = "没有 Token 时无法拉快照，也没法判断队列健康和待人工任务。";
+              } else if (selectedTaskId) {
+                focus = "当前已经锁定一个任务，优先看详情、最新 generation 和审计轨迹。";
+                note = "判断问题归属后，再去 Phase 5 做审核，或去 Phase 6 做反馈补录与复盘。";
+              } else if (summary) {
+                if (summary.filtered_manual > 0) {
+                  focus = `当前有 ${summary.filtered_manual} 个任务待人工处理，优先从这些状态组开始。`;
+                  note = "待人工和待重写通常最需要立刻介入，看板卡片会提示下一步去哪一页处理。";
+                } else if (summary.filtered_failed > 0) {
+                  focus = `当前有 ${summary.filtered_failed} 个失败任务，先看错误和审计轨迹。`;
+                  note = "失败任务通常先看详情页里的错误、审计和最新 generation，再决定是否重试。";
+                } else if (summary.filtered_total === 0) {
+                  focus = "当前筛选下没有任务。换个筛选看看。";
+                  note = "可以放宽状态、来源或起始时间，先把需要关注的任务重新找出来。";
+                } else {
+                  focus = "当前任务流可用，先看待推草稿、失败和异常堆积是否有新变化。";
+                  note = opsHealth.note;
+                }
+              }
+              overviewFocusEl.textContent = focus;
+              overviewFocusNoteEl.textContent = note;
+              if (heroFocusEl) {
+                heroFocusEl.textContent = focus;
+              }
             };
 
             const saveDraft = () => {
@@ -3044,7 +3401,7 @@ def unified_console() -> str:
 
             const renderBoard = (tasks) => {
               if (!Array.isArray(tasks) || tasks.length === 0) {
-                boardEl.innerHTML = '<div class="hint">当前筛选条件下没有任务。</div>';
+                boardEl.innerHTML = '<div class="hint">当前筛选下没有任务。换个筛选看看。</div>';
                 return;
               }
               const counts = tasks.reduce((map, item) => {
@@ -3063,7 +3420,7 @@ def unified_console() -> str:
                   </div>
                   <div class="task-grid">
                     ${tasks.filter((item) => item.status === groupStatus).map((task) => `
-                      <article class="task-card">
+                      <article class="task-card ${selectedTaskId === task.task_id ? "selected" : ""}">
                         <h3>${escapeHtml(task.title || "未命名任务")}</h3>
                         <div class="pill-row">
                           <span class="${pillClass(task.status)}">${escapeHtml(task.status)}</span>
@@ -3079,6 +3436,7 @@ def unified_console() -> str:
                           <div><strong>链接</strong> ${escapeHtml(truncate(task.source_url, 88))}</div>
                           <div><strong>错误</strong> ${escapeHtml(task.error || "无")}</div>
                         </div>
+                        <div class="task-note"><strong>下一步</strong> ${escapeHtml(nextActionText(task))}</div>
                         <div class="task-actions">
                           <button data-action="inspect" data-task-id="${escapeHtml(task.task_id)}">查看详情</button>
                           <a href="/admin/phase5" target="_blank" rel="noreferrer">去 Phase5</a>
@@ -3199,6 +3557,7 @@ def unified_console() -> str:
             };
 
             const renderMonitorSnapshot = (snapshot, { updateOutput = true, source = "manual" } = {}) => {
+              lastSnapshot = snapshot;
               renderMetrics(snapshot.summary);
               renderOperations(snapshot.operations);
               renderBoard(snapshot.tasks || []);
@@ -3213,17 +3572,23 @@ def unified_console() -> str:
                 renderOutput(snapshot);
               }
               if (source === "stream") {
-                setStatus(`实时中 · ${snapshot.tasks.length} 个任务`);
+                setStatus(`实时中 · ${snapshot.tasks.length} 个任务`, "", "SSE 正在持续推送最新快照。");
               } else {
-                setStatus(`已刷新 · ${snapshot.tasks.length} 个任务`);
+                setStatus(`已刷新 · ${snapshot.tasks.length} 个任务`, "", "监控快照已刷新，可以继续收窄筛选或点开任务详情。");
               }
+              renderOverview(snapshot);
             };
 
             const refreshAll = async () => {
               saveDraft();
-              setStatus("刷新中");
-              const snapshot = await request(`/api/v1/admin/monitor/snapshot?${buildSnapshotQuery()}`);
-              renderMonitorSnapshot(snapshot, { updateOutput: true, source: "manual" });
+              setStatus("刷新中", "", "正在拉取最新监控快照。");
+              setDataBusy(true);
+              try {
+                const snapshot = await request(`/api/v1/admin/monitor/snapshot?${buildSnapshotQuery()}`);
+                renderMonitorSnapshot(snapshot, { updateOutput: true, source: "manual" });
+              } finally {
+                setDataBusy(false);
+              }
             };
 
             const refreshWorkspace = async (taskId) => {
@@ -3249,7 +3614,7 @@ def unified_console() -> str:
               const seconds = Math.min(Math.max(Number(pollSecondsEl.value) || 5, 3), 60);
               refreshTimer = window.setInterval(() => {
                 refreshAll().catch((error) => {
-                  setStatus("轮询失败");
+                  setStatus("轮询失败", "warn", "轮询刷新失败，详见输出区域。");
                   renderOutput(error.message || String(error));
                 });
               }, seconds * 1000);
@@ -3264,10 +3629,12 @@ def unified_console() -> str:
               }
               if (!tokenEl.value.trim()) {
                 setLiveHint("当前模式：等待 Bearer Token");
+                renderOverview();
                 return;
               }
               if (!autoRefreshEl.checked) {
                 setLiveHint("当前模式：自动更新已关闭");
+                renderOverview();
                 return;
               }
               if (!window.EventSource) {
@@ -3284,7 +3651,7 @@ def unified_console() -> str:
                   renderMonitorSnapshot(snapshot, { updateOutput: true, source: "stream" });
                   setLiveHint(`当前模式：SSE 实时推送 · ${formatDate(snapshot.summary.generated_at)}`);
                 } catch (error) {
-                  setStatus("实时流解析失败");
+                  setStatus("实时流解析失败", "warn", "实时流返回了无法解析的数据，详见输出区域。");
                   renderOutput(error.message || String(error));
                 }
               });
@@ -3295,20 +3662,18 @@ def unified_console() -> str:
               };
             };
 
-            document.getElementById("refresh-now").addEventListener("click", async () => {
-              try {
+            document.getElementById("refresh-now").addEventListener("click", async (event) => {
+              await withButtonBusy(event.currentTarget, "刷新中...", async () => {
                 await refreshAll();
-              } catch (error) {
-                setStatus("失败");
-                renderOutput(error.message || String(error));
-              }
+              });
             });
 
             document.getElementById("clear-selection").addEventListener("click", () => {
               selectedTaskId = "";
               saveDraft();
               workspaceEl.innerHTML = '<div class="hint">当前任务已清空。</div>';
-              setStatus("空闲");
+              renderOverview();
+              setStatus("已清空", "", "当前任务已清空，可以继续从看板里挑一个任务。");
               restartRealtime();
             });
 
@@ -3316,6 +3681,7 @@ def unified_console() -> str:
               const eventName = element === queryFilterEl ? "input" : "change";
               element.addEventListener(eventName, () => {
                 saveDraft();
+                renderOverview();
                 restartRealtime();
               });
             });
@@ -3328,16 +3694,17 @@ def unified_console() -> str:
               try {
                 await refreshWorkspace(taskId);
               } catch (error) {
-                setStatus("失败");
+                setStatus("失败", "danger", "加载任务详情失败，详见输出区域。");
                 renderOutput(error.message || String(error));
               }
             });
 
             loadDraft();
+            renderOverview();
             restartRealtime();
             if (tokenEl.value.trim()) {
               refreshAll().catch((error) => {
-                setStatus("失败");
+                setStatus("失败", "danger", "首次加载监控快照失败，详见输出区域。");
                 renderOutput(error.message || String(error));
               });
             }
@@ -3345,6 +3712,11 @@ def unified_console() -> str:
         </body>
         </html>
         """
+    )
+    return (
+        html.replace("__ADMIN_NAV_STYLES__", admin_section_nav_styles()).replace(
+            "__ADMIN_SECTION_NAV__", admin_section_nav("portal")
+        )
     )
 
 
@@ -3814,7 +4186,7 @@ def settings_console() -> str:
                 </div>
                 <aside class="hero-status-card" aria-label="设置页状态">
                   <span class="status" id="status">等待加载</span>
-                  <p class="hero-status-copy" id="flash-message" role="status" aria-live="polite" aria-atomic="true">先填 Bearer Token，再刷新设置和环境状态。</p>
+                  <p class="hero-status-copy" id="flash-message" role="status" aria-live="polite" aria-atomic="true">默认复用后台登录态。先刷新设置和环境状态。</p>
                   <div class="hero-summary" aria-label="首屏提示">
                     <div class="hero-summary-card">
                       <strong>会影响什么</strong>
@@ -3822,7 +4194,7 @@ def settings_console() -> str:
                     </div>
                     <div class="hero-summary-card">
                       <strong>需要准备什么</strong>
-                      <span>Bearer Token、操作人标识和变更备注。</span>
+                      <span>操作人标识和变更备注；默认复用后台登录态。</span>
                     </div>
                     <div class="hero-summary-card wide">
                       <strong>当前建议</strong>
@@ -3861,12 +4233,15 @@ def settings_console() -> str:
               <div class="stack">
                 <section class="panel">
                   <h2>先准备</h2>
-                  <p class="panel-intro">先准备鉴权和操作元数据。保存设置、恢复默认、发送测试告警都会复用这里的信息。</p>
-                  <div class="field">
-                    <label for="token">Bearer Token</label>
-                    <input id="token" type="password" placeholder="输入 API_BEARER_TOKEN" aria-describedby="token-hint" />
-                  </div>
-                  <p class="field-hint" id="token-hint">第一次打开时填一次就行，页面会先记住。这里只在浏览器侧存储，不会写回服务端。</p>
+                  <p class="panel-intro">先准备操作元数据。页面默认复用后台登录态；保存设置、恢复默认、发送测试告警都会复用这里的信息。</p>
+                  <details class="fold">
+                    <summary>高级鉴权兜底</summary>
+                    <div class="field" style="margin-top: 12px;">
+                      <label for="fallback-token">Bearer Token（仅兜底）</label>
+                      <input id="fallback-token" type="password" placeholder="仅在未启用后台登录态时填写" aria-describedby="fallback-token-hint" />
+                    </div>
+                    <p class="field-hint" id="fallback-token-hint">页面会先复用当前后台登录态。只有请求返回 401 且当前环境没有启用后台 Basic Auth 时，才需要在这里临时填入 `API_BEARER_TOKEN`。</p>
+                  </details>
                   <div class="field" style="margin-top: 14px;">
                     <label for="operator">operator</label>
                     <input id="operator" type="text" value="admin-console" aria-describedby="operator-hint" />
@@ -3902,7 +4277,7 @@ def settings_console() -> str:
                   <p class="panel-intro">这里放的是低频辅助操作，不应该干扰主流程。先刷新确认状态，再决定是否发测试告警或看调试输出。</p>
                   <details class="fold">
                     <summary>测试告警</summary>
-                    <div class="hint" id="alert-hint" style="margin-top: 10px;">先填 Bearer Token，再点“刷新”。若 `ALERT_WEBHOOK_URL` 未配置，这里会显示为不可用。</div>
+                    <div class="hint" id="alert-hint" style="margin-top: 10px;">先点“刷新”。若 `ALERT_WEBHOOK_URL` 未配置，这里会显示为不可用。</div>
                     <div class="actions">
                       <button id="send-alert">发送</button>
                     </div>
@@ -3919,7 +4294,7 @@ def settings_console() -> str:
                   <h2>当前设置</h2>
                   <p class="panel-intro">改完只影响新任务；恢复默认会回退到环境变量。优先处理确实需要热修改的项，不要把这里当作 `.env` 编辑器。</p>
                   <div id="categories" class="categories" aria-busy="false">
-                    <div class="empty">请输入 Bearer Token 后点击“刷新”。</div>
+                    <div class="empty">点击“刷新”拉取当前设置。</div>
                   </div>
                 </section>
 
@@ -3927,7 +4302,7 @@ def settings_console() -> str:
                   <h2>环境状态</h2>
                   <p class="panel-intro">这里只读显示，密钥不会明文展示。它的作用是帮助你判断“能不能改”和“改了以后会不会真正生效”。</p>
                   <div id="runtime-status" class="categories" aria-busy="false">
-                    <div class="empty">请输入 Bearer Token 后点击“刷新”。</div>
+                    <div class="empty">点击“刷新”拉取环境状态。</div>
                   </div>
                 </section>
               </div>
@@ -3940,7 +4315,7 @@ def settings_console() -> str:
             const heroFocusEl = document.getElementById("hero-focus");
             const outputEl = document.getElementById("output");
             const alertHintEl = document.getElementById("alert-hint");
-            const tokenEl = document.getElementById("token");
+            const fallbackTokenEl = document.getElementById("fallback-token");
             const operatorEl = document.getElementById("operator");
             const noteEl = document.getElementById("note");
             const categoriesEl = document.getElementById("categories");
@@ -3980,6 +4355,9 @@ def settings_console() -> str:
               outputEl.textContent = typeof value === "string" ? value : JSON.stringify(value, null, 2);
             };
             const apiUrl = (path) => new URL(path, window.location.origin).toString();
+            const authErrorMessage = (usedFallbackToken) => usedFallbackToken
+              ? "高级鉴权兜底里的 Bearer Token 未通过校验，请确认填写的是当前环境的 API_BEARER_TOKEN。"
+              : "当前页面默认复用后台登录态。若这个环境没有配置后台登录，请展开“高级鉴权兜底”后填入 Bearer Token。";
 
             const escapeHtml = (value) =>
               String(value)
@@ -4022,33 +4400,50 @@ def settings_console() -> str:
             };
 
             const readDraft = () => {
-              tokenEl.value = localStorage.getItem("phase7_settings_token") || "";
+              fallbackTokenEl.value = localStorage.getItem("phase7_settings_fallback_token") || "";
               operatorEl.value = localStorage.getItem("phase7_settings_operator") || "admin-console";
               noteEl.value = localStorage.getItem("phase7_settings_note") || "";
             };
 
             const saveDraft = () => {
-              localStorage.setItem("phase7_settings_token", tokenEl.value.trim());
+              localStorage.setItem("phase7_settings_fallback_token", fallbackTokenEl.value.trim());
               localStorage.setItem("phase7_settings_operator", operatorEl.value.trim());
               localStorage.setItem("phase7_settings_note", noteEl.value);
             };
 
             const request = async (path, options = {}) => {
-              const token = tokenEl.value.trim();
-              if (!token) throw new Error("请先输入 Bearer Token");
-              const headers = {
-                Authorization: `Bearer ${token}`,
-                ...(options.headers || {}),
+              saveDraft();
+              const fallbackToken = fallbackTokenEl.value.trim();
+              const execute = async (useFallbackToken = false) => {
+                const headers = { ...(options.headers || {}) };
+                if (useFallbackToken && fallbackToken) {
+                  headers.Authorization = `Bearer ${fallbackToken}`;
+                }
+                const response = await fetch(apiUrl(path), {
+                  ...options,
+                  headers,
+                  credentials: "same-origin",
+                });
+                const text = await response.text();
+                let body = null;
+                try {
+                  body = text ? JSON.parse(text) : null;
+                } catch (_error) {
+                  body = text;
+                }
+                return { response, body, text };
               };
-              const response = await fetch(apiUrl(path), { ...options, headers });
-              const text = await response.text();
-              let body = null;
-              try {
-                body = text ? JSON.parse(text) : null;
-              } catch (_error) {
-                body = text;
+
+              let usedFallbackToken = false;
+              let { response, body, text } = await execute(false);
+              if (response.status === 401 && fallbackToken) {
+                usedFallbackToken = true;
+                ({ response, body, text } = await execute(true));
               }
               if (!response.ok) {
+                if (response.status === 401) {
+                  throw new Error(authErrorMessage(usedFallbackToken));
+                }
                 const detail = body && typeof body === "object" && body.detail ? body.detail : text || response.statusText;
                 throw new Error(detail);
               }
@@ -4278,7 +4673,7 @@ def settings_console() -> str:
               setStatus("空闲");
             });
 
-            [tokenEl, operatorEl, noteEl].forEach((element) => {
+            [fallbackTokenEl, operatorEl, noteEl].forEach((element) => {
               element.addEventListener("input", saveDraft);
             });
 
@@ -4297,12 +4692,10 @@ def settings_console() -> str:
 
             readDraft();
             renderOverview([], null);
-            if (tokenEl.value.trim()) {
-              loadAll().catch((error) => {
-                setStatus("加载失败", "warn");
-                renderOutput(error.message || String(error));
-              });
-            }
+            loadAll().catch((error) => {
+              setStatus("加载失败", "warn");
+              renderOutput(error.message || String(error));
+            });
           </script>
         </body>
         </html>

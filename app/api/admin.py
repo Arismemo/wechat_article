@@ -529,6 +529,7 @@ def phase5_console() -> str:
             * { box-sizing: border-box; }
             body {
               margin: 0;
+              line-height: 1.5;
               font-family: "PingFang SC", "Noto Serif SC", serif;
               color: var(--text);
               background:
@@ -537,6 +538,22 @@ def phase5_console() -> str:
                 linear-gradient(140deg, #f0e8db 0%, #f7f3eb 42%, #ece4d7 100%);
               min-height: 100vh;
             }
+            .skip-link {
+              position: absolute;
+              top: 16px;
+              left: 16px;
+              transform: translateY(-180%);
+              padding: 10px 14px;
+              border-radius: 999px;
+              background: var(--accent-dark);
+              color: #f7faf8;
+              text-decoration: none;
+              z-index: 20;
+              transition: transform 120ms ease;
+            }
+            .skip-link:focus-visible {
+              transform: translateY(0);
+            }
             main {
               max-width: 1280px;
               margin: 0 auto;
@@ -544,8 +561,25 @@ def phase5_console() -> str:
             }
             .hero {
               display: grid;
-              gap: 10px;
+              gap: 14px;
+              padding: 24px;
+              border: 1px solid var(--line);
+              border-radius: 28px;
+              background: linear-gradient(135deg, rgba(255, 248, 239, 0.92), rgba(248, 244, 237, 0.86));
+              box-shadow: var(--shadow);
+              backdrop-filter: blur(10px);
               margin-bottom: 20px;
+            }
+            .hero-grid {
+              display: grid;
+              grid-template-columns: minmax(0, 1.28fr) minmax(320px, 0.92fr);
+              gap: 18px;
+              align-items: stretch;
+            }
+            .hero-copy {
+              display: grid;
+              gap: 10px;
+              align-content: start;
             }
             .eyebrow {
               display: inline-flex;
@@ -569,6 +603,81 @@ def phase5_console() -> str:
               max-width: 820px;
               line-height: 1.75;
             }
+            .hero-status-card {
+              display: grid;
+              gap: 14px;
+              padding: 18px;
+              border-radius: 24px;
+              border: 1px solid rgba(29, 106, 95, 0.12);
+              background: linear-gradient(160deg, rgba(255, 252, 247, 0.95), rgba(249, 245, 237, 0.9));
+            }
+            .hero-status-copy {
+              margin: 0;
+              font-size: 15px;
+              line-height: 1.7;
+            }
+            .hero-summary {
+              display: grid;
+              grid-template-columns: repeat(2, minmax(0, 1fr));
+              gap: 10px;
+            }
+            .hero-summary-card {
+              display: grid;
+              gap: 6px;
+              padding: 12px 14px;
+              border-radius: 18px;
+              border: 1px solid rgba(65, 48, 27, 0.1);
+              background: rgba(255, 253, 249, 0.78);
+            }
+            .hero-summary-card strong {
+              color: var(--muted);
+              font-size: 12px;
+              font-weight: 500;
+            }
+            .hero-summary-card span {
+              font-size: 16px;
+              line-height: 1.55;
+            }
+            .hero-summary-card.wide {
+              grid-column: 1 / -1;
+              background: linear-gradient(135deg, rgba(29, 106, 95, 0.1), rgba(255, 249, 242, 0.95));
+            }
+            .overview-strip {
+              display: grid;
+              grid-template-columns: repeat(4, minmax(0, 1fr));
+              gap: 12px;
+              margin-bottom: 20px;
+            }
+            .overview-card {
+              display: grid;
+              gap: 8px;
+              min-width: 0;
+              padding: 16px;
+              border-radius: 20px;
+              border: 1px solid var(--line);
+              background: rgba(255, 251, 246, 0.9);
+              box-shadow: 0 14px 32px rgba(58, 40, 18, 0.08);
+            }
+            .overview-card.highlight {
+              grid-column: span 2;
+              background: linear-gradient(135deg, rgba(29, 106, 95, 0.1), rgba(255, 249, 242, 0.96));
+            }
+            .overview-card strong {
+              color: var(--muted);
+              font-size: 12px;
+              font-weight: 500;
+            }
+            .overview-card span {
+              display: block;
+              font-size: 28px;
+              line-height: 1.1;
+            }
+            .overview-card p {
+              margin: 0;
+              color: var(--muted);
+              font-size: 13px;
+              line-height: 1.7;
+            }
             .layout {
               display: grid;
               grid-template-columns: 360px minmax(0, 1fr);
@@ -591,6 +700,12 @@ def phase5_console() -> str:
               margin: 0 0 14px;
               font-size: 18px;
             }
+            .panel-intro {
+              margin: 0 0 14px;
+              color: var(--muted);
+              font-size: 13px;
+              line-height: 1.7;
+            }
             .grid {
               display: grid;
               grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -598,6 +713,16 @@ def phase5_console() -> str:
             }
             .grid.single {
               grid-template-columns: 1fr;
+            }
+            .field {
+              display: grid;
+              gap: 6px;
+            }
+            .field-hint {
+              margin: 0;
+              color: var(--muted);
+              font-size: 13px;
+              line-height: 1.7;
             }
             label {
               display: block;
@@ -615,6 +740,15 @@ def phase5_console() -> str:
               background: #fffdf9;
               color: var(--text);
               border: 1px solid var(--line);
+            }
+            input:focus-visible,
+            textarea:focus-visible,
+            button:focus-visible,
+            select:focus-visible,
+            a:focus-visible,
+            summary:focus-visible {
+              outline: 2px solid rgba(29, 106, 95, 0.18);
+              outline-offset: 3px;
             }
             textarea {
               min-height: 120px;
@@ -686,6 +820,10 @@ def phase5_console() -> str:
               font-size: 12px;
               margin-bottom: 12px;
             }
+            .status.warn {
+              background: rgba(186, 125, 28, 0.16);
+              color: #8a5c10;
+            }
             .hint, .meta {
               color: var(--muted);
               font-size: 13px;
@@ -732,6 +870,9 @@ def phase5_console() -> str:
               flex-wrap: wrap;
               gap: 8px;
               margin-bottom: 12px;
+            }
+            .board[aria-busy="true"], .workspace[aria-busy="true"] {
+              opacity: 0.82;
             }
             .group-block {
               display: grid;
@@ -973,14 +1114,24 @@ def phase5_console() -> str:
             }
             __ADMIN_NAV_STYLES__
             @media (max-width: 1024px) {
+              .hero-grid {
+                grid-template-columns: 1fr;
+              }
+              .overview-strip {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+              }
               .layout {
                 grid-template-columns: 1fr;
               }
             }
             @media (max-width: 720px) {
               main { padding: 22px 14px 36px; }
+              .hero { padding: 18px; }
               .panel { padding: 16px; border-radius: 20px; }
               .hero h1 { font-size: 30px; }
+              .hero-summary { grid-template-columns: 1fr; }
+              .overview-strip { grid-template-columns: 1fr; }
+              .overview-card.highlight { grid-column: span 1; }
               .actions { grid-template-columns: 1fr; }
               .action-grid { grid-template-columns: 1fr; }
               .task-actions { flex-direction: column; }
@@ -989,40 +1140,101 @@ def phase5_console() -> str:
           </style>
         </head>
         <body>
+          <a class="skip-link" href="#review-region">跳到审核主区</a>
           <main>
             <section class="hero">
-              <span class="eyebrow">PHASE 5 ADMIN CONSOLE</span>
-              <h1>审核台</h1>
-              <p>先看任务，再决定：通过、重写，还是推草稿。</p>
+              <div class="hero-grid">
+                <div class="hero-copy">
+                  <span class="eyebrow">PHASE 5 ADMIN CONSOLE</span>
+                  <h1>审核台</h1>
+                  <p>先看任务，再决定：通过、重写，还是推草稿。</p>
+                </div>
+                <aside class="hero-status-card" aria-label="审核台状态">
+                  <span class="status" id="status">空闲</span>
+                  <p class="hero-status-copy" id="flash-message" role="status" aria-live="polite" aria-atomic="true">先刷新最近任务，再点一条卡片进入工作区。</p>
+                  <div class="hero-summary" aria-label="首屏提示">
+                    <div class="hero-summary-card">
+                      <strong>主要流程</strong>
+                      <span>先选任务，再看工作区，再决定动作。</span>
+                    </div>
+                    <div class="hero-summary-card">
+                      <strong>人工介入点</strong>
+                      <span>通过、重写、允许推稿、禁止推稿。</span>
+                    </div>
+                    <div class="hero-summary-card wide">
+                      <strong>当前建议</strong>
+                      <span id="hero-focus">先刷新最近任务，再点一条卡片进入工作区。</span>
+                    </div>
+                  </div>
+                </aside>
+              </div>
               __ADMIN_SECTION_NAV__
             </section>
 
-            <section class="layout">
+            <section class="overview-strip" aria-label="审核概览">
+              <article class="overview-card">
+                <strong>可见任务</strong>
+                <span id="overview-total">0</span>
+                <p>当前筛选后显示在审核台里的任务数量。</p>
+              </article>
+              <article class="overview-card">
+                <strong>等你处理</strong>
+                <span id="overview-manual">0</span>
+                <p>需要人工审核、重写或决定是否推稿的任务。</p>
+              </article>
+              <article class="overview-card">
+                <strong>待推草稿</strong>
+                <span id="overview-ready">0</span>
+                <p>已经通过审核，下一步是决定是否推送草稿。</p>
+              </article>
+              <article class="overview-card">
+                <strong>失败 / 异常</strong>
+                <span id="overview-failed">0</span>
+                <p>优先看失败任务，先判断补数据还是直接重跑。</p>
+              </article>
+              <article class="overview-card highlight">
+                <strong>当前优先</strong>
+                <span id="overview-focus">先刷新最近任务，再点一条卡片进入工作区。</span>
+                <p id="overview-focus-note">右侧工作区会集中展示当前动作、草稿状态、版本差异和审计轨迹。</p>
+              </article>
+            </section>
+
+            <section class="layout" id="review-region">
               <div class="stack">
                 <section class="panel">
                   <h2>先选任务</h2>
+                  <p class="panel-intro">默认会复用后台登录态。左边只负责选任务和触发动作，右边统一看工作区内容；只有当前环境没启用后台登录时，才需要展开下面的鉴权兜底。</p>
+                  <details class="fold">
+                    <summary>高级鉴权兜底</summary>
+                    <div class="grid single" style="margin-top: 12px;">
+                      <div class="field">
+                        <label for="fallback-token">Bearer Token（仅兜底）</label>
+                        <input id="fallback-token" type="password" placeholder="仅在未启用后台登录态时填写" aria-describedby="fallback-token-hint" />
+                      </div>
+                      <p class="field-hint" id="fallback-token-hint">页面会先复用当前后台登录态。只有请求返回 401 且当前环境没有启用后台 Basic Auth 时，才需要在这里临时填入 `API_BEARER_TOKEN`。</p>
+                    </div>
+                  </details>
                   <div class="grid single">
-                    <div>
-                      <label for="token">Bearer Token</label>
-                      <input id="token" type="password" placeholder="输入 API_BEARER_TOKEN" />
-                    </div>
-                    <p class="hint" style="margin: 0;">第一次打开时填一次就行，页面会先记住。</p>
-                    <div>
+                    <div class="field">
                       <label for="device">device_id</label>
-                      <input id="device" type="text" value="phase5-console" />
+                      <input id="device" type="text" value="phase5-console" aria-describedby="device-hint" />
                     </div>
-                    <div>
+                    <p class="field-hint" id="device-hint">会写入审计日志，建议填当前值班人或具体操作来源。</p>
+                    <div class="field">
                       <label for="url">微信文章链接</label>
-                      <input id="url" type="url" placeholder="https://mp.weixin.qq.com/s/..." />
+                      <input id="url" type="url" placeholder="https://mp.weixin.qq.com/s/..." aria-describedby="url-hint" />
                     </div>
-                    <div>
+                    <p class="field-hint" id="url-hint">当你要从新链接直接开任务时再填它；已有任务优先直接填 `task_id`。</p>
+                    <div class="field">
                       <label for="task">task_id</label>
-                      <input id="task" type="text" placeholder="f703c3ef-..." />
+                      <input id="task" type="text" placeholder="f703c3ef-..." aria-describedby="task-hint" />
                     </div>
-                    <div>
+                    <p class="field-hint" id="task-hint">刷新最近任务后，点卡片按钮会自动把 `task_id` 填到这里。</p>
+                    <div class="field">
                       <label for="review-note">人工审核备注</label>
-                      <textarea id="review-note" placeholder="会写入 audit log，例如：结构已达标，可人工放行；或：观点重复，退回重写。"></textarea>
+                      <textarea id="review-note" placeholder="会写入 audit log，例如：结构已达标，可人工放行；或：观点重复，退回重写。" aria-describedby="review-note-hint"></textarea>
                     </div>
+                    <p class="field-hint" id="review-note-hint">备注会跟随人工通过、驳回和推稿许可一起写入审计轨迹，尽量写出决定依据。</p>
                   </div>
                   <div class="action-blocks">
                     <div class="action-block">
@@ -1053,11 +1265,12 @@ def phase5_console() -> str:
                       </div>
                     </div>
                   </div>
-                  <p class="hint">先加载详情，再决定：重跑、通过、驳回，或者推稿。</p>
+                  <p class="hint">先加载详情，再决定：重跑、通过、驳回，或者推稿。危险动作会在工作区里给出上下文再判断。</p>
                 </section>
 
                 <section class="panel">
                   <h2>怎么用</h2>
+                  <p class="panel-intro">审核台不是从左到右把所有按钮都点一遍，而是按任务状态决定下一步。</p>
                   <div class="meta">
                     <div>1. 先刷新最近任务，再点一条卡片。</div>
                     <div>2. 右边先看状态、最新一稿和风险。</div>
@@ -1075,6 +1288,7 @@ def phase5_console() -> str:
 
                 <section class="panel">
                   <h2>任务看板</h2>
+                  <p class="panel-intro">默认先把还没收口的任务放到前面。先筛“待人工审核 / 待重生成 / 待推草稿”，再看右侧工作区。</p>
                   <div class="filter-grid">
                     <div>
                       <label for="recent-status-filter">状态筛选</label>
@@ -1104,9 +1318,8 @@ def phase5_console() -> str:
                   <div class="actions" style="margin-top: 0;">
                     <button id="refresh-recent" class="secondary">刷新最近任务</button>
                   </div>
-                  <p class="hint">默认先把还没收口的任务放到前面。</p>
                   <div class="summary-strip" id="recent-summary"></div>
-                  <div class="board" id="recent-list">
+                  <div class="board" id="recent-list" aria-busy="false">
                     <div class="hint">等待加载最近任务...</div>
                   </div>
                 </section>
@@ -1114,10 +1327,10 @@ def phase5_console() -> str:
 
               <div class="stack">
                 <section class="panel">
-                  <span class="status" id="status">空闲</span>
                   <h2>任务工作台</h2>
-                  <div class="workspace" id="workspace">
-                    <div class="hint">先输入 Bearer Token，再加载 task_id 或刷新最近任务。</div>
+                  <p class="panel-intro">这里集中看当前动作、推稿许可、源文摘要、Brief、最新成稿、版本差异和审计轨迹。</p>
+                  <div class="workspace" id="workspace" aria-busy="false">
+                    <div class="hint">先加载 task_id 或刷新最近任务。</div>
                   </div>
                 </section>
 
@@ -1130,19 +1343,27 @@ def phase5_console() -> str:
           </main>
 
           <script>
-            const tokenEl = document.getElementById("token");
+            const fallbackTokenEl = document.getElementById("fallback-token");
             const urlEl = document.getElementById("url");
             const taskEl = document.getElementById("task");
             const reviewNoteEl = document.getElementById("review-note");
             const deviceEl = document.getElementById("device");
             const outputEl = document.getElementById("output");
             const statusEl = document.getElementById("status");
+            const flashMessageEl = document.getElementById("flash-message");
+            const heroFocusEl = document.getElementById("hero-focus");
             const recentListEl = document.getElementById("recent-list");
             const recentSummaryEl = document.getElementById("recent-summary");
             const recentStatusEl = document.getElementById("recent-status-filter");
             const recentLimitEl = document.getElementById("recent-limit");
             const recentActiveEl = document.getElementById("recent-active-only");
             const workspaceEl = document.getElementById("workspace");
+            const overviewTotalEl = document.getElementById("overview-total");
+            const overviewManualEl = document.getElementById("overview-manual");
+            const overviewReadyEl = document.getElementById("overview-ready");
+            const overviewFailedEl = document.getElementById("overview-failed");
+            const overviewFocusEl = document.getElementById("overview-focus");
+            const overviewFocusNoteEl = document.getElementById("overview-focus-note");
             const STATUS_LABELS = {
               queued: "待执行",
               deduping: "去重中",
@@ -1186,6 +1407,18 @@ def phase5_console() -> str:
               "pushing_wechat_draft",
               "draft_saved",
             ];
+            const WAITING_STATUSES = new Set(["needs_manual_review", "needs_regenerate"]);
+            const READY_STATUSES = new Set(["review_passed"]);
+            const FAILED_STATUSES = new Set([
+              "fetch_failed",
+              "analyze_failed",
+              "search_failed",
+              "brief_failed",
+              "generate_failed",
+              "review_failed",
+              "push_failed",
+              "needs_manual_source",
+            ]);
 
             const escapeHtml = (value) => {
               return String(value ?? "")
@@ -1205,7 +1438,7 @@ def phase5_console() -> str:
             };
 
             const loadDraft = () => {
-              tokenEl.value = localStorage.getItem("phase5_console_token") || "";
+              fallbackTokenEl.value = localStorage.getItem("phase5_console_fallback_token") || "";
               urlEl.value = localStorage.getItem("phase5_console_url") || "";
               taskEl.value = localStorage.getItem("phase5_console_task") || "";
               reviewNoteEl.value = localStorage.getItem("phase5_console_review_note") || "";
@@ -1215,7 +1448,7 @@ def phase5_console() -> str:
             };
 
             const saveDraft = () => {
-              localStorage.setItem("phase5_console_token", tokenEl.value.trim());
+              localStorage.setItem("phase5_console_fallback_token", fallbackTokenEl.value.trim());
               localStorage.setItem("phase5_console_url", urlEl.value.trim());
               localStorage.setItem("phase5_console_task", taskEl.value.trim());
               localStorage.setItem("phase5_console_review_note", reviewNoteEl.value.trim());
@@ -1226,6 +1459,13 @@ def phase5_console() -> str:
 
             const setStatus = (text) => {
               statusEl.textContent = text;
+              if (flashMessageEl) {
+                flashMessageEl.textContent = text;
+              }
+            };
+            const setPanelsBusy = (busy) => {
+              recentListEl.setAttribute("aria-busy", busy ? "true" : "false");
+              workspaceEl.setAttribute("aria-busy", busy ? "true" : "false");
             };
             const scrollWorkspaceIntoView = () => {
               if (!window.matchMedia("(max-width: 1024px)").matches) return;
@@ -1244,11 +1484,9 @@ def phase5_console() -> str:
               outputEl.textContent = JSON.stringify(payload, null, 2);
             };
 
-            const requireToken = () => {
-              const token = tokenEl.value.trim();
-              if (!token) throw new Error("请先输入 Bearer Token");
-              return token;
-            };
+            const authErrorMessage = (usedFallbackToken) => usedFallbackToken
+              ? "高级鉴权兜底里的 Bearer Token 未通过校验，请确认填写的是当前环境的 API_BEARER_TOKEN。"
+              : "当前页面默认复用后台登录态。若这个环境没有配置后台登录，请展开“高级鉴权兜底”后填入 Bearer Token。";
             const setButtonBusy = (button, busy, pendingLabel = "处理中...") => {
               if (!button) return;
               if (!button.dataset.defaultLabel) {
@@ -1274,22 +1512,41 @@ def phase5_console() -> str:
 
             const request = async (method, path, body) => {
               saveDraft();
-              const response = await fetch(apiUrl(path), {
-                method,
-                headers: {
-                  "Authorization": `Bearer ${requireToken()}`,
-                  "Content-Type": "application/json"
-                },
-                body: body ? JSON.stringify(body) : undefined,
-              });
-              const text = await response.text();
-              let data;
-              try {
-                data = text ? JSON.parse(text) : {};
-              } catch {
-                data = { raw: text };
+              const fallbackToken = fallbackTokenEl.value.trim();
+              const execute = async (useFallbackToken = false) => {
+                const headers = {};
+                if (body !== undefined) {
+                  headers["Content-Type"] = "application/json";
+                }
+                if (useFallbackToken && fallbackToken) {
+                  headers["Authorization"] = `Bearer ${fallbackToken}`;
+                }
+                const response = await fetch(apiUrl(path), {
+                  method,
+                  headers,
+                  credentials: "same-origin",
+                  body: body === undefined ? undefined : JSON.stringify(body),
+                });
+                const text = await response.text();
+                let data;
+                try {
+                  data = text ? JSON.parse(text) : {};
+                } catch {
+                  data = { raw: text };
+                }
+                return { response, data };
+              };
+
+              let usedFallbackToken = false;
+              let { response, data } = await execute(false);
+              if (response.status === 401 && fallbackToken) {
+                usedFallbackToken = true;
+                ({ response, data } = await execute(true));
               }
               if (!response.ok) {
+                if (response.status === 401) {
+                  throw new Error(authErrorMessage(usedFallbackToken));
+                }
                 throw new Error(data.detail || data.raw || `HTTP ${response.status}`);
               }
               return data;
@@ -1299,6 +1556,44 @@ def phase5_console() -> str:
             const truncate = (value, limit = 220) => {
               const text = String(value || "");
               return text.length > limit ? `${text.slice(0, limit)}...` : text;
+            };
+            const nextStepText = (task) => {
+              if (!task) return "先刷新最近任务，再点一条卡片。";
+              if (task.error) return `先处理这个报错：${task.error}`;
+              if (READY_STATUSES.has(task.status)) return "这条已经审过了，下一步是决定是否推草稿。";
+              if (WAITING_STATUSES.has(task.status)) return "这条需要你判断是否通过还是退回重写。";
+              if (FAILED_STATUSES.has(task.status)) return "这条先看错误，再决定补数据还是重跑。";
+              if (task.status === "draft_saved") return "这条已经进草稿箱，可以去公众号后台检查并发布。";
+              return "系统还在推进，先看右侧工作区和最新状态。";
+            };
+            const renderOverview = (tasks = []) => {
+              const manualCount = tasks.filter((task) => WAITING_STATUSES.has(task.status)).length;
+              const readyCount = tasks.filter((task) => READY_STATUSES.has(task.status)).length;
+              const failedCount = tasks.filter((task) => FAILED_STATUSES.has(task.status)).length;
+              let focus = "先刷新最近任务，再点一条卡片进入工作区。";
+              let note = "右侧工作区会集中展示当前动作、草稿状态、版本差异和审计轨迹。";
+              if (manualCount > 0) {
+                focus = `先处理 ${manualCount} 条待人工判断任务`;
+                note = "优先看待人工审核和待重生成任务，避免稿件停在最后一步。";
+              } else if (readyCount > 0) {
+                focus = `有 ${readyCount} 条任务已经待推草稿`;
+                note = "先确认最新一稿和推稿许可，再决定是否推送到微信草稿箱。";
+              } else if (failedCount > 0) {
+                focus = `有 ${failedCount} 条异常任务需要排查`;
+                note = "优先看失败任务的错误信息，再决定补源文、重跑 P3 还是重跑 P4。";
+              } else if (tasks.length > 0) {
+                focus = "当前列表没有卡住任务，可以按更新时间继续检查。";
+                note = "先抽查最新几条任务，确认审稿结论、草稿状态和推稿许可一致。";
+              }
+              overviewTotalEl.textContent = String(tasks.length);
+              overviewManualEl.textContent = String(manualCount);
+              overviewReadyEl.textContent = String(readyCount);
+              overviewFailedEl.textContent = String(failedCount);
+              overviewFocusEl.textContent = focus;
+              overviewFocusNoteEl.textContent = note;
+              if (heroFocusEl) {
+                heroFocusEl.textContent = focus;
+              }
             };
 
             const scorePillClass = (decision) => {
@@ -1588,11 +1883,16 @@ def phase5_console() -> str:
 
             const fetchWorkspace = async (taskId) => {
               if (!taskId) throw new Error("请先输入 task_id");
-              const data = await request("GET", `/api/v1/tasks/${taskId}/workspace`);
-              renderWorkspace(data);
-              renderOutput(data);
-              scrollWorkspaceIntoView();
-              return data;
+              workspaceEl.setAttribute("aria-busy", "true");
+              try {
+                const data = await request("GET", `/api/v1/tasks/${taskId}/workspace`);
+                renderWorkspace(data);
+                renderOutput(data);
+                scrollWorkspaceIntoView();
+                return data;
+              } finally {
+                workspaceEl.setAttribute("aria-busy", "false");
+              }
             };
 
             const setTaskId = (taskId) => {
@@ -1601,6 +1901,7 @@ def phase5_console() -> str:
             };
 
             const renderRecentBoard = (tasks) => {
+              renderOverview(Array.isArray(tasks) ? tasks : []);
               if (!Array.isArray(tasks) || tasks.length === 0) {
                 recentSummaryEl.innerHTML = "";
                 recentListEl.innerHTML = '<div class="hint">当前筛选条件下没有任务。</div>';
@@ -1633,6 +1934,7 @@ def phase5_console() -> str:
                         .map((task) => `
                           <div class="task-card">
                             <h3>${escapeHtml(task.title || "未命名任务")}</h3>
+                            <div class="hint">${escapeHtml(nextStepText(task))}</div>
                             <div class="meta">
                               <div><strong>task_id</strong> ${escapeHtml(task.task_id)}</div>
                               <div><strong>状态</strong> ${escapeHtml(task.status)} · ${escapeHtml(task.progress)}%</div>
@@ -1660,16 +1962,21 @@ def phase5_console() -> str:
             };
 
             const refreshRecent = async () => {
+              setPanelsBusy(true);
               const params = new URLSearchParams();
-              params.set("limit", String(Math.min(Math.max(Number(recentLimitEl.value) || 18, 1), 50)));
-              if (recentActiveEl.checked) {
-                params.set("active_only", "true");
+              try {
+                params.set("limit", String(Math.min(Math.max(Number(recentLimitEl.value) || 18, 1), 50)));
+                if (recentActiveEl.checked) {
+                  params.set("active_only", "true");
+                }
+                if (recentStatusEl.value) {
+                  params.set("status", recentStatusEl.value);
+                }
+                const tasks = await request("GET", `/api/v1/tasks?${params.toString()}`);
+                renderRecentBoard(tasks);
+              } finally {
+                setPanelsBusy(false);
               }
-              if (recentStatusEl.value) {
-                params.set("status", recentStatusEl.value);
-              }
-              const tasks = await request("GET", `/api/v1/tasks?${params.toString()}`);
-              renderRecentBoard(tasks);
             };
 
             const buildIngestPayload = () => {
@@ -1826,6 +2133,7 @@ def phase5_console() -> str:
               });
             });
 
+            fallbackTokenEl.addEventListener("change", saveDraft);
             [recentStatusEl, recentLimitEl, recentActiveEl].forEach((element) => {
               element.addEventListener("change", async () => {
                 try {
@@ -1911,13 +2219,12 @@ def phase5_console() -> str:
             });
 
             loadDraft();
-            if (tokenEl.value.trim()) {
-              refreshRecent().catch(() => {
-                recentListEl.innerHTML = '<div class="hint">最近任务加载失败，请确认 Bearer Token 后重试。</div>';
-              });
-            } else {
-              recentListEl.innerHTML = '<div class="hint">先输入 Bearer Token，再点“刷新最近任务”。</div>';
-            }
+            renderOverview([]);
+            refreshRecent().catch((error) => {
+              renderOverview([]);
+              recentListEl.innerHTML = `<div class="hint">${escapeHtml(error.message || "最近任务加载失败，请稍后重试。")}</div>`;
+              renderOutput(error.message || String(error));
+            });
           </script>
         </body>
         </html>
@@ -1950,12 +2257,14 @@ def phase6_console() -> str:
               --accent: #2b6f58;
               --accent-dark: #1b4b3b;
               --danger: #9b4130;
+              --warn: #a87418;
               --ink: #163028;
               --shadow: 0 18px 46px rgba(24, 42, 29, 0.1);
             }
             * { box-sizing: border-box; }
             body {
               margin: 0;
+              line-height: 1.5;
               color: var(--text);
               font-family: "PingFang SC", "Noto Serif SC", serif;
               background:
@@ -1964,15 +2273,48 @@ def phase6_console() -> str:
                 linear-gradient(140deg, #e9eee7 0%, #f3f6f0 42%, #e7eee5 100%);
               min-height: 100vh;
             }
+            .skip-link {
+              position: absolute;
+              top: 16px;
+              left: 16px;
+              transform: translateY(-180%);
+              padding: 10px 14px;
+              border-radius: 999px;
+              background: var(--accent-dark);
+              color: #f7faf8;
+              text-decoration: none;
+              z-index: 20;
+              transition: transform 120ms ease;
+            }
+            .skip-link:focus-visible {
+              transform: translateY(0);
+            }
             main {
               max-width: 1280px;
               margin: 0 auto;
-              padding: 32px 20px 48px;
+              padding: 32px 20px 52px;
             }
             .hero {
               display: grid;
-              gap: 10px;
+              gap: 14px;
+              padding: 24px;
+              border: 1px solid var(--line);
+              border-radius: 28px;
+              background: linear-gradient(135deg, rgba(252, 255, 250, 0.94), rgba(244, 249, 242, 0.9));
+              box-shadow: var(--shadow);
+              backdrop-filter: blur(10px);
               margin-bottom: 20px;
+            }
+            .hero-grid {
+              display: grid;
+              grid-template-columns: minmax(0, 1.24fr) minmax(320px, 0.94fr);
+              gap: 18px;
+              align-items: stretch;
+            }
+            .hero-copy {
+              display: grid;
+              gap: 10px;
+              align-content: start;
             }
             .eyebrow {
               display: inline-flex;
@@ -1986,18 +2328,93 @@ def phase6_console() -> str:
             }
             .hero h1 {
               margin: 0;
-              font-size: 40px;
+              font-size: 42px;
               line-height: 1.04;
             }
             .hero p {
               margin: 0;
-              max-width: 860px;
+              max-width: 820px;
               color: var(--muted);
               line-height: 1.75;
             }
+            .hero-status-card {
+              display: grid;
+              gap: 14px;
+              padding: 18px;
+              border-radius: 24px;
+              border: 1px solid rgba(43, 111, 88, 0.14);
+              background: linear-gradient(160deg, rgba(255, 255, 252, 0.95), rgba(244, 249, 242, 0.92));
+            }
+            .hero-status-copy {
+              margin: 0;
+              font-size: 15px;
+              line-height: 1.7;
+            }
+            .hero-summary {
+              display: grid;
+              grid-template-columns: repeat(2, minmax(0, 1fr));
+              gap: 10px;
+            }
+            .hero-summary-card {
+              display: grid;
+              gap: 6px;
+              padding: 12px 14px;
+              border-radius: 18px;
+              border: 1px solid rgba(22, 48, 40, 0.08);
+              background: rgba(255, 255, 252, 0.82);
+            }
+            .hero-summary-card strong {
+              color: var(--muted);
+              font-size: 12px;
+              font-weight: 500;
+            }
+            .hero-summary-card span {
+              font-size: 16px;
+              line-height: 1.55;
+            }
+            .hero-summary-card.wide {
+              grid-column: 1 / -1;
+              background: linear-gradient(135deg, rgba(43, 111, 88, 0.1), rgba(252, 255, 250, 0.96));
+            }
+            .overview-strip {
+              display: grid;
+              grid-template-columns: repeat(4, minmax(0, 1fr));
+              gap: 12px;
+              margin-bottom: 20px;
+            }
+            .overview-card {
+              display: grid;
+              gap: 8px;
+              min-width: 0;
+              padding: 16px;
+              border-radius: 20px;
+              border: 1px solid var(--line);
+              background: rgba(250, 255, 248, 0.88);
+              box-shadow: 0 14px 32px rgba(24, 42, 29, 0.08);
+            }
+            .overview-card.highlight {
+              grid-column: span 2;
+              background: linear-gradient(135deg, rgba(43, 111, 88, 0.1), rgba(252, 255, 250, 0.96));
+            }
+            .overview-card strong {
+              color: var(--muted);
+              font-size: 12px;
+              font-weight: 500;
+            }
+            .overview-card span {
+              display: block;
+              font-size: 28px;
+              line-height: 1.1;
+            }
+            .overview-card p {
+              margin: 0;
+              color: var(--muted);
+              font-size: 13px;
+              line-height: 1.7;
+            }
             .layout {
               display: grid;
-              grid-template-columns: 420px minmax(0, 1fr);
+              grid-template-columns: 380px minmax(0, 1fr);
               gap: 18px;
               align-items: start;
             }
@@ -2017,6 +2434,12 @@ def phase6_console() -> str:
               margin: 0 0 14px;
               font-size: 18px;
             }
+            .panel-intro {
+              margin: 0 0 14px;
+              color: var(--muted);
+              font-size: 13px;
+              line-height: 1.7;
+            }
             .grid {
               display: grid;
               grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -2024,6 +2447,16 @@ def phase6_console() -> str:
             }
             .grid.single {
               grid-template-columns: 1fr;
+            }
+            .field {
+              display: grid;
+              gap: 6px;
+            }
+            .field-hint {
+              margin: 0;
+              color: var(--muted);
+              font-size: 13px;
+              line-height: 1.7;
             }
             label {
               display: block;
@@ -2042,6 +2475,15 @@ def phase6_console() -> str:
               color: var(--text);
               border: 1px solid var(--line);
             }
+            input:focus-visible,
+            textarea:focus-visible,
+            select:focus-visible,
+            button:focus-visible,
+            a:focus-visible,
+            summary:focus-visible {
+              outline: 2px solid rgba(43, 111, 88, 0.2);
+              outline-offset: 3px;
+            }
             textarea {
               min-height: 120px;
               resize: vertical;
@@ -2054,31 +2496,71 @@ def phase6_console() -> str:
               color: #f7fdf8;
               transition: transform 0.12s ease, background 0.12s ease;
             }
-            button:hover { background: var(--accent-dark); transform: translateY(-1px); }
-            button.secondary { background: #d2e1d5; color: var(--ink); }
-            button.danger { background: var(--danger); color: #fff7f3; }
+            button:hover {
+              background: var(--accent-dark);
+              transform: translateY(-1px);
+            }
+            button.secondary {
+              background: #d2e1d5;
+              color: var(--ink);
+            }
+            button.danger {
+              background: var(--danger);
+              color: #fff7f3;
+            }
+            button.warn {
+              background: var(--warn);
+              color: #fff9ea;
+            }
             button[aria-busy="true"] {
               opacity: 0.82;
               cursor: progress;
             }
             .actions {
-              display: flex;
-              flex-wrap: wrap;
+              display: grid;
+              grid-template-columns: repeat(2, minmax(0, 1fr));
               gap: 10px;
               margin-top: 14px;
             }
-            .actions button {
-              width: auto;
-              min-width: 140px;
+            .actions.compact {
+              grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+            .action-blocks {
+              display: grid;
+              gap: 10px;
+              margin-top: 14px;
+            }
+            .action-block {
+              border: 1px solid var(--line);
+              border-radius: 18px;
+              padding: 12px;
+              background: rgba(255, 254, 251, 0.84);
+            }
+            .action-block h3 {
+              margin: 0 0 10px;
+              font-size: 13px;
+              color: var(--muted);
+            }
+            .action-grid {
+              display: grid;
+              grid-template-columns: repeat(2, minmax(0, 1fr));
+              gap: 10px;
             }
             .status {
-              display: inline-block;
-              padding: 6px 10px;
+              display: inline-flex;
+              padding: 7px 12px;
               border-radius: 999px;
               background: rgba(43, 111, 88, 0.14);
               color: var(--accent-dark);
               font-size: 12px;
-              margin-bottom: 12px;
+            }
+            .status.warn {
+              background: rgba(168, 116, 24, 0.18);
+              color: #85570f;
+            }
+            .status.danger {
+              background: rgba(155, 65, 48, 0.12);
+              color: var(--danger);
             }
             pre {
               margin: 0;
@@ -2104,6 +2586,9 @@ def phase6_console() -> str:
               grid-auto-rows: max-content;
               gap: 12px;
             }
+            .list[aria-busy="true"] {
+              opacity: 0.78;
+            }
             .card {
               border: 1px solid var(--line);
               border-radius: 18px;
@@ -2113,8 +2598,6 @@ def phase6_console() -> str:
               align-content: start;
               gap: 8px;
               min-width: 0;
-              position: relative;
-              isolation: isolate;
             }
             .card h3 {
               margin: 0;
@@ -2162,6 +2645,11 @@ def phase6_console() -> str:
               margin-top: 10px;
             }
             __ADMIN_NAV_STYLES__
+            @media (max-width: 1040px) {
+              .hero-grid { grid-template-columns: 1fr; }
+              .overview-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+              .overview-card.highlight { grid-column: span 2; }
+            }
             @media (max-width: 980px) {
               .layout { grid-template-columns: 1fr; }
             }
@@ -2169,75 +2657,147 @@ def phase6_console() -> str:
               main { padding: 22px 14px 36px; }
               .panel { padding: 16px; border-radius: 20px; }
               .hero h1 { font-size: 30px; }
-              .actions { flex-direction: column; }
-              .actions button { width: 100%; }
+              .hero-summary,
+              .overview-strip,
+              .actions,
+              .actions.compact,
+              .action-grid,
+              .grid {
+                grid-template-columns: 1fr;
+              }
+              .overview-card.highlight { grid-column: span 1; }
             }
           </style>
         </head>
         <body>
+          <a class="skip-link" href="#feedback-region">跳到反馈主区</a>
           <main>
             <section class="hero">
-              <span class="eyebrow">PHASE 6 FEEDBACK LOOP</span>
-              <h1>反馈台</h1>
-              <p>先选任务，再看反馈、实验和可复用的写法。</p>
+              <div class="hero-grid">
+                <div class="hero-copy">
+                  <span class="eyebrow">PHASE 6 FEEDBACK LOOP</span>
+                  <h1>反馈台</h1>
+                  <p>这里负责回收任务反馈、观察 prompt 实验表现，并沉淀已经验证过的写法资产。先锁定任务，再决定是查历史、补录反馈，还是把结论沉淀下来。</p>
+                </div>
+                <aside class="hero-status-card" aria-label="反馈页状态">
+                  <span class="status" id="status">等待输入</span>
+                  <p class="hero-status-copy" id="flash-message" role="status" aria-live="polite" aria-atomic="true">默认复用后台登录态。先补 task_id，再选择“查反馈”“同步”或“导入”。</p>
+                  <div class="hero-summary" aria-label="首屏提示">
+                    <div class="hero-summary-card">
+                      <strong>这页负责什么</strong>
+                      <span>把任务表现、实验趋势和复用资产串成一个反馈闭环。</span>
+                    </div>
+                    <div class="hero-summary-card">
+                      <strong>需要准备什么</strong>
+                      <span>task_id，以及必要时的 generation_id 和操作人标识；默认复用后台登录态。</span>
+                    </div>
+                    <div class="hero-summary-card wide">
+                      <strong>当前建议</strong>
+                      <span id="hero-focus">先补 task_id，再看当前任务有没有已有反馈。</span>
+                    </div>
+                  </div>
+                </aside>
+              </div>
               __ADMIN_SECTION_NAV__
             </section>
 
-            <section class="layout">
+            <section class="overview-strip" aria-label="反馈概览">
+              <article class="overview-card">
+                <strong>当前任务反馈</strong>
+                <span id="overview-feedback-count">0</span>
+                <p>按当前 task_id 回收到的反馈快照数量。</p>
+              </article>
+              <article class="overview-card">
+                <strong>实验榜样本</strong>
+                <span id="overview-experiment-count">0</span>
+                <p>当前页已拉下来的 prompt 实验排行条目数。</p>
+              </article>
+              <article class="overview-card">
+                <strong>风格资产</strong>
+                <span id="overview-asset-count">0</span>
+                <p>当前页已拉下来的可复用写法资产数量。</p>
+              </article>
+              <article class="overview-card highlight">
+                <strong>当前优先</strong>
+                <span id="overview-focus">先补 task_id，再看当前任务有没有已有反馈。</span>
+                <p id="overview-focus-note">没有 task_id 时，只有实验榜和资产库能独立查询；导入与同步都需要任务上下文。</p>
+              </article>
+            </section>
+
+            <section class="layout" id="feedback-region">
               <div class="stack">
                 <section class="panel">
-                  <h2>先选任务</h2>
+                  <h2>先准备</h2>
+                  <p class="panel-intro">这一列负责任务上下文。页面默认复用后台登录态；查实验、查资产可以独立执行，但导入反馈、同步反馈、沉淀资产最好先带上当前任务。</p>
+                  <details class="fold">
+                    <summary>高级鉴权兜底</summary>
+                    <div class="grid single" style="margin-top: 12px;">
+                      <div class="field">
+                        <label for="fallback-token">Bearer Token（仅兜底）</label>
+                        <input id="fallback-token" type="password" placeholder="仅在未启用后台登录态时填写" aria-describedby="fallback-token-hint" />
+                      </div>
+                      <p class="field-hint" id="fallback-token-hint">页面会先复用当前后台登录态。只有请求返回 401 且当前环境没有启用后台 Basic Auth 时，才需要在这里临时填入 `API_BEARER_TOKEN`。</p>
+                    </div>
+                  </details>
                   <div class="grid single">
-                    <div>
-                      <label for="token">Bearer Token</label>
-                      <input id="token" type="password" placeholder="输入 API_BEARER_TOKEN" />
-                    </div>
-                    <p class="hint" style="margin: 0;">第一次打开时填一次就行，页面会先记住。</p>
-                    <div>
+                    <div class="field">
                       <label for="task-id">Task ID</label>
-                      <input id="task-id" type="text" placeholder="f703c3ef-..." />
+                      <input id="task-id" type="text" placeholder="f703c3ef-..." aria-describedby="task-id-hint" />
                     </div>
-                    <div>
-                      <label for="generation-id">Generation ID（可选）</label>
-                      <input id="generation-id" type="text" placeholder="默认取 latest accepted / latest" />
+                    <p class="field-hint" id="task-id-hint">建议先锁定 task_id，再看反馈快照和后续动作。没有 task_id 时，手工导入和同步会失败。</p>
+                    <div class="grid">
+                      <div class="field">
+                        <label for="generation-id">Generation ID（可选）</label>
+                        <input id="generation-id" type="text" placeholder="默认取 latest accepted / latest" aria-describedby="generation-id-hint" />
+                      </div>
+                      <div class="field">
+                        <label for="operator">操作人</label>
+                        <input id="operator" type="text" value="admin-console" aria-describedby="operator-hint" />
+                      </div>
                     </div>
-                    <div>
-                      <label for="operator">操作人</label>
-                      <input id="operator" type="text" value="admin-console" />
-                    </div>
+                    <p class="field-hint" id="generation-id-hint">不填时默认取最新 accepted generation；如果任务还没 accepted，会回退到最近一次 generation。</p>
+                    <p class="field-hint" id="operator-hint">会写入导入记录和资产审计日志，建议填当前值班人或操作来源。</p>
                   </div>
-                  <div class="actions">
-                    <button id="query-feedback" class="secondary">查反馈</button>
-                    <button id="refresh-experiments" class="secondary">查实验</button>
-                    <button id="refresh-assets" class="secondary">查资产</button>
-                    <button id="clear-output" class="danger">清空</button>
+                  <div class="action-blocks">
+                    <article class="action-block">
+                      <h3>先看现状</h3>
+                      <div class="action-grid">
+                        <button id="query-feedback" class="secondary">查反馈</button>
+                        <button id="refresh-experiments" class="secondary">查实验</button>
+                        <button id="refresh-assets" class="secondary">查资产</button>
+                        <button id="clear-output" class="danger">清空输出</button>
+                      </div>
+                    </article>
                   </div>
                 </section>
 
                 <section class="panel">
                   <h2>自动同步</h2>
+                  <p class="panel-intro">这一步只处理已经成功入草稿的任务。建议先查反馈确认哪些窗口还空着，再决定立即同步、单任务入队，还是扫最近草稿批量入队。</p>
                   <div class="grid">
-                    <div>
+                    <div class="field">
                       <label for="sync-day-offsets">同步窗口（逗号分隔）</label>
-                      <input id="sync-day-offsets" type="text" value="1,3,7" />
+                      <input id="sync-day-offsets" type="text" value="1,3,7" aria-describedby="sync-day-offsets-hint" />
                     </div>
-                    <div>
+                    <div class="field">
                       <label for="sync-limit">扫描最近草稿数</label>
-                      <input id="sync-limit" type="number" min="1" max="100" value="20" />
+                      <input id="sync-limit" type="number" min="1" max="100" value="20" aria-describedby="sync-limit-hint" />
                     </div>
                   </div>
-                  <div class="actions">
+                  <p class="field-hint" id="sync-day-offsets-hint">通常用 `1,3,7`，分别对应 T+1、T+3、T+7 反馈窗口。</p>
+                  <p class="field-hint" id="sync-limit-hint">只对“扫描入队”生效，用来限制最近要扫多少条已入草稿任务。</p>
+                  <div class="actions compact">
                     <button id="run-feedback-sync">立即同步</button>
-                    <button id="queue-feedback-sync" class="secondary">入队同步</button>
+                    <button id="queue-feedback-sync" class="secondary">单任务入队</button>
                     <button id="queue-recent-feedback-sync" class="secondary">扫描入队</button>
                   </div>
-                  <p class="hint">这里只处理已经成功入草稿的任务。</p>
                 </section>
 
                 <section class="panel">
                   <h2>导入反馈</h2>
+                  <p class="panel-intro">当微信后台数据需要人工抄录时，用这里补 T+1、T+3、T+7 的快照。备注里最好写清楚数据来源和时间，方便后续复盘。</p>
                   <div class="grid">
-                    <div>
+                    <div class="field">
                       <label for="day-offset">观察窗口</label>
                       <select id="day-offset">
                         <option value="1">T+1</option>
@@ -2245,47 +2805,47 @@ def phase6_console() -> str:
                         <option value="7">T+7</option>
                       </select>
                     </div>
-                    <div>
+                    <div class="field">
                       <label for="snapshot-at">快照时间（ISO，可选）</label>
                       <input id="snapshot-at" type="text" placeholder="2026-03-08T10:00:00+08:00" />
                     </div>
-                    <div>
+                    <div class="field">
                       <label for="read-count">阅读数</label>
                       <input id="read-count" type="number" min="0" placeholder="1200" />
                     </div>
-                    <div>
+                    <div class="field">
                       <label for="like-count">点赞数</label>
                       <input id="like-count" type="number" min="0" placeholder="86" />
                     </div>
-                    <div>
+                    <div class="field">
                       <label for="share-count">转发数</label>
                       <input id="share-count" type="number" min="0" placeholder="14" />
                     </div>
-                    <div>
+                    <div class="field">
                       <label for="comment-count">评论数</label>
                       <input id="comment-count" type="number" min="0" placeholder="3" />
                     </div>
-                    <div>
+                    <div class="field">
                       <label for="click-rate">点击率（可选）</label>
                       <input id="click-rate" type="number" min="0" step="0.0001" placeholder="0.1825" />
                     </div>
-                    <div>
+                    <div class="field">
                       <label for="media-id">media_id（可选）</label>
                       <input id="media-id" type="text" placeholder="默认回填最近草稿 media_id" />
                     </div>
                   </div>
-                  <div style="margin-top: 12px;">
+                  <div class="field" style="margin-top: 12px;">
                     <label for="feedback-notes">导入备注</label>
                     <textarea id="feedback-notes" placeholder="例如：后台手工抄录 T+1 数据"></textarea>
                   </div>
                   <div class="actions">
-                    <button id="import-feedback">导入</button>
+                    <button id="import-feedback">导入反馈</button>
                   </div>
-                  <p class="hint">不填 Generation ID 时，默认取最新 accepted generation。</p>
                 </section>
 
                 <section class="panel">
-                  <h2>更多工具</h2>
+                  <h2>辅助工具</h2>
+                  <p class="panel-intro">低频动作放到这里，避免打断主路径。只有在字段齐全、确认要批量处理或沉淀模板时再展开。</p>
                   <details class="fold">
                     <summary>批量导入 CSV</summary>
                     <div style="margin-top: 12px;">
@@ -2300,28 +2860,28 @@ def phase6_console() -> str:
                   <details class="fold">
                     <summary>新建风格资产</summary>
                     <div class="grid" style="margin-top: 12px;">
-                      <div>
+                      <div class="field">
                         <label for="asset-type">资产类型</label>
                         <input id="asset-type" type="text" value="opening_hook" />
                       </div>
-                      <div>
+                      <div class="field">
                         <label for="asset-title">标题</label>
                         <input id="asset-title" type="text" placeholder="反直觉开头模板" />
                       </div>
-                      <div>
+                      <div class="field">
                         <label for="asset-tags">标签（逗号分隔）</label>
                         <input id="asset-tags" type="text" placeholder="技术科普,误区纠偏" />
                       </div>
-                      <div>
+                      <div class="field">
                         <label for="asset-weight">权重</label>
                         <input id="asset-weight" type="number" min="0.1" step="0.1" value="1.0" />
                       </div>
                     </div>
-                    <div style="margin-top: 12px;">
+                    <div class="field" style="margin-top: 12px;">
                       <label for="asset-content">资产内容</label>
                       <textarea id="asset-content" placeholder="写下经过验证的标题模板、开头结构、段落骨架或转场句式"></textarea>
                     </div>
-                    <div style="margin-top: 12px;">
+                    <div class="field" style="margin-top: 12px;">
                       <label for="asset-notes">备注</label>
                       <textarea id="asset-notes" placeholder="可记录来源任务、适用题材、风险提醒"></textarea>
                     </div>
@@ -2335,32 +2895,32 @@ def phase6_console() -> str:
 
               <div class="stack">
                 <section class="panel">
-                  <h2>输出</h2>
-                  <span class="status" id="status">空闲</span>
+                  <h2>输出与提示</h2>
+                  <p class="panel-intro">这里保留最近一次请求返回，方便复制排错、核对导入结果，或确认自动同步到底做了什么。</p>
                   <pre id="output">等待输入...</pre>
                 </section>
 
                 <section class="panel">
                   <h2>任务反馈快照</h2>
-                  <p class="hint">这条任务已经回收到了哪些反馈。</p>
-                  <div class="list" id="task-feedback-list">
-                    <div class="hint">等待查询任务反馈...</div>
+                  <p class="panel-intro">按当前 task_id 展示已经回收到的反馈快照。空态时会提醒你下一步该查同步还是补录。</p>
+                  <div class="list" id="task-feedback-list" aria-busy="false">
+                    <div class="hint">先输入 task_id，再点击“查反馈”。</div>
                   </div>
                 </section>
 
                 <section class="panel">
                   <h2>Prompt 实验榜</h2>
-                  <p class="hint">哪套 prompt 更稳。</p>
-                  <div class="list" id="experiment-list">
-                    <div class="hint">等待加载实验榜...</div>
+                  <p class="panel-intro">比较不同 prompt 版本在各观察窗口里的稳定性，先看哪套更稳，再决定是否要固化成资产或继续观察。</p>
+                  <div class="list" id="experiment-list" aria-busy="false">
+                    <div class="hint">点击“查实验”拉一版最新样本。</div>
                   </div>
                 </section>
 
                 <section class="panel">
                   <h2>风格资产库</h2>
-                  <p class="hint">哪些写法值得留下来复用。</p>
-                  <div class="list" id="style-asset-list">
-                    <div class="hint">等待加载风格资产...</div>
+                  <p class="panel-intro">这里只保留已经验证过、值得复用的结构和句式，不收临时想法。先看历史资产，再决定是否新增。</p>
+                  <div class="list" id="style-asset-list" aria-busy="false">
+                    <div class="hint">点击“查资产”拉一版当前沉淀。</div>
                   </div>
                 </section>
               </div>
@@ -2368,7 +2928,7 @@ def phase6_console() -> str:
           </main>
 
           <script>
-            const tokenEl = document.getElementById("token");
+            const fallbackTokenEl = document.getElementById("fallback-token");
             const taskIdEl = document.getElementById("task-id");
             const generationIdEl = document.getElementById("generation-id");
             const operatorEl = document.getElementById("operator");
@@ -2392,15 +2952,30 @@ def phase6_console() -> str:
             const assetNotesEl = document.getElementById("asset-notes");
             const outputEl = document.getElementById("output");
             const statusEl = document.getElementById("status");
+            const flashMessageEl = document.getElementById("flash-message");
+            const heroFocusEl = document.getElementById("hero-focus");
             const taskFeedbackListEl = document.getElementById("task-feedback-list");
             const experimentListEl = document.getElementById("experiment-list");
             const styleAssetListEl = document.getElementById("style-asset-list");
+            const overviewFeedbackCountEl = document.getElementById("overview-feedback-count");
+            const overviewExperimentCountEl = document.getElementById("overview-experiment-count");
+            const overviewAssetCountEl = document.getElementById("overview-asset-count");
+            const overviewFocusEl = document.getElementById("overview-focus");
+            const overviewFocusNoteEl = document.getElementById("overview-focus-note");
+            let currentTaskFeedbackCount = 0;
+            let currentExperimentItems = [];
+            let currentAssetItems = [];
 
             const escapeHtml = (value) => String(value ?? "")
               .replaceAll("&", "&amp;")
               .replaceAll("<", "&lt;")
               .replaceAll(">", "&gt;")
               .replaceAll('"', "&quot;");
+            const truncate = (value, length = 16) => {
+              const text = String(value ?? "");
+              if (!text || text.length <= length) return text || "当前任务";
+              return `${text.slice(0, length)}...`;
+            };
 
             const formatDate = (value) => {
               if (!value) return "未知";
@@ -2409,11 +2984,24 @@ def phase6_console() -> str:
               return date.toLocaleString("zh-CN", { hour12: false });
             };
 
-            const setStatus = (value) => { statusEl.textContent = value; };
+            const setStatus = (value, tone = "", message = value) => {
+              statusEl.textContent = value;
+              statusEl.className = `status ${tone}`.trim();
+              if (flashMessageEl) {
+                flashMessageEl.textContent = message;
+              }
+            };
             const renderOutput = (value) => {
               outputEl.textContent = typeof value === "string" ? value : JSON.stringify(value, null, 2);
             };
             const apiUrl = (path) => new URL(path, window.location.origin).toString();
+            const setListBusy = (element, busy, loadingText = "") => {
+              if (!element) return;
+              element.setAttribute("aria-busy", busy ? "true" : "false");
+              if (busy && loadingText) {
+                element.innerHTML = `<div class="hint">${escapeHtml(loadingText)}</div>`;
+              }
+            };
             const setButtonBusy = (button, busy, pendingLabel = "处理中...") => {
               if (!button) return;
               if (!button.dataset.defaultLabel) {
@@ -2429,15 +3017,47 @@ def phase6_console() -> str:
               try {
                 await work();
               } catch (error) {
-                setStatus("失败");
+                setStatus("失败", "danger", "最近一次操作失败，详见输出区域。");
                 renderOutput(error.message || String(error));
               } finally {
                 setButtonBusy(button, false);
               }
             };
+            const authErrorMessage = (usedFallbackToken) => usedFallbackToken
+              ? "高级鉴权兜底里的 Bearer Token 未通过校验，请确认填写的是当前环境的 API_BEARER_TOKEN。"
+              : "当前页面默认复用后台登录态。若这个环境没有配置后台登录，请展开“高级鉴权兜底”后填入 Bearer Token。";
+            const renderOverview = () => {
+              const taskId = taskIdEl.value.trim();
+              overviewFeedbackCountEl.textContent = String(currentTaskFeedbackCount);
+              overviewExperimentCountEl.textContent = String(currentExperimentItems.length);
+              overviewAssetCountEl.textContent = String(currentAssetItems.length);
+              let focus = "先补 task_id，再看当前任务有没有已有反馈。";
+              let note = "没有 task_id 时，只有实验榜和资产库能独立查询；导入与同步都需要任务上下文。";
+              if (!taskId) {
+                focus = "可以先查实验榜和资产库，但要补反馈或做同步前，先补上 task_id。";
+                note = "task_id 决定反馈快照、自动同步和资产来源归属。";
+              } else if (currentTaskFeedbackCount === 0) {
+                focus = `当前任务 ${truncate(taskId, 12)} 还没看到反馈，先查反馈，再决定同步还是手工导入。`;
+                note = "同步只处理已入草稿任务；如果数据来自微信后台手工抄录，用“导入反馈”最直接。";
+              } else if (!currentExperimentItems.length) {
+                focus = "已有任务反馈，接着刷新实验榜，看哪套 prompt 更稳。";
+                note = "实验榜适合判断是否继续用当前 prompt，或者要不要把结论固化成资产。";
+              } else if (!currentAssetItems.length) {
+                focus = "实验榜已经加载，可以把稳定写法沉淀成风格资产。";
+                note = "只记录已经验证过、会重复复用的结构或句式，避免把临时想法写进资产库。";
+              } else {
+                focus = "反馈、实验和资产都已就绪，可以围绕当前任务做完整复盘。";
+                note = "优先看早期反馈，再结合实验榜判断是否要补新资产或调整后续策略。";
+              }
+              overviewFocusEl.textContent = focus;
+              overviewFocusNoteEl.textContent = note;
+              if (heroFocusEl) {
+                heroFocusEl.textContent = focus;
+              }
+            };
 
             const loadDraft = () => {
-              tokenEl.value = localStorage.getItem("phase6_console_token") || "";
+              fallbackTokenEl.value = localStorage.getItem("phase6_console_fallback_token") || "";
               taskIdEl.value = localStorage.getItem("phase6_console_task_id") || "";
               generationIdEl.value = localStorage.getItem("phase6_console_generation_id") || "";
               operatorEl.value = localStorage.getItem("phase6_console_operator") || "admin-console";
@@ -2446,7 +3066,7 @@ def phase6_console() -> str:
             };
 
             const saveDraft = () => {
-              localStorage.setItem("phase6_console_token", tokenEl.value.trim());
+              localStorage.setItem("phase6_console_fallback_token", fallbackTokenEl.value.trim());
               localStorage.setItem("phase6_console_task_id", taskIdEl.value.trim());
               localStorage.setItem("phase6_console_generation_id", generationIdEl.value.trim());
               localStorage.setItem("phase6_console_operator", operatorEl.value.trim());
@@ -2455,20 +3075,38 @@ def phase6_console() -> str:
             };
 
             const request = async (method, path, body) => {
-              const token = tokenEl.value.trim();
-              if (!token) throw new Error("缺少 Bearer Token");
-              const response = await fetch(apiUrl(path), {
-                method,
-                headers: {
-                  "Authorization": `Bearer ${token}`,
-                  "Content-Type": "application/json"
-                },
-                body: body ? JSON.stringify(body) : undefined
-              });
-              const text = await response.text();
-              let payload = text;
-              try { payload = JSON.parse(text); } catch (_) {}
+              saveDraft();
+              const fallbackToken = fallbackTokenEl.value.trim();
+              const execute = async (useFallbackToken = false) => {
+                const headers = {};
+                if (body !== undefined) {
+                  headers["Content-Type"] = "application/json";
+                }
+                if (useFallbackToken && fallbackToken) {
+                  headers["Authorization"] = `Bearer ${fallbackToken}`;
+                }
+                const response = await fetch(apiUrl(path), {
+                  method,
+                  headers,
+                  credentials: "same-origin",
+                  body: body === undefined ? undefined : JSON.stringify(body)
+                });
+                const text = await response.text();
+                let payload = text;
+                try { payload = JSON.parse(text); } catch (_) {}
+                return { response, payload };
+              };
+
+              let usedFallbackToken = false;
+              let { response, payload } = await execute(false);
+              if (response.status === 401 && fallbackToken) {
+                usedFallbackToken = true;
+                ({ response, payload } = await execute(true));
+              }
               if (!response.ok) {
+                if (response.status === 401) {
+                  throw new Error(authErrorMessage(usedFallbackToken));
+                }
                 throw new Error(typeof payload === "string" ? payload : JSON.stringify(payload, null, 2));
               }
               return payload;
@@ -2533,8 +3171,10 @@ def phase6_console() -> str:
 
             const renderTaskFeedback = (payload) => {
               const items = payload?.metrics || [];
+              currentTaskFeedbackCount = items.length;
               if (!items.length) {
-                taskFeedbackListEl.innerHTML = '<div class="hint">当前任务还没有反馈记录。</div>';
+                taskFeedbackListEl.innerHTML = '<div class="hint">当前任务还没有反馈记录。先确认是否已经入草稿，再决定用“立即同步”还是“导入反馈”。</div>';
+                renderOverview();
                 return;
               }
               taskFeedbackListEl.innerHTML = items.map((item) => `
@@ -2553,14 +3193,17 @@ def phase6_console() -> str:
                   </div>
                 </article>
               `).join("");
+              renderOverview();
             };
 
             const renderExperiments = (items) => {
-              if (!Array.isArray(items) || !items.length) {
-                experimentListEl.innerHTML = '<div class="hint">还没有实验样本。</div>';
+              currentExperimentItems = Array.isArray(items) ? items : [];
+              if (!currentExperimentItems.length) {
+                experimentListEl.innerHTML = '<div class="hint">还没有实验样本。等有更多反馈回流后，再来比较哪套 prompt 更稳。</div>';
+                renderOverview();
                 return;
               }
-              experimentListEl.innerHTML = items.map((item) => `
+              experimentListEl.innerHTML = currentExperimentItems.map((item) => `
                 <article class="card">
                   <h3>${escapeHtml(`${item.prompt_type} / ${item.prompt_version}`)}</h3>
                   <div class="pill-row">
@@ -2579,14 +3222,17 @@ def phase6_console() -> str:
                   </div>
                 </article>
               `).join("");
+              renderOverview();
             };
 
             const renderStyleAssets = (items) => {
-              if (!Array.isArray(items) || !items.length) {
-                styleAssetListEl.innerHTML = '<div class="hint">还没有风格资产。</div>';
+              currentAssetItems = Array.isArray(items) ? items : [];
+              if (!currentAssetItems.length) {
+                styleAssetListEl.innerHTML = '<div class="hint">还没有风格资产。先看实验榜和真实反馈，再把稳定写法沉淀下来。</div>';
+                renderOverview();
                 return;
               }
-              styleAssetListEl.innerHTML = items.map((item) => `
+              styleAssetListEl.innerHTML = currentAssetItems.map((item) => `
                 <article class="card">
                   <h3>${escapeHtml(item.title)}</h3>
                   <div class="pill-row">
@@ -2603,55 +3249,71 @@ def phase6_console() -> str:
                   </div>
                 </article>
               `).join("");
+              renderOverview();
             };
 
             const queryTaskFeedback = async () => {
               const taskId = taskIdEl.value.trim();
               if (!taskId) throw new Error("请先输入 task_id");
-              const payload = await request("GET", `/api/v1/tasks/${taskId}/feedback`);
-              renderTaskFeedback(payload);
-              return payload;
+              setListBusy(taskFeedbackListEl, true, "正在查询当前任务反馈...");
+              try {
+                const payload = await request("GET", `/api/v1/tasks/${taskId}/feedback`);
+                renderTaskFeedback(payload);
+                return payload;
+              } finally {
+                setListBusy(taskFeedbackListEl, false);
+              }
             };
 
             const refreshExperiments = async () => {
-              const items = await request("GET", "/api/v1/feedback/experiments?limit=12");
-              renderExperiments(items);
-              return items;
+              setListBusy(experimentListEl, true, "正在查询 prompt 实验榜...");
+              try {
+                const items = await request("GET", "/api/v1/feedback/experiments?limit=12");
+                renderExperiments(items);
+                return items;
+              } finally {
+                setListBusy(experimentListEl, false);
+              }
             };
 
             const refreshStyleAssets = async () => {
-              const items = await request("GET", "/api/v1/feedback/style-assets?limit=12");
-              renderStyleAssets(items);
-              return items;
+              setListBusy(styleAssetListEl, true, "正在查询风格资产...");
+              try {
+                const items = await request("GET", "/api/v1/feedback/style-assets?limit=12");
+                renderStyleAssets(items);
+                return items;
+              } finally {
+                setListBusy(styleAssetListEl, false);
+              }
             };
 
             document.getElementById("query-feedback").addEventListener("click", (event) => {
               withButtonBusy(event.currentTarget, "查询中...", async () => {
                 saveDraft();
-                setStatus("查反馈");
+                setStatus("查反馈", "", "正在查询当前任务的反馈快照。");
                 const payload = await queryTaskFeedback();
                 renderOutput(payload);
-                setStatus("完成");
+                setStatus("已完成", "", "任务反馈已更新，可以决定是否同步、补录或继续看实验榜。");
               });
             });
 
             document.getElementById("refresh-experiments").addEventListener("click", (event) => {
               withButtonBusy(event.currentTarget, "查询中...", async () => {
                 saveDraft();
-                setStatus("查实验");
+                setStatus("查实验", "", "正在刷新 prompt 实验榜。");
                 const items = await refreshExperiments();
                 renderOutput(items);
-                setStatus("完成");
+                setStatus("已完成", "", "实验榜已更新，可以对比哪套 prompt 更稳。");
               });
             });
 
             document.getElementById("refresh-assets").addEventListener("click", (event) => {
               withButtonBusy(event.currentTarget, "查询中...", async () => {
                 saveDraft();
-                setStatus("查资产");
+                setStatus("查资产", "", "正在刷新风格资产库。");
                 const items = await refreshStyleAssets();
                 renderOutput(items);
-                setStatus("完成");
+                setStatus("已完成", "", "风格资产已更新，可以判断是否还需要新增沉淀。");
               });
             });
 
@@ -2660,12 +3322,12 @@ def phase6_console() -> str:
                 saveDraft();
                 const taskId = taskIdEl.value.trim();
                 if (!taskId) throw new Error("请先输入 task_id");
-                setStatus("导入反馈中");
+                setStatus("导入中", "", "正在写入手工补录反馈，并回刷当前任务与实验榜。");
                 const result = await request("POST", `/internal/v1/tasks/${taskId}/import-feedback`, buildFeedbackPayload());
                 renderOutput(result);
                 await queryTaskFeedback();
                 await refreshExperiments();
-                setStatus("导入完成");
+                setStatus("导入完成", "", "反馈已补录完成，当前任务和实验榜都已回刷。");
               });
             });
 
@@ -2674,12 +3336,12 @@ def phase6_console() -> str:
                 saveDraft();
                 const taskId = taskIdEl.value.trim();
                 if (!taskId) throw new Error("请先输入 task_id");
-                setStatus("自动同步反馈中");
+                setStatus("同步中", "", "正在为当前任务拉取自动反馈，并回刷反馈快照与实验榜。");
                 const result = await request("POST", `/internal/v1/tasks/${taskId}/run-feedback-sync`, buildFeedbackSyncPayload());
                 renderOutput(result);
                 await queryTaskFeedback();
                 await refreshExperiments();
-                setStatus(`自动同步完成 (${result.imported_count})`);
+                setStatus(`同步完成 (${result.imported_count})`, "", `自动同步完成，新增 ${result.imported_count} 条反馈记录。`);
               });
             });
 
@@ -2688,20 +3350,20 @@ def phase6_console() -> str:
                 saveDraft();
                 const taskId = taskIdEl.value.trim();
                 if (!taskId) throw new Error("请先输入 task_id");
-                setStatus("反馈同步入队中");
+                setStatus("入队中", "", "正在把当前任务的反馈同步动作送入队列。");
                 const result = await request("POST", `/internal/v1/tasks/${taskId}/enqueue-feedback-sync`, buildFeedbackSyncPayload());
                 renderOutput(result);
-                setStatus(result.enqueued ? "已入队" : "已在队列中");
+                setStatus(result.enqueued ? "已入队" : "已在队列中", "", result.enqueued ? "当前任务的反馈同步已入队。" : "当前任务已经在反馈同步队列里。");
               });
             });
 
             document.getElementById("queue-recent-feedback-sync").addEventListener("click", (event) => {
               withButtonBusy(event.currentTarget, "扫描中...", async () => {
                 saveDraft();
-                setStatus("扫描最近草稿中");
+                setStatus("扫描中", "", "正在扫描最近已入草稿任务，并把缺反馈的任务入队。");
                 const result = await request("POST", "/internal/v1/feedback/enqueue-recent-sync", buildRecentFeedbackSyncPayload());
                 renderOutput(result);
-                setStatus(`已扫描 ${result.requested_count} 个任务，入队 ${result.enqueued_count} 个`);
+                setStatus(`已扫描 ${result.requested_count} 个任务`, "", `最近草稿扫描完成，共入队 ${result.enqueued_count} 个任务。`);
               });
             });
 
@@ -2709,14 +3371,14 @@ def phase6_console() -> str:
               withButtonBusy(event.currentTarget, "导入中...", async () => {
                 saveDraft();
                 if (!feedbackCsvEl.value.trim()) throw new Error("请先粘贴 CSV 内容");
-                setStatus("批量导入中");
+                setStatus("批量导入中", "", "正在按 CSV 批量写入反馈，并回刷实验榜。");
                 const result = await request("POST", "/internal/v1/feedback/import-csv", buildFeedbackCsvPayload());
                 renderOutput(result);
                 if (taskIdEl.value.trim()) {
                   await queryTaskFeedback();
                 }
                 await refreshExperiments();
-                setStatus(`批量导入完成 (${result.imported_count})`);
+                setStatus(`批量导入完成 (${result.imported_count})`, "", `CSV 导入完成，共写入 ${result.imported_count} 条反馈。`);
               });
             });
 
@@ -2726,23 +3388,39 @@ def phase6_console() -> str:
                 if (!assetTypeEl.value.trim() || !assetTitleEl.value.trim() || !assetContentEl.value.trim()) {
                   throw new Error("请填写资产类型、标题和内容");
                 }
-                setStatus("创建风格资产");
+                setStatus("创建资产中", "", "正在创建风格资产，并回刷资产库。");
                 const result = await request("POST", "/internal/v1/style-assets", buildStyleAssetPayload());
                 renderOutput(result);
                 await refreshStyleAssets();
-                setStatus("创建完成");
+                setStatus("创建完成", "", "风格资产已创建完成，可以继续整理其他稳定写法。");
               });
             });
 
             document.getElementById("clear-output").addEventListener("click", () => {
-              setStatus("空闲");
+              setStatus("已清空", "", "已清空最近一次输出；当前列表内容会保留。");
               renderOutput("等待输入...");
             });
 
+            [fallbackTokenEl, taskIdEl, generationIdEl, operatorEl, syncDayOffsetsEl, syncLimitEl].forEach((element) => {
+              const eventName = element === taskIdEl ? "input" : "change";
+              element.addEventListener(eventName, () => {
+                if (element === taskIdEl) {
+                  currentTaskFeedbackCount = 0;
+                  taskFeedbackListEl.innerHTML = '<div class="hint">task_id 已变更。点击“查反馈”加载这条任务的反馈快照。</div>';
+                }
+                saveDraft();
+                renderOverview();
+              });
+            });
+
             loadDraft();
-            if (tokenEl.value.trim()) {
-              Promise.allSettled([refreshExperiments(), refreshStyleAssets()]).catch(() => {});
-            }
+            renderOverview();
+            Promise.allSettled([refreshExperiments(), refreshStyleAssets()]).then((results) => {
+              const failed = results.find((item) => item.status === "rejected");
+              if (!failed) return;
+              setStatus("待鉴权", "warn", failed.reason?.message || "初始数据加载失败，详见输出区域。");
+              renderOutput(failed.reason?.message || "初始数据加载失败。");
+            });
           </script>
         </body>
         </html>

@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
+from app.core.security import verify_bearer_token
 from app.db.redis_client import get_redis_client
 from app.settings import get_settings
 
@@ -129,7 +130,9 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("人工驳回重写", response.text)
         self.assertIn("允许推稿", response.text)
         self.assertIn("禁止推稿", response.text)
+        self.assertIn("高级鉴权兜底", response.text)
         self.assertIn('aria-label="后台分区"', response.text)
+        self.assertIn('aria-current="page"', response.text)
         self.assertIn("const apiUrl = (path) => new URL(path, window.location.origin).toString();", response.text)
         self.assertIn("const scrollWorkspaceIntoView = () => {", response.text)
 
@@ -143,8 +146,17 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("统一控制台", response.text)
         self.assertIn("统一任务监控首页", response.text)
         self.assertIn("自动实时更新（优先 SSE，失败时回退轮询）", response.text)
+        self.assertIn("跳到监控主区", response.text)
+        self.assertIn("监控概览", response.text)
+        self.assertIn("这页负责什么", response.text)
         self.assertIn("队列与 Worker 观测", response.text)
         self.assertIn("打开 Phase 5 审核台", response.text)
+        self.assertIn("打开 Phase 6 反馈台", response.text)
+        self.assertIn('aria-label="后台分区"', response.text)
+        self.assertIn('role="status"', response.text)
+        self.assertIn(">总览<", response.text)
+        self.assertIn("当前筛选下没有任务。换个筛选看看。", response.text)
+        self.assertIn("下一步", response.text)
 
     def test_admin_settings_page_renders(self) -> None:
         app_module = reload(import_module("app.main"))
@@ -166,6 +178,7 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("辅助工具", response.text)
         self.assertIn("测试告警", response.text)
         self.assertIn("环境状态", response.text)
+        self.assertIn("高级鉴权兜底", response.text)
         self.assertIn("const apiUrl = (path) => new URL(path, window.location.origin).toString();", response.text)
 
     def test_admin_portal_page_renders(self) -> None:
@@ -201,6 +214,11 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("workspace-overview", response.text)
         self.assertIn("workspace-layout", response.text)
         self.assertIn("action-grid.single", response.text)
+        self.assertIn('const WAITING = new Set(["needs_manual_review", "needs_regenerate", "needs_manual_source"]);', response.text)
+        self.assertIn('const READY_TO_PUSH = new Set(["review_passed"]);', response.text)
+        self.assertIn("待推草稿", response.text)
+        self.assertIn("showBusy = true", response.text)
+        self.assertIn("loadSnapshot({ showBusy: false })", response.text)
         self.assertIn("当前筛选下没有任务。换个筛选看看。", response.text)
 
     def test_admin_phase6_page_renders(self) -> None:
@@ -211,18 +229,31 @@ class AppRouteTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("Phase 6 反馈台", response.text)
+        self.assertIn("跳到反馈主区", response.text)
+        self.assertIn("反馈概览", response.text)
+        self.assertIn("当前任务反馈", response.text)
         self.assertIn("自动同步", response.text)
         self.assertIn("导入反馈", response.text)
         self.assertIn("批量导入 CSV", response.text)
         self.assertIn("Prompt 实验榜", response.text)
         self.assertIn("风格资产库", response.text)
+        self.assertIn("这页负责什么", response.text)
         self.assertIn("哪套 prompt 更稳。", response.text)
-        self.assertIn("哪些写法值得留下来复用。", response.text)
+        self.assertIn("只把已经验证过、会重复用到的写法沉淀下来。", response.text)
         self.assertIn("立即同步", response.text)
         self.assertIn("导入 CSV", response.text)
         self.assertIn("新建资产", response.text)
-        self.assertIn(">总览<", response.text)
+        self.assertIn("高级鉴权兜底", response.text)
+        self.assertIn('aria-label="后台分区"', response.text)
+        self.assertIn('role="status"', response.text)
+        self.assertIn(">反馈<", response.text)
         self.assertIn("const apiUrl = (path) => new URL(path, window.location.origin).toString();", response.text)
+
+    def test_verify_bearer_token_accepts_admin_basic_auth_when_configured(self) -> None:
+        with patch.dict(os.environ, {"ADMIN_USERNAME": "admin", "ADMIN_PASSWORD": "secret-pass"}, clear=False):
+            get_settings.cache_clear()
+            encoded = base64.b64encode(b"admin:secret-pass").decode("ascii")
+            verify_bearer_token(authorization=f"Basic {encoded}")
 
     def test_admin_pages_require_basic_auth_when_configured(self) -> None:
         with patch.dict(os.environ, {"ADMIN_USERNAME": "admin", "ADMIN_PASSWORD": "secret-pass"}, clear=False):
