@@ -1399,7 +1399,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               filterButtons: Array.from(document.querySelectorAll("[data-filter]")),
             }};
 
-            const escapeHtml = (value) => (value || "")
+            const escapeHtml = (value) => String(value ?? "")
               .replaceAll("&", "&amp;")
               .replaceAll("<", "&lt;")
               .replaceAll(">", "&gt;")
@@ -4674,7 +4674,7 @@ def settings_console() -> str:
             const apiUrl = (path) => new URL(path, window.location.origin).toString();
 
             const escapeHtml = (value) =>
-              String(value)
+              String(value ?? "")
                 .replaceAll("&", "&amp;")
                 .replaceAll("<", "&lt;")
                 .replaceAll(">", "&gt;")
