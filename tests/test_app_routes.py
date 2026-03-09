@@ -143,6 +143,8 @@ class AppRouteTests(unittest.TestCase):
         self.assertNotIn("Bearer Token（仅兜底）", response.text)
         self.assertIn("const apiUrl = (path) => new URL(path, window.location.origin).toString();", response.text)
         self.assertIn("const scrollWorkspaceIntoView = () => {", response.text)
+        self.assertIn("data-task-card", response.text)
+        self.assertIn("data-filter-status", response.text)
 
     def test_admin_console_page_renders(self) -> None:
         app_module = reload(import_module("app.main"))

@@ -871,6 +871,29 @@ def phase5_console() -> str:
               gap: 8px;
               margin-bottom: 12px;
             }
+            .summary-pill {
+              width: auto;
+              min-width: 0;
+              padding: 6px 10px;
+              border-radius: 999px;
+              border: 1px solid var(--line);
+              background: #fffdf8;
+              color: var(--muted);
+              font-size: 12px;
+              cursor: pointer;
+              transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+            }
+            .summary-pill:hover {
+              background: #efe3ca;
+              color: #684d22;
+              border-color: #d8c8aa;
+              transform: none;
+            }
+            .summary-pill.active {
+              background: #efe3ca;
+              color: #684d22;
+              border-color: #d8c8aa;
+            }
             .board[aria-busy="true"], .workspace[aria-busy="true"] {
               opacity: 0.82;
             }
@@ -904,6 +927,19 @@ def phase5_console() -> str:
               min-width: 0;
               position: relative;
               isolation: isolate;
+            }
+            .task-card[data-task-card] {
+              cursor: pointer;
+              transition: transform 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+            }
+            .task-card[data-task-card]:hover {
+              transform: translateY(-1px);
+              border-color: rgba(29, 106, 95, 0.24);
+              box-shadow: 0 14px 28px rgba(53, 36, 16, 0.08);
+            }
+            .task-card.selected {
+              border-color: rgba(29, 106, 95, 0.3);
+              box-shadow: 0 16px 30px rgba(29, 106, 95, 0.08);
             }
             .task-card h3, .detail-card h3, .generation-card h3 {
               margin: 0 0 8px;
@@ -2127,6 +2163,22 @@ def phase5_console() -> str:
             const setTaskId = (taskId) => {
               taskEl.value = taskId;
               saveDraft();
+              syncRecentSelection();
+            };
+            const syncRecentSelection = () => {
+              const selectedTaskId = taskEl.value.trim();
+              recentListEl.querySelectorAll("[data-task-card]").forEach((card) => {
+                const active = card.getAttribute("data-task-id") === selectedTaskId;
+                card.classList.toggle("selected", active);
+                card.setAttribute("aria-pressed", active ? "true" : "false");
+              });
+            };
+            const loadWorkspaceFromList = async (taskId) => {
+              if (!taskId) return;
+              setTaskId(taskId);
+              setStatus("加载工作台");
+              await fetchWorkspace(taskId);
+              syncRecentSelection();
             };
 
             const renderRecentBoard = (tasks) => {
@@ -2146,10 +2198,20 @@ def phase5_console() -> str:
                 ...Object.keys(counts).filter((item) => !STATUS_ORDER.includes(item)).sort(),
               ];
 
-              recentSummaryEl.innerHTML = orderedStatuses
-                .map((item) => `<span class="pill">${escapeHtml(statusLabel(item))} · ${escapeHtml(counts[item])}</span>`)
+              const activeStatus = recentStatusEl.value || "";
+              recentSummaryEl.innerHTML = [
+                `<button type="button" class="summary-pill ${activeStatus === "" ? "active" : ""}" data-filter-status="">全部 · ${escapeHtml(tasks.length)}</button>`,
+                ...orderedStatuses.map((item) => `
+                  <button
+                    type="button"
+                    class="summary-pill ${activeStatus === item ? "active" : ""}"
+                    data-filter-status="${escapeHtml(item)}"
+                  >${escapeHtml(statusLabel(item))} · ${escapeHtml(counts[item])}</button>
+                `),
+              ]
                 .join("");
 
+              const selectedTaskId = taskEl.value.trim();
               recentListEl.innerHTML = orderedStatuses
                 .map((groupStatus) => `
                   <section class="group-block">
@@ -2161,7 +2223,14 @@ def phase5_console() -> str:
                       ${tasks
                         .filter((task) => task.status === groupStatus)
                         .map((task) => `
-                          <div class="task-card">
+                          <div
+                            class="task-card ${selectedTaskId === task.task_id ? "selected" : ""}"
+                            data-task-card="true"
+                            data-task-id="${escapeHtml(task.task_id)}"
+                            role="button"
+                            tabindex="0"
+                            aria-pressed="${selectedTaskId === task.task_id ? "true" : "false"}"
+                          >
                             <h3>${escapeHtml(task.title || "未命名任务")}</h3>
                             <div class="hint">${escapeHtml(nextStepText(task))}</div>
                             <div class="meta">
@@ -2363,6 +2432,21 @@ def phase5_console() -> str:
               });
             });
 
+            recentSummaryEl.addEventListener("click", async (event) => {
+              const button = event.target.closest("[data-filter-status]");
+              if (!button) return;
+              const nextStatus = button.getAttribute("data-filter-status") || "";
+              recentStatusEl.value = recentStatusEl.value === nextStatus ? "" : nextStatus;
+              try {
+                setStatus("刷新列表中");
+                await refreshRecent();
+                setStatus("空闲");
+              } catch (error) {
+                setStatus("失败");
+                renderOutput(error.message || String(error));
+              }
+            });
+
             [recentStatusEl, recentLimitEl, recentActiveEl].forEach((element) => {
               element.addEventListener("change", async () => {
                 try {
@@ -2378,7 +2462,19 @@ def phase5_console() -> str:
 
             recentListEl.addEventListener("click", async (event) => {
               const button = event.target.closest("button[data-action]");
-              if (!button) return;
+              if (!button) {
+                const card = event.target.closest("[data-task-card]");
+                if (!card) return;
+                const taskId = card.getAttribute("data-task-id");
+                try {
+                  await loadWorkspaceFromList(taskId);
+                  setStatus("空闲");
+                } catch (error) {
+                  setStatus("失败");
+                  renderOutput(error.message || String(error));
+                }
+                return;
+              }
               const taskId = button.getAttribute("data-task-id");
               const action = button.getAttribute("data-action");
               if (!taskId || !action) return;
@@ -2386,7 +2482,8 @@ def phase5_console() -> str:
 
               withButtonBusy(button, "处理中...", async () => {
                 if (action === "workspace") {
-                  await fetchWorkspace(taskId);
+                  await loadWorkspaceFromList(taskId);
+                  setStatus("空闲");
                   return;
                 }
                 if (action === "phase3") {
@@ -2445,6 +2542,21 @@ def phase5_console() -> str:
                   await fetchWorkspace(taskId);
                 }
               });
+            });
+
+            recentListEl.addEventListener("keydown", async (event) => {
+              const card = event.target.closest("[data-task-card]");
+              if (!card) return;
+              if (event.key !== "Enter" && event.key !== " ") return;
+              event.preventDefault();
+              const taskId = card.getAttribute("data-task-id");
+              try {
+                await loadWorkspaceFromList(taskId);
+                setStatus("空闲");
+              } catch (error) {
+                setStatus("失败");
+                renderOutput(error.message || String(error));
+              }
             });
 
             workspaceEl.addEventListener("click", async (event) => {
