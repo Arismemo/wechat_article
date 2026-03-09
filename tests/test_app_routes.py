@@ -217,6 +217,8 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn('const WAITING = new Set(["needs_manual_review", "needs_regenerate", "needs_manual_source"]);', response.text)
         self.assertIn('const READY_TO_PUSH = new Set(["review_passed"]);', response.text)
         self.assertIn("待推草稿", response.text)
+        self.assertIn("filterCountsFromVisibleTasks", response.text)
+        self.assertIn("const visibleCounts = filterCountsFromVisibleTasks();", response.text)
         self.assertIn("showBusy = true", response.text)
         self.assertIn("loadSnapshot({ showBusy: false })", response.text)
         self.assertIn("当前筛选下没有任务。换个筛选看看。", response.text)

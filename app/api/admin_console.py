@@ -1558,11 +1558,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               return currentTasks().find((item) => item.task_id === state.selectedTaskId) || null;
             }};
 
-            const matchesFilter = (task) => {{
-              if (state.filter === "doing" && !ACTIVE.has(task.status)) return false;
-              if (state.filter === "waiting" && !WAITING.has(task.status)) return false;
-              if (state.filter === "done" && !DONE.has(task.status)) return false;
-              if (state.filter === "failed" && !FAILED.has(task.status)) return false;
+            const matchesSearch = (task) => {{
               if (!state.search) return true;
               const needle = state.search.toLowerCase();
               return [
@@ -1572,7 +1568,25 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               ].some((value) => value.toLowerCase().includes(needle));
             }};
 
-            const filteredTasks = () => currentTasks().filter(matchesFilter);
+            const matchesFilter = (task, filter = state.filter) => {{
+              if (filter === "doing" && !ACTIVE.has(task.status)) return false;
+              if (filter === "waiting" && !WAITING.has(task.status)) return false;
+              if (filter === "done" && !DONE.has(task.status)) return false;
+              if (filter === "failed" && !FAILED.has(task.status)) return false;
+              return matchesSearch(task);
+            }};
+
+            const filteredTasks = () => currentTasks().filter((task) => matchesFilter(task));
+            const filterCountsFromVisibleTasks = () => {{
+              const searchableTasks = currentTasks().filter(matchesSearch);
+              return {{
+                all: searchableTasks.length,
+                doing: searchableTasks.filter((task) => ACTIVE.has(task.status)).length,
+                waiting: searchableTasks.filter((task) => WAITING.has(task.status)).length,
+                done: searchableTasks.filter((task) => DONE.has(task.status)).length,
+                failed: searchableTasks.filter((task) => FAILED.has(task.status)).length,
+              }};
+            }};
 
             const alignSelectedTaskToVisibleTasks = () => {{
               const visibleTasks = filteredTasks();
@@ -1597,6 +1611,11 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             }};
 
             const suggestFilter = (summary) => {{
+              const visibleCounts = filterCountsFromVisibleTasks();
+              if (visibleCounts.waiting > 0) return "waiting";
+              if (visibleCounts.doing > 0) return "doing";
+              if (visibleCounts.failed > 0) return "failed";
+              if (visibleCounts.done > 0) return "done";
               if (!summary) return "all";
               if (summary.filtered_manual > 0) return "waiting";
               if (summary.filtered_active > 0) return "doing";
@@ -1682,13 +1701,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               elements.heroFocus.textContent = focus.headline;
               elements.overviewFocus.textContent = focus.headline;
               elements.overviewFocusNote.textContent = `${{focus.note}} 审稿通过率 ${{formatPercent(summary.today_review_success_rate)}}，推稿成功率 ${{formatPercent(summary.today_auto_push_success_rate)}}。`;
-              const counts = {{
-                all: summary.filtered_total,
-                doing: summary.filtered_active,
-                waiting: summary.filtered_manual,
-                done: summary.filtered_draft_saved,
-                failed: summary.filtered_failed,
-              }};
+              const counts = filterCountsFromVisibleTasks();
               elements.filterButtons.forEach((button) => {{
                 const label = button.dataset.label || button.textContent || "";
                 const count = counts[button.dataset.filter] ?? 0;
