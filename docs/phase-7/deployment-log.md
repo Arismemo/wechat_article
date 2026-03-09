@@ -344,3 +344,74 @@ Phase 7 当前已具备：
 截至 2026-03-09，`v1.1.0` 的代码、文档和验证结果已经具备打 tag 条件。
 
 第二版的主要价值不是新增一个全新 phase，而是把现有 MVP 主链路后的后台交互、审稿闭环和 worker 运行态增强整理为正式版本。
+
+## 25. v1.1.1 发布收口
+
+更新时间：2026-03-10
+
+本次发布不是继续扩 Phase 7F，而是把 `v1.1.0` 之后已经本地完成的 4 个收口任务正式发到服务器：
+
+- 参考文章可点击查看
+- 历史稿人工采用与当前采用版本展示
+- 流水线时间线
+- AI 去痕触发原因可见化
+
+本次部署方式：
+
+- 本地 `git push origin main`
+- 本地 `BASE_IMAGE=wechat_artical:v1.1.1-amd64 bash scripts/deploy_prebuilt_from_local.sh`
+- 服务器 `git pull --ff-only origin main`
+- `docker compose up -d --no-build --force-recreate api`
+- `docker compose run --rm api alembic upgrade head`
+- 额外手动执行：
+  - `docker compose up -d --no-build --force-recreate phase2_worker phase3_worker phase4_worker feedback_worker`
+
+本次服务器结果：
+
+- 服务器仓库从 `2a292ac` 更新到 `b39fab3`
+- `api` 已更新并重新健康
+- 4 个 worker 已全部重建，当前快照返回：
+  - `worker_count=4`
+  - `healthy_count=4`
+  - `phase2=idle`
+  - `phase3=idle`
+  - `phase4=busy`
+  - `feedback=idle`
+
+本次 smoke test：
+
+- `GET /healthz`
+  - 返回 `200 {"status":"ok"}`
+- `GET /admin`
+  - 页面包含：
+    - `STATUS_PROGRESS`
+    - `applyOptimisticTaskState`
+    - `cache: "no-store"`
+    - `当前采用版本`
+    - `参考文章`
+    - `AI 去痕诊断`
+    - `流水线时间线`
+- `GET /admin/phase5`
+  - 页面包含：
+    - `参考文章`
+    - `AI 去痕诊断`
+    - `流水线时间线`
+    - `采用此版本`
+    - `当前采用版本`
+- `GET /admin/console/stream?once=true&limit=3`
+  - 返回 `event: snapshot`
+- `GET /api/v1/admin/monitor/snapshot?selected_task_id=b28d14f3-71e5-461c-a910-bf59a82fc393`
+  - `workspace.selected_generation.source=latest_accepted`
+  - `workspace.related_articles=5`
+  - `workspace.timeline=26`
+  - 最新 generation 已返回 `ai_trace_diagnosis`
+- `GET /api/v1/tasks/b28d14f3-71e5-461c-a910-bf59a82fc393/workspace`
+  - 初始 `selected_generation.version_no=2`
+- `POST /internal/v1/tasks/b28d14f3-71e5-461c-a910-bf59a82fc393/select-generation`
+  - 切到 `v1` 成功，随后 `workspace.selected_generation.version_no=1`
+  - 再切回 `v2` 成功，随后 `workspace.selected_generation.version_no=2`
+
+结论：
+
+- `v1.1.1` 的 TP-01 ~ TP-04 已完成服务器发布与 smoke test
+- `/admin`、`/admin/phase5`、`/api/v1/tasks/{task_id}/workspace`、`/internal/v1/tasks/{task_id}/select-generation` 已在线闭环

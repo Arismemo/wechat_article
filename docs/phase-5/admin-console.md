@@ -1,7 +1,7 @@
 # 阶段 5 后台工作台与人工审核
 
-更新时间：2026-03-09
-状态：Phase 5 已收口；`2026-03-09` 补充能力待服务器 smoke test
+更新时间：2026-03-10
+状态：Phase 5 已收口并纳入 `v1.1.1`
 
 ## 1. 目标
 
@@ -213,14 +213,37 @@
 - `POST /internal/v1/tasks/{task_id}/allow-wechat-draft-push`
 - 被 `blocked` 的任务调用 `POST /internal/v1/tasks/{task_id}/push-wechat-draft` 返回 `409`
 
-本轮新增的这些能力目前已本地实现并验证，但尚未补服务器 smoke test：
+`2026-03-10` 已完成服务器 smoke test 的新增能力：
 
 - `POST /internal/v1/tasks/{task_id}/select-generation`
 - `workspace.related_articles`
 - `workspace.selected_generation`
 - `workspace.timeline`
 - `generation.ai_trace_diagnosis`
-- `/admin/phase5` 里的“参考文章 / AI 去痕诊断 / 流水线时间线 / 采用此版本”
+- `/admin/phase5` 里的“参考文章 / AI 去痕诊断 / 流水线时间线 / 采用此版本 / 当前采用版本”
+
+本轮线上样本验证：
+
+- `GET /admin/phase5`
+  - 页面已包含：
+    - `参考文章`
+    - `AI 去痕诊断`
+    - `流水线时间线`
+    - `采用此版本`
+    - `当前采用版本`
+- `task_id=b28d14f3-71e5-461c-a910-bf59a82fc393`
+  - `workspace` 初始返回：
+    - `selected_generation.source=latest_accepted`
+    - `related_articles=5`
+    - `timeline=26`
+  - 调用 `select-generation` 切到 `v1` 后：
+    - `selected_generation.source=manual_selected`
+    - `selected_generation.version_no=1`
+    - `operator=smoke-release`
+  - 再切回 `v2` 后：
+    - `selected_generation.source=manual_selected`
+    - `selected_generation.version_no=2`
+    - `operator=smoke-release`
 
 本轮推稿许可烟测样例：
 

@@ -1,7 +1,7 @@
 # v1.1.1 发布说明
 
 更新时间：2026-03-10
-状态：Preparing
+状态：Released
 
 ## 1. 发布结论
 
@@ -64,7 +64,61 @@
 
 ## 4. 线上验收
 
-待本轮服务器部署与 smoke test 完成后回填。
+本轮使用标准预构建镜像路径发布：
+
+- 本地 `git push origin main`
+- 本地 `BASE_IMAGE=wechat_artical:v1.1.1-amd64 bash scripts/deploy_prebuilt_from_local.sh`
+- 服务器完成：
+  - `git pull --ff-only origin main`
+  - `docker compose up -d --no-build --force-recreate api`
+  - `docker compose run --rm api alembic upgrade head`
+  - `docker compose up -d --no-build --force-recreate phase2_worker phase3_worker phase4_worker feedback_worker`
+
+线上已确认：
+
+- `GET /healthz`
+  - 返回 `200 {"status":"ok"}`
+- `GET /admin`
+  - 页面包含：
+    - `STATUS_PROGRESS`
+    - `applyOptimisticTaskState`
+    - `cache: "no-store"`
+    - `当前采用版本`
+    - `参考文章`
+    - `AI 去痕诊断`
+    - `流水线时间线`
+- `GET /admin/phase5`
+  - 页面包含：
+    - `参考文章`
+    - `AI 去痕诊断`
+    - `流水线时间线`
+    - `采用此版本`
+    - `当前采用版本`
+- `GET /admin/console/stream?once=true&limit=3`
+  - 返回 `event: snapshot`
+- `GET /api/v1/admin/monitor/snapshot?selected_task_id=b28d14f3-71e5-461c-a910-bf59a82fc393`
+  - `workspace.selected_generation.source=latest_accepted`
+  - `workspace.related_articles=5`
+  - `workspace.timeline=26`
+  - 最新 generation 已返回 `ai_trace_diagnosis`
+- `GET /api/v1/tasks/b28d14f3-71e5-461c-a910-bf59a82fc393/workspace`
+  - 初始 `selected_generation.version_no=2`
+  - 初始 `ai_trace_diagnosis.state=not_triggered`
+- `POST /internal/v1/tasks/b28d14f3-71e5-461c-a910-bf59a82fc393/select-generation`
+  - 切到 `v1` 成功，返回 `status=draft_saved`
+  - 随后 `workspace.selected_generation.version_no=1`
+  - 再切回 `v2` 成功，返回 `status=draft_saved`
+  - 随后 `workspace.selected_generation.version_no=2`
+
+worker 运行态：
+
+- `worker_count=4`
+- `healthy_count=4`
+- 当前状态：
+  - `phase2=idle`
+  - `phase3=idle`
+  - `phase4=busy`
+  - `feedback=idle`
 
 ## 5. 已知边界
 
@@ -77,9 +131,11 @@
 
 ## 6. 发布结果
 
-待回填：
-
-- release commit
-- 正式 tag
-- 部署方式
-- 服务器当前 commit
+- 正式 tag：`v1.1.1`
+- 发布方式：
+  - 本地预构建 `linux/amd64` 镜像
+  - 服务器 `git pull --ff-only + alembic upgrade + docker compose --force-recreate`
+- release commit：
+  - 以 `v1.1.1` tag 指向的 commit 为准
+- 服务器工作树：
+  - 已对齐到 release commit

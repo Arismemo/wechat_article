@@ -1,7 +1,7 @@
 # 阶段 4 生成、审稿与重生成
 
-更新时间：2026-03-09
-状态：已收口并纳入 v1.1.0
+更新时间：2026-03-10
+状态：Phase 4 已收口；`v1.1.1` 已发布 workspace / adopted generation 补充能力
 
 ## 1. 目标
 
@@ -97,6 +97,20 @@
 详细部署记录见：
 
 - `docs/phase-4/deployment-log.md`
+
+`2026-03-10` 发布补充验收：
+
+- `GET /api/v1/tasks/{task_id}/workspace`
+  - 已在线返回 `related_articles`、`selected_generation`、`timeline`
+  - generation 已在线返回 `ai_trace_diagnosis`
+- `POST /internal/v1/tasks/{task_id}/select-generation`
+  - 已在线验证可切换历史已通过版本，并写回 `manual_selected`
+- 推草稿与反馈相关链路仍优先跟随“当前采用版本”
+- 线上样本任务：
+  - `task_id=b28d14f3-71e5-461c-a910-bf59a82fc393`
+  - 先从 `v2` 切到 `v1`
+  - 再切回 `v2`
+  - 两次返回都为 `status=draft_saved`
 
 ### 2.2 本轮不做
 

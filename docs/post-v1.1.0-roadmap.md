@@ -39,9 +39,9 @@
 - 落地真实反馈 Provider。以现有 `http` Provider 为接入面，先把“已入草稿任务 -> 自动同步表现 -> 回写实验聚合”跑稳定，而不是继续停留在 mock 和手工补录并行状态。
 - 补强内容质量卡口。对高风险稿件增加更明确的事实校验 / 风险门控策略，让“高 AI 痕迹”“高风险题材”“审稿不稳定”的稿件更早进入人工判断，而不是在末端再补救。
 - 补齐 Phase 4 流水线的可观测时间线。把写稿、审稿、AI 去痕、复审的 `started / completed / skipped / failed` 串成单任务时间线，并把关键输入输出摘要沉淀为可读日志，而不只是散落在审计记录里。
-  - `2026-03-09`：已在本地实现到 `workspace.timeline`、`/admin/phase5` 与 `/admin` 摘要层，待补服务器 smoke test。
+  - `2026-03-10`：已随 `v1.1.1` 发布到服务器，`workspace.timeline`、`/admin/phase5` 与 `/admin` 摘要层已完成 smoke test。
 - 明确 AI 去痕的触发与跳过原因。需要把“未达到 AI 痕迹阈值”“没有 rewrite_targets”“风险过高不允许去痕”“改写后无有效变化”等原因结构化落库并向页面透出，避免只能从结果反推。
-  - `2026-03-09`：已在本地实现到 `generation.ai_trace_diagnosis`、`/admin/phase5` 与 `/admin` 摘要层，待补服务器 smoke test。
+  - `2026-03-10`：已随 `v1.1.1` 发布到服务器，`generation.ai_trace_diagnosis`、`/admin/phase5` 与 `/admin` 摘要层已完成 smoke test。
 - 推进 Phase 7F 第一刀。先补趋势图、告警分级、去重与静默，重点解决“知道哪里异常”和“避免重复打扰”两个问题。
 - 梳理失败恢复主路径。把 Phase 5 的人工动作、推草稿冲突、反馈同步失败、worker 异常的恢复入口做得更统一，减少靠复制错误文本排查。
 
@@ -51,12 +51,12 @@
 - 把“下一步”提示从一句文案升级成结构化动作卡。至少要同时表达：当前卡点、建议动作、要去的页面、为什么这样做。
 - 统一后台会话失效恢复。页面检测到 `401` 后，不只提示刷新，还要保留当前 `task_id`、筛选条件和最近输入，让刷新后能回到原上下文。
 - 把参考文章系统做成可点击、可查看的工作区模块。每条入选同题素材至少展示标题、来源、筛选原因和原始链接，并支持一键打开原文或在页面内快速预览。
-  - `2026-03-09`：已在本地实现到 `workspace.related_articles`、`/admin/phase5` 与 `/admin` 摘要层，待补服务器 smoke test。
+  - `2026-03-10`：已随 `v1.1.1` 发布到服务器，`workspace.related_articles`、`/admin/phase5` 与 `/admin` 摘要层已完成 smoke test。
 - 优化 Phase 5 审核台的信息层级。首屏先给“是否建议通过 / 是否允许推稿 / AI 痕迹等级 / humanize 情况 / 主要风险点”，完整 diff、完整审稿 JSON 和审计轨迹下沉到折叠区。
 - 给审核台补“驳回重写后的历史稿对比与回退选择”。当最新稿被驳回或重写后，应能直接对比历史 generation、当前重写稿和最近已通过稿，并允许人工明确选择保留哪一版。
-  - `2026-03-09`：已在本地实现“采用此版本”与当前采用版本解析，待补服务器 smoke test。
+  - `2026-03-10`：已随 `v1.1.1` 发布“采用此版本”与当前采用版本解析，并完成服务器 smoke test。
 - 给单任务工作区补完整流水线视图。除了任务状态和审计轨迹，还应能看到写稿摘要、审稿结论、AI 去痕是否触发、触发后改了哪些 block、为什么跳过或失败。
-  - `2026-03-09`：已在本地实现到 `workspace.timeline`、`workspace.selected_generation`、`/admin/phase5` 与 `/admin` 摘要层，待补服务器 smoke test。
+  - `2026-03-10`：已随 `v1.1.1` 发布到服务器，`workspace.timeline`、`workspace.selected_generation`、`/admin/phase5` 与 `/admin` 摘要层已完成 smoke test。
 - 优化 `/admin/console` 的模式切换。默认突出日常关注项，只有在排障模式下再展开 SSE、原始快照、队列深度和 worker 心跳等技术细节。
 
 ### 4.3 验收标准
