@@ -758,6 +758,50 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               gap: 18px;
               align-content: start;
             }}
+            .workspace-overview {{
+              display: grid;
+              grid-template-columns: repeat(4, minmax(0, 1fr));
+              gap: 10px;
+            }}
+            .workspace-overview-card {{
+              display: grid;
+              gap: 6px;
+              min-width: 0;
+              padding: 14px;
+              border-radius: 18px;
+              border: 1px solid var(--line);
+              background: #fffdf9;
+            }}
+            .workspace-overview-card.strong {{
+              grid-column: span 2;
+              background: linear-gradient(135deg, rgba(31, 93, 83, 0.12), rgba(255, 249, 242, 0.96));
+            }}
+            .workspace-overview-card strong {{
+              color: var(--muted);
+              font-size: 12px;
+              font-weight: 500;
+            }}
+            .workspace-overview-card span {{
+              font-size: 20px;
+              line-height: 1.35;
+              word-break: break-word;
+            }}
+            .workspace-overview-card p {{
+              margin: 0;
+              color: var(--muted);
+              font-size: 13px;
+              line-height: 1.65;
+            }}
+            .workspace-layout {{
+              display: grid;
+              grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.92fr);
+              gap: 14px;
+              align-items: start;
+            }}
+            .workspace-stack {{
+              display: grid;
+              gap: 14px;
+            }}
             .summary-block {{
               display: grid;
               gap: 12px;
@@ -836,6 +880,9 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               grid-template-columns: repeat(4, minmax(0, 1fr));
               gap: 10px;
             }}
+            .action-grid.compact {{
+              grid-template-columns: repeat(2, minmax(0, 1fr));
+            }}
             .detail-sections {{
               display: grid;
               gap: 14px;
@@ -879,6 +926,31 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               color: var(--muted);
               font-size: 13px;
               line-height: 1.7;
+            }}
+            .section-metrics {{
+              display: grid;
+              gap: 10px;
+            }}
+            .metric-item {{
+              display: flex;
+              justify-content: space-between;
+              gap: 16px;
+              align-items: flex-start;
+              padding-bottom: 10px;
+              border-bottom: 1px dashed rgba(65, 48, 27, 0.14);
+            }}
+            .metric-item:last-child {{
+              padding-bottom: 0;
+              border-bottom: none;
+            }}
+            .metric-item strong {{
+              font-size: 13px;
+              color: var(--muted);
+              font-weight: 500;
+            }}
+            .metric-item span {{
+              text-align: right;
+              word-break: break-word;
             }}
             .action-empty {{
               padding: 14px 16px;
@@ -934,6 +1006,35 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               margin: 0;
               line-height: 1.7;
             }}
+            .error-box {{
+              border-color: rgba(161, 69, 52, 0.16);
+              background: linear-gradient(180deg, rgba(255, 248, 246, 0.96), rgba(255, 252, 249, 0.9));
+            }}
+            .danger-confirm-box {{
+              display: grid;
+              gap: 12px;
+              padding: 14px;
+              border-radius: 18px;
+              border: 1px solid rgba(161, 69, 52, 0.24);
+              background: rgba(255, 247, 244, 0.88);
+            }}
+            .danger-confirm-copy {{
+              margin: 0;
+              color: #6d4d45;
+              font-size: 13px;
+              line-height: 1.7;
+            }}
+            .danger-confirm-actions {{
+              display: flex;
+              flex-wrap: wrap;
+              gap: 10px;
+            }}
+            .danger-inline-note {{
+              margin: 0;
+              color: var(--muted);
+              font-size: 12px;
+              line-height: 1.7;
+            }}
             .danger-card {{
               border-color: rgba(161, 69, 52, 0.18);
               background: linear-gradient(180deg, rgba(255, 248, 245, 0.96), rgba(255, 252, 249, 0.92));
@@ -967,6 +1068,9 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               .hero-grid {{ grid-template-columns: 1fr; }}
               .overview-strip {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
               .layout {{ grid-template-columns: 1fr; }}
+              .workspace-overview {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+              .workspace-overview-card.strong {{ grid-column: span 2; }}
+              .workspace-layout {{ grid-template-columns: 1fr; }}
               .action-grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
             }}
             @media (max-width: 720px) {{
@@ -987,8 +1091,11 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               .composer-actions {{ grid-template-columns: 1fr; }}
               .overview-strip {{ grid-template-columns: 1fr; }}
               .overview-card.highlight {{ grid-column: span 1; }}
+              .workspace-overview {{ grid-template-columns: 1fr; }}
+              .workspace-overview-card.strong {{ grid-column: span 1; }}
               .kv-grid {{ grid-template-columns: 1fr; }}
               .action-grid {{ grid-template-columns: 1fr; }}
+              .action-grid.compact {{ grid-template-columns: 1fr; }}
               .detail-section-head {{ flex-direction: column; }}
               .search-row {{ grid-template-columns: 1fr; }}
             }}
@@ -1209,6 +1316,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               search: "",
               filterPinned: false,
               detailExpandedByTask: {{}},
+              deleteConfirmTaskId: null,
               pendingAction: null,
               isIngesting: false,
               isRefreshing: false,
@@ -1351,6 +1459,17 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             const clearPendingAction = () => {{
               state.pendingAction = null;
               renderTaskDetail();
+            }};
+            const armDeleteConfirm = (taskId) => {{
+              state.deleteConfirmTaskId = taskId;
+              renderTaskDetail();
+            }};
+            const clearDeleteConfirm = (taskId = null, rerender = true) => {{
+              if (taskId && state.deleteConfirmTaskId !== taskId) return;
+              state.deleteConfirmTaskId = null;
+              if (rerender) {{
+                renderTaskDetail();
+              }}
             }};
             const setDetailExpanded = (taskId, expanded) => {{
               if (!taskId) return;
@@ -1644,6 +1763,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               const draftUrl = escapeHtml(rawDraftUrl);
               const draftHint = escapeHtml(rawDraftHint || "还没有微信草稿记录。");
               const draftLinkLabel = rawDraftDirect ? "打开微信草稿" : "打开公众号后台";
+              const deleteArmed = state.deleteConfirmTaskId === task.task_id;
               const previewAvailable = Boolean(latestGeneration?.generation_id);
               const canRetry = !ACTIVE.has(task.status);
               const canApprove = task.status === "needs_manual_review";
@@ -1683,7 +1803,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                 }});
               }}
               const actionHtml = actionButtons.length
-                ? `<div class="action-grid">${{actionButtons.map((button) => `
+                ? `<div class="action-grid${{actionButtons.length <= 2 ? " compact" : ""}}">${{actionButtons.map((button) => `
                     <button
                       type="button"
                       id="${{button.id}}"
@@ -1697,17 +1817,14 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               const sourceLink = rawSourceUrl
                 ? `<a href="${{sourceUrl}}" title="${{sourceUrl}}" target="_blank" rel="noreferrer">${{sourceLabel}}</a>`
                 : "";
-              const quickFacts = [
-                `创建：${{formatDateTime(task.created_at)}}`,
-                `更新时间：${{formatDateTime(task.updated_at)}}`,
-                WAITING.has(task.status) ? "当前需要人工介入" : "当前无需人工介入",
-                `参考：${{task.related_article_count || 0}} 篇`,
-                rawMediaId ? "草稿已生成" : "还没进草稿",
-              ];
+              const taskCode = escapeHtml(task.task_code || task.task_id);
+              const latestTitle = escapeHtml(latestGeneration?.title || "还没有生成稿件");
+              const latestPromptVersion = escapeHtml(latestGeneration?.prompt_version || "未记录 Prompt 版本");
+              const draftState = rawMediaId
+                ? (rawDraftDirect ? "已有直达草稿" : "已记录后台入口")
+                : "还没进草稿";
               const utilityButtons = [
                 `<button type="button" id="copy-task-id" class="tiny-button">复制任务号</button>`,
-                rawMediaId ? `<button type="button" id="copy-media-id" class="tiny-button">复制草稿号</button>` : "",
-                rawDraftUrl ? `<button type="button" id="copy-draft-url" class="tiny-button">复制草稿入口</button>` : "",
                 rawSourceUrl ? `<button type="button" id="copy-source-url" class="tiny-button">复制原文链接</button>` : "",
                 previewAvailable ? `<button type="button" id="jump-preview" class="tiny-button">定位预览</button>` : "",
               ].filter(Boolean).join("");
@@ -1727,84 +1844,132 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                   </div>
                 </div>
 
-                <div class="quick-facts">
-                  ${{quickFacts.map((item) => `<span class="fact-pill">${{escapeHtml(item)}}</span>`).join("")}}
+                <div class="workspace-overview">
+                  <article class="workspace-overview-card strong">
+                    <strong>当前动作</strong>
+                    <span>${{hint}}</span>
+                    <p>${{WAITING.has(task.status) ? "这条任务已经等你处理，右侧动作区只保留当前最相关的按钮。" : "系统还会继续往下推进，先关注状态变化和成稿内容。"}}</p>
+                  </article>
+                  <article class="workspace-overview-card">
+                    <strong>任务状态</strong>
+                    <span>${{statusLabel(task.status)}}</span>
+                    <p>进度 ${{task.progress}}%${{WAITING.has(task.status) ? "，当前需要人工介入。" : "，当前不用额外操作。"}}</p>
+                  </article>
+                  <article class="workspace-overview-card">
+                    <strong>最近更新</strong>
+                    <span>${{formatDateTime(task.updated_at)}}</span>
+                    <p>创建时间 ${{formatDateTime(task.created_at)}}，任务号 ${{taskCode}}</p>
+                  </article>
+                  <article class="workspace-overview-card">
+                    <strong>草稿状态</strong>
+                    <span>${{escapeHtml(rawMediaId ? "已生成" : "未生成")}}</span>
+                    <p>${{escapeHtml(draftState)}}${{rawDraftUrl ? ` · ${{compactUrl(rawDraftUrl, 42)}}` : ""}}</p>
+                  </article>
                 </div>
 
-                ${{actionHtml}}
-
-                <div class="detail-sections">
-                  <section class="detail-section">
-                    <div class="detail-section-head">
-                      <div>
-                        <strong>微信草稿</strong>
-                        <span>把草稿入口、media_id 和当前版本放在一起，减少来回找信息。</span>
-                      </div>
-                      <div class="section-actions">
-                        ${{rawDraftUrl ? `<a href="${{draftUrl}}" target="_blank" rel="noreferrer" class="button-link ghost">${{escapeHtml(draftLinkLabel)}}</a>` : ""}}
-                        ${{rawMediaId ? `<button type="button" id="copy-media-id-inline" class="secondary">复制 media_id</button>` : ""}}
-                      </div>
-                    </div>
-                    <div class="kv-grid">
-                      <div class="kv"><strong>任务状态</strong><span>${{statusLabel(task.status)}}</span></div>
-                      <div class="kv"><strong>草稿 media_id</strong><span>${{mediaId}}</span></div>
-                      <div class="kv"><strong>草稿入口链接</strong><span>${{escapeHtml(rawDraftUrl || "还没有")}}</span></div>
-                      <div class="kv"><strong>最新版本</strong><span>${{escapeHtml(latestGeneration?.title || "还没有生成稿件")}}</span></div>
-                      <div class="kv"><strong>版本状态</strong><span>${{escapeHtml(latestDecision)}}</span></div>
-                    </div>
-                    <p class="section-hint">${{draftHint}}</p>
-                  </section>
-
+                <div class="workspace-layout">
                   <section class="detail-section" id="preview-section">
                     <div class="detail-section-head">
                       <div>
                         <strong>成稿预览</strong>
-                        <span>这里展示最近一版的 HTML 成稿，便于在进入公众号后台前先看一眼排版。</span>
-                      </div>
-                      <div class="section-actions">
-                        ${{utilityButtons}}
+                        <span>主工作区只放最近一版 HTML 成稿，先在这里看排版，再去公众号后台补细节。</span>
                       </div>
                     </div>
                     ${{previewAvailable
                       ? `<div class="article-preview-shell" data-generation-html="${{escapeHtml(latestGeneration.generation_id)}}"></div>`
                       : '<div class="empty">还没有生成稿件，所以这里暂时没有预览。</div>'}}
-                    ${{previewAvailable ? `<div class="latest-box"><strong>最新一稿</strong><p>${{escapeHtml(latestGeneration?.title || "还没有生成稿件")}}</p><p class="mini">${{escapeHtml(latestGeneration?.prompt_version || "未记录 Prompt 版本")}}</p><p>${{digest}}</p></div>` : ""}}
+                    ${{previewAvailable ? `<div class="latest-box"><strong>最新一稿</strong><p>${{latestTitle}}</p><p class="mini">${{latestPromptVersion}} · ${{escapeHtml(latestDecision)}}</p><p>${{digest}}</p></div>` : ""}}
                   </section>
 
-                  <details class="detail-more" ${{isDetailExpanded(task.task_id) ? "open" : ""}}>
-                    <summary>详细信息</summary>
-                    <div class="detail-more-grid">
-                      <div class="kv-grid">
-                        <div class="kv"><strong>任务号</strong><span>${{escapeHtml(task.task_code || task.task_id)}}</span></div>
-                        <div class="kv"><strong>原文链接</strong><span>${{escapeHtml(rawSourceUrl || "还没有")}}</span></div>
-                        <div class="kv"><strong>作者</strong><span>${{escapeHtml(workspace?.source_article?.author || "未知")}}</span></div>
-                        <div class="kv"><strong>源文摘要</strong><span>${{escapeHtml(workspace?.source_article?.summary || "暂无")}}</span></div>
-                        <div class="kv"><strong>新角度</strong><span>${{escapeHtml(workspace?.brief?.new_angle || "暂无")}}</span></div>
-                        <div class="kv"><strong>定位</strong><span>${{escapeHtml(workspace?.brief?.positioning || "暂无")}}</span></div>
+                  <div class="workspace-stack">
+                    <section class="detail-section">
+                      <div class="detail-section-head">
+                        <div>
+                          <strong>当前动作</strong>
+                          <span>这里只放当前最相关的操作，避免把按钮散在各个区域。</span>
+                        </div>
                       </div>
+                      ${{actionHtml}}
+                      <div class="utility-grid">
+                        ${{utilityButtons}}
+                      </div>
+                      <div class="section-metrics">
+                        <div class="metric-item"><strong>版本结论</strong><span>${{escapeHtml(latestDecision)}}</span></div>
+                        <div class="metric-item"><strong>最新版本</strong><span>${{latestTitle}}</span></div>
+                        <div class="metric-item"><strong>参考文章</strong><span>${{task.related_article_count || 0}} 篇</span></div>
+                      </div>
+                    </section>
+
+                    <section class="detail-section">
+                      <div class="detail-section-head">
+                        <div>
+                          <strong>微信草稿</strong>
+                          <span>入口、media_id 和说明都收在这里，避免在预览区重复出现。</span>
+                        </div>
+                        <div class="section-actions">
+                          ${{rawDraftUrl ? `<a href="${{draftUrl}}" target="_blank" rel="noreferrer" class="button-link ghost">${{escapeHtml(draftLinkLabel)}}</a>` : ""}}
+                          ${{rawDraftUrl ? `<button type="button" id="copy-draft-url" class="secondary">复制草稿入口</button>` : ""}}
+                          ${{rawMediaId ? `<button type="button" id="copy-media-id" class="secondary">复制 media_id</button>` : ""}}
+                        </div>
+                      </div>
+                      <div class="section-metrics">
+                        <div class="metric-item"><strong>草稿状态</strong><span>${{escapeHtml(draftState)}}</span></div>
+                        <div class="metric-item"><strong>草稿 media_id</strong><span>${{mediaId}}</span></div>
+                        <div class="metric-item"><strong>草稿入口</strong><span>${{escapeHtml(rawDraftUrl || "还没有")}}</span></div>
+                      </div>
+                      <p class="section-hint">${{draftHint}}</p>
+                    </section>
+
+                    ${{task.error ? `<section class="detail-section error-box"><div class="detail-section-head"><div><strong>报错</strong><span>先看这条报错，再决定是重跑还是去高级页面补数据。</span></div></div><p class="section-hint">${{visibleError}}</p></section>` : ""}}
+                  </div>
+                </div>
+
+                <details class="detail-more" ${{isDetailExpanded(task.task_id) ? "open" : ""}}>
+                  <summary>详细信息</summary>
+                  <div class="detail-more-grid">
+                    <div class="kv-grid">
+                      <div class="kv"><strong>任务号</strong><span>${{taskCode}}</span></div>
+                      <div class="kv"><strong>原文链接</strong><span>${{escapeHtml(rawSourceUrl || "还没有")}}</span></div>
+                      <div class="kv"><strong>作者</strong><span>${{escapeHtml(workspace?.source_article?.author || "未知")}}</span></div>
+                      <div class="kv"><strong>源文摘要</strong><span>${{escapeHtml(workspace?.source_article?.summary || "暂无")}}</span></div>
+                      <div class="kv"><strong>新角度</strong><span>${{escapeHtml(workspace?.brief?.new_angle || "暂无")}}</span></div>
+                      <div class="kv"><strong>定位</strong><span>${{escapeHtml(workspace?.brief?.positioning || "暂无")}}</span></div>
                     </div>
-                  </details>
+                  </div>
+                </details>
 
-                  ${{task.error ? `<div class="latest-box"><strong>报错</strong><p>${{visibleError}}</p></div>` : ""}}
-
-                  <section class="detail-section danger-card">
-                    <div class="detail-section-head">
-                      <div>
-                        <strong>危险操作</strong>
-                        <span>如果这条任务已经不需要了，可以彻底删除。删除后任务、生成稿、草稿记录和审计关联都会一起清理。</span>
-                      </div>
-                      <div class="section-actions">
+                <section class="detail-section danger-card">
+                  <div class="detail-section-head">
+                    <div>
+                      <strong>危险操作</strong>
+                      <span>如果这条任务已经不需要了，可以彻底删除。删除后任务、生成稿、草稿记录和审计关联都会一起清理。</span>
+                    </div>
+                    <div class="section-actions">
+                      <button
+                        type="button"
+                        id="delete-task-button"
+                        class="danger"
+                        ${{state.pendingAction?.taskId === task.task_id || deleteArmed ? "disabled" : ""}}
+                        aria-busy="${{state.pendingAction?.taskId === task.task_id && state.pendingAction?.action === "delete" ? "true" : "false"}}"
+                      >${{state.pendingAction?.taskId === task.task_id && state.pendingAction?.action === "delete" ? actionBusyLabel("delete", "彻底删除") : (deleteArmed ? "删除确认中" : "彻底删除")}}</button>
+                    </div>
+                  </div>
+                  ${{deleteArmed ? `
+                    <div class="danger-confirm-box">
+                      <p class="danger-confirm-copy">将删除任务 <strong>${{title}}</strong>（${{taskCode}}）以及关联的生成稿、草稿记录和审计索引。这个操作无法恢复。</p>
+                      <div class="danger-confirm-actions">
                         <button
                           type="button"
-                          id="delete-task-button"
+                          id="confirm-delete-task-button"
                           class="danger"
                           ${{state.pendingAction?.taskId === task.task_id ? "disabled" : ""}}
                           aria-busy="${{state.pendingAction?.taskId === task.task_id && state.pendingAction?.action === "delete" ? "true" : "false"}}"
-                        >${{state.pendingAction?.taskId === task.task_id && state.pendingAction?.action === "delete" ? actionBusyLabel("delete", "彻底删除") : "彻底删除"}}</button>
+                        >${{state.pendingAction?.taskId === task.task_id && state.pendingAction?.action === "delete" ? actionBusyLabel("delete", "确认彻底删除") : "确认彻底删除"}}</button>
+                        <button type="button" id="cancel-delete-task-button" class="ghost" ${{state.pendingAction?.taskId === task.task_id ? "disabled" : ""}}>取消</button>
                       </div>
                     </div>
-                  </section>
-                </div>
+                  ` : '<p class="danger-inline-note">先点“彻底删除”，页面内会再确认一次，避免误删。</p>'}}
+                </section>
               `;
 
               hydrateArticlePreview(elements.taskDetail, workspace?.generations || []);
@@ -1817,7 +1982,6 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               elements.taskDetail.querySelector("#copy-task-id")?.addEventListener("click", () => copyText("任务号", task.task_code || task.task_id));
               if (rawMediaId) {{
                 elements.taskDetail.querySelector("#copy-media-id")?.addEventListener("click", () => copyText("草稿号", rawMediaId));
-                elements.taskDetail.querySelector("#copy-media-id-inline")?.addEventListener("click", () => copyText("草稿号", rawMediaId));
               }}
               if (rawDraftUrl) {{
                 elements.taskDetail.querySelector("#copy-draft-url")?.addEventListener("click", () => copyText("草稿入口", rawDraftUrl));
@@ -1828,7 +1992,15 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               if (previewAvailable) {{
                 elements.taskDetail.querySelector("#jump-preview")?.addEventListener("click", scrollPreviewIntoView);
               }}
-              elements.taskDetail.querySelector("#delete-task-button")?.addEventListener("click", () => runAction("delete", task.task_id));
+              elements.taskDetail.querySelector("#delete-task-button")?.addEventListener("click", () => {{
+                armDeleteConfirm(task.task_id);
+                setFlashMessage("请再确认一次是否彻底删除当前任务。", "waiting");
+              }});
+              elements.taskDetail.querySelector("#cancel-delete-task-button")?.addEventListener("click", () => {{
+                clearDeleteConfirm(task.task_id);
+                setFlashMessage("已取消删除。");
+              }});
+              elements.taskDetail.querySelector("#confirm-delete-task-button")?.addEventListener("click", () => runAction("delete", task.task_id));
             }};
 
             const render = () => {{
@@ -1871,6 +2043,12 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                   !state.snapshot.tasks.some((item) => item.task_id === state.selectedTaskId)
                 ) {{
                   state.selectedTaskId = state.snapshot.tasks[0]?.task_id || null;
+                }}
+                if (
+                  state.deleteConfirmTaskId &&
+                  !state.snapshot.tasks.some((item) => item.task_id === state.deleteConfirmTaskId)
+                ) {{
+                  state.deleteConfirmTaskId = null;
                 }}
                 const selectionAlignment = alignSelectedTaskToVisibleTasks();
                 if (selectionAlignment.needsReload && state.selectedTaskId) {{
@@ -1928,11 +2106,10 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                 delete: "正在删除任务…",
               }};
               if (state.pendingAction) return;
-              if (action === "delete") {{
-                const confirmed = window.confirm("将永久删除这个任务、生成稿、草稿记录和相关工作数据，且无法恢复。确定继续吗？");
-                if (!confirmed) return;
-              }}
               try {{
+                if (action === "delete") {{
+                  clearDeleteConfirm(taskId, false);
+                }}
                 setPendingAction(action, taskId);
                 setFlashMessage(pendingMessages[action] || "正在处理…", "waiting");
                 if (action === "delete") {{
@@ -1994,6 +2171,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             }};
 
             const refreshVisibleSelection = async () => {{
+              clearDeleteConfirm(null, false);
               const selectionAlignment = alignSelectedTaskToVisibleTasks();
               if (selectionAlignment.needsReload && state.selectedTaskId) {{
                 await loadSnapshot();
@@ -2024,6 +2202,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             elements.taskList.addEventListener("click", (event) => {{
               const card = event.target.closest("[data-task-id]");
               if (!card) return;
+              clearDeleteConfirm(null, false);
               state.selectedTaskId = card.dataset.taskId;
               syncUrl();
               loadSnapshot()
@@ -2198,6 +2377,10 @@ def unified_console() -> str:
               color: var(--accent-dark);
               font-size: 12px;
               margin-bottom: 12px;
+            }
+            .status.warn {
+              background: rgba(176, 122, 24, 0.16);
+              color: #8a5c12;
             }
             .grid {
               display: grid;
@@ -3181,12 +3364,29 @@ def settings_console() -> str:
             body {
               margin: 0;
               color: var(--text);
+              line-height: 1.5;
               font-family: "PingFang SC", "Noto Serif SC", serif;
               min-height: 100vh;
               background:
                 radial-gradient(circle at top left, rgba(255, 229, 175, 0.5), transparent 26%),
                 radial-gradient(circle at bottom right, rgba(178, 222, 208, 0.42), transparent 28%),
                 linear-gradient(140deg, #efe8dd 0%, #f6f2ea 44%, #ebe1d2 100%);
+            }
+            .skip-link {
+              position: absolute;
+              top: 16px;
+              left: 16px;
+              transform: translateY(-180%);
+              padding: 10px 14px;
+              border-radius: 999px;
+              background: var(--accent-dark);
+              color: #f7faf8;
+              text-decoration: none;
+              z-index: 20;
+              transition: transform 120ms ease;
+            }
+            .skip-link:focus-visible {
+              transform: translateY(0);
             }
             main {
               max-width: 1440px;
@@ -3197,7 +3397,24 @@ def settings_console() -> str:
             }
             .hero {
               display: grid;
+              gap: 14px;
+              padding: 24px;
+              border: 1px solid var(--line);
+              border-radius: 28px;
+              background: linear-gradient(135deg, rgba(255, 248, 239, 0.92), rgba(248, 244, 237, 0.86));
+              box-shadow: var(--shadow);
+              backdrop-filter: blur(10px);
+            }
+            .hero-grid {
+              display: grid;
+              grid-template-columns: minmax(0, 1.28fr) minmax(320px, 0.92fr);
+              gap: 18px;
+              align-items: stretch;
+            }
+            .hero-copy {
+              display: grid;
               gap: 10px;
+              align-content: start;
             }
             .eyebrow {
               display: inline-flex;
@@ -3219,6 +3436,80 @@ def settings_console() -> str:
               max-width: 920px;
               line-height: 1.75;
               color: var(--muted);
+            }
+            .hero-status-card {
+              display: grid;
+              gap: 14px;
+              padding: 18px;
+              border-radius: 24px;
+              border: 1px solid rgba(37, 93, 82, 0.12);
+              background: linear-gradient(160deg, rgba(255, 252, 247, 0.95), rgba(249, 245, 237, 0.9));
+            }
+            .hero-status-copy {
+              margin: 0;
+              font-size: 15px;
+              line-height: 1.7;
+            }
+            .hero-summary {
+              display: grid;
+              grid-template-columns: repeat(2, minmax(0, 1fr));
+              gap: 10px;
+            }
+            .hero-summary-card {
+              display: grid;
+              gap: 6px;
+              padding: 12px 14px;
+              border-radius: 18px;
+              border: 1px solid rgba(65, 48, 27, 0.1);
+              background: rgba(255, 253, 249, 0.78);
+            }
+            .hero-summary-card strong {
+              color: var(--muted);
+              font-size: 12px;
+              font-weight: 500;
+            }
+            .hero-summary-card span {
+              font-size: 16px;
+              line-height: 1.55;
+            }
+            .hero-summary-card.wide {
+              grid-column: 1 / -1;
+              background: linear-gradient(135deg, rgba(37, 93, 82, 0.1), rgba(255, 249, 242, 0.95));
+            }
+            .overview-strip {
+              display: grid;
+              grid-template-columns: repeat(4, minmax(0, 1fr));
+              gap: 12px;
+            }
+            .overview-card {
+              display: grid;
+              gap: 8px;
+              min-width: 0;
+              padding: 16px;
+              border-radius: 20px;
+              border: 1px solid var(--line);
+              background: rgba(255, 251, 246, 0.9);
+              box-shadow: 0 14px 32px rgba(58, 40, 18, 0.08);
+            }
+            .overview-card.highlight {
+              grid-column: span 2;
+              background: linear-gradient(135deg, rgba(37, 93, 82, 0.1), rgba(255, 249, 242, 0.96));
+            }
+            .overview-card strong {
+              color: var(--muted);
+              font-size: 12px;
+              font-weight: 500;
+            }
+            .overview-card span {
+              display: block;
+              font-size: 28px;
+              line-height: 1.1;
+            }
+            .overview-card p {
+              margin: 0;
+              color: var(--muted);
+              font-size: 13px;
+              line-height: 1.7;
             }
             .layout {
               display: grid;
@@ -3242,6 +3533,12 @@ def settings_console() -> str:
               margin: 0 0 14px;
               font-size: 18px;
             }
+            .panel-intro {
+              margin: 0 0 14px;
+              color: var(--muted);
+              font-size: 13px;
+              line-height: 1.7;
+            }
             .status {
               display: inline-flex;
               padding: 7px 12px;
@@ -3257,6 +3554,16 @@ def settings_console() -> str:
               color: var(--muted);
               margin-bottom: 6px;
             }
+            .field {
+              display: grid;
+              gap: 6px;
+            }
+            .field-hint {
+              margin: 0;
+              color: var(--muted);
+              font-size: 13px;
+              line-height: 1.7;
+            }
             input, textarea, select, button {
               width: 100%;
               border-radius: 12px;
@@ -3267,6 +3574,15 @@ def settings_console() -> str:
               padding: 11px 13px;
               background: #fffdf8;
               color: var(--text);
+            }
+            input:focus-visible,
+            textarea:focus-visible,
+            select:focus-visible,
+            button:focus-visible,
+            a:focus-visible,
+            summary:focus-visible {
+              outline: 2px solid rgba(37, 93, 82, 0.18);
+              outline-offset: 3px;
             }
             textarea {
               min-height: 100px;
@@ -3453,46 +3769,103 @@ def settings_console() -> str:
               color: var(--muted);
               background: rgba(255, 255, 255, 0.4);
             }
+            .categories[aria-busy="true"] {
+              opacity: 0.8;
+            }
             __ADMIN_NAV_STYLES__
             @media (max-width: 960px) {
+              .hero-grid { grid-template-columns: 1fr; }
+              .overview-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
               .layout { grid-template-columns: 1fr; }
             }
             @media (max-width: 720px) {
               main { padding: 20px 14px 36px; }
+              .hero { padding: 18px; }
               .panel { padding: 16px; border-radius: 20px; }
               .hero h1 { font-size: 30px; }
-            .setting-actions, .actions { flex-direction: column; }
+              .hero-summary { grid-template-columns: 1fr; }
+              .overview-strip { grid-template-columns: 1fr; }
+              .overview-card.highlight { grid-column: span 1; }
+              .setting-actions, .actions { flex-direction: column; }
               button { width: 100%; }
             }
           </style>
         </head>
         <body>
+          <a class="skip-link" href="#settings-region">跳到设置主区</a>
           <main>
             <section class="hero">
-              <span class="eyebrow">RUNTIME SETTINGS & STATUS</span>
-              <h1>运行参数设置</h1>
-              <p>这里只改少量运行开关，不碰密钥和基础设施。</p>
+              <div class="hero-grid">
+                <div class="hero-copy">
+                  <span class="eyebrow">RUNTIME SETTINGS & STATUS</span>
+                  <h1>运行参数设置</h1>
+                  <p>这里只改少量运行开关，不碰密钥和基础设施。</p>
+                </div>
+                <aside class="hero-status-card" aria-label="设置页状态">
+                  <span class="status" id="status">等待加载</span>
+                  <p class="hero-status-copy" id="flash-message" role="status" aria-live="polite" aria-atomic="true">先填 Bearer Token，再刷新设置和环境状态。</p>
+                  <div class="hero-summary" aria-label="首屏提示">
+                    <div class="hero-summary-card">
+                      <strong>会影响什么</strong>
+                      <span>只影响新任务，不回写基础设施。</span>
+                    </div>
+                    <div class="hero-summary-card">
+                      <strong>需要准备什么</strong>
+                      <span>Bearer Token、操作人标识和变更备注。</span>
+                    </div>
+                    <div class="hero-summary-card wide">
+                      <strong>当前建议</strong>
+                      <span id="hero-focus">先刷新，把可改设置和只读环境状态都拉下来。</span>
+                    </div>
+                  </div>
+                </aside>
+              </div>
               __ADMIN_SECTION_NAV__
             </section>
 
-            <section class="layout">
+            <section class="overview-strip" aria-label="设置概览">
+              <article class="overview-card">
+                <strong>可改设置</strong>
+                <span id="overview-settings-count">0</span>
+                <p>当前支持通过网页覆盖的运行参数数量。</p>
+              </article>
+              <article class="overview-card">
+                <strong>已覆盖</strong>
+                <span id="overview-overrides-count">0</span>
+                <p>数据库里已经覆盖、不会再走环境默认的设置项。</p>
+              </article>
+              <article class="overview-card">
+                <strong>必填环境缺失</strong>
+                <span id="overview-missing-count">0</span>
+                <p>这些配置不在页面里修改，需要回服务器补齐。</p>
+              </article>
+              <article class="overview-card highlight">
+                <strong>当前优先</strong>
+                <span id="overview-focus">先刷新，把可改设置和只读环境状态都拉下来。</span>
+                <p id="overview-focus-note">页面先判断哪些能改、哪些只能看，再决定是否保存覆盖值。</p>
+              </article>
+            </section>
+
+            <section class="layout" id="settings-region">
               <div class="stack">
                 <section class="panel">
-                  <span class="status" id="status">等待加载</span>
                   <h2>先准备</h2>
-                  <div>
+                  <p class="panel-intro">先准备鉴权和操作元数据。保存设置、恢复默认、发送测试告警都会复用这里的信息。</p>
+                  <div class="field">
                     <label for="token">Bearer Token</label>
-                    <input id="token" type="password" placeholder="输入 API_BEARER_TOKEN" />
+                    <input id="token" type="password" placeholder="输入 API_BEARER_TOKEN" aria-describedby="token-hint" />
                   </div>
-                  <p class="hint" style="margin: 10px 0 0;">第一次打开时填一次就行，页面会先记住。</p>
-                  <div style="margin-top: 14px;">
+                  <p class="field-hint" id="token-hint">第一次打开时填一次就行，页面会先记住。这里只在浏览器侧存储，不会写回服务端。</p>
+                  <div class="field" style="margin-top: 14px;">
                     <label for="operator">operator</label>
-                    <input id="operator" type="text" value="admin-console" />
+                    <input id="operator" type="text" value="admin-console" aria-describedby="operator-hint" />
                   </div>
-                  <div style="margin-top: 14px;">
+                  <p class="field-hint" id="operator-hint">用于审计日志，建议填当前值班人或操作来源。</p>
+                  <div class="field" style="margin-top: 14px;">
                     <label for="note">变更备注</label>
-                    <textarea id="note" placeholder="例如：将写稿模型切到新版本做小流量验证"></textarea>
+                    <textarea id="note" placeholder="例如：将写稿模型切到新版本做小流量验证" aria-describedby="note-hint"></textarea>
                   </div>
+                  <p class="field-hint" id="note-hint">备注会跟随变更和测试告警一起发送，尽量写清楚目的和影响范围。</p>
                   <div class="actions">
                     <button id="refresh">刷新</button>
                     <button id="clear-output" class="secondary">清空</button>
@@ -3501,6 +3874,7 @@ def settings_console() -> str:
 
                 <section class="panel">
                   <h2>不能改什么</h2>
+                  <p class="panel-intro">为了安全和部署稳定，下面这些仍然保留在服务器配置里，不开放网页编辑。</p>
                   <details class="fold">
                     <summary>展开说明</summary>
                     <ul class="list">
@@ -3514,6 +3888,7 @@ def settings_console() -> str:
 
                 <section class="panel">
                   <h2>辅助工具</h2>
+                  <p class="panel-intro">这里放的是低频辅助操作，不应该干扰主流程。先刷新确认状态，再决定是否发测试告警或看调试输出。</p>
                   <details class="fold">
                     <summary>测试告警</summary>
                     <div class="hint" id="alert-hint" style="margin-top: 10px;">先填 Bearer Token，再点“刷新”。若 `ALERT_WEBHOOK_URL` 未配置，这里会显示为不可用。</div>
@@ -3531,16 +3906,16 @@ def settings_console() -> str:
               <div class="stack">
                 <section class="panel">
                   <h2>当前设置</h2>
-                  <div class="hint" style="margin-bottom: 14px;">改完只影响新任务；恢复默认会回退到环境变量。</div>
-                  <div id="categories" class="categories">
+                  <p class="panel-intro">改完只影响新任务；恢复默认会回退到环境变量。优先处理确实需要热修改的项，不要把这里当作 `.env` 编辑器。</p>
+                  <div id="categories" class="categories" aria-busy="false">
                     <div class="empty">请输入 Bearer Token 后点击“刷新”。</div>
                   </div>
                 </section>
 
                 <section class="panel">
                   <h2>环境状态</h2>
-                  <div class="hint" style="margin-bottom: 14px;">这里只读显示，密钥不会明文展示。</div>
-                  <div id="runtime-status" class="categories">
+                  <p class="panel-intro">这里只读显示，密钥不会明文展示。它的作用是帮助你判断“能不能改”和“改了以后会不会真正生效”。</p>
+                  <div id="runtime-status" class="categories" aria-busy="false">
                     <div class="empty">请输入 Bearer Token 后点击“刷新”。</div>
                   </div>
                 </section>
@@ -3550,6 +3925,8 @@ def settings_console() -> str:
 
           <script>
             const statusEl = document.getElementById("status");
+            const flashMessageEl = document.getElementById("flash-message");
+            const heroFocusEl = document.getElementById("hero-focus");
             const outputEl = document.getElementById("output");
             const alertHintEl = document.getElementById("alert-hint");
             const tokenEl = document.getElementById("token");
@@ -3557,6 +3934,11 @@ def settings_console() -> str:
             const noteEl = document.getElementById("note");
             const categoriesEl = document.getElementById("categories");
             const runtimeStatusEl = document.getElementById("runtime-status");
+            const overviewSettingsCountEl = document.getElementById("overview-settings-count");
+            const overviewOverridesCountEl = document.getElementById("overview-overrides-count");
+            const overviewMissingCountEl = document.getElementById("overview-missing-count");
+            const overviewFocusEl = document.getElementById("overview-focus");
+            const overviewFocusNoteEl = document.getElementById("overview-focus-note");
             const CATEGORY_LABELS = {
               phase4: "Phase 4 生成与审稿",
               feedback: "Phase 6 自动反馈",
@@ -3571,8 +3953,16 @@ def settings_console() -> str:
             let currentSettings = [];
             let currentRuntimeStatus = null;
 
-            const setStatus = (text) => {
+            const setStatus = (text, tone = "") => {
               statusEl.textContent = text;
+              statusEl.className = `status ${tone}`.trim();
+              if (flashMessageEl) {
+                flashMessageEl.textContent = text;
+              }
+            };
+            const setDataBusy = (busy) => {
+              categoriesEl.setAttribute("aria-busy", busy ? "true" : "false");
+              runtimeStatusEl.setAttribute("aria-busy", busy ? "true" : "false");
             };
 
             const renderOutput = (value) => {
@@ -3593,6 +3983,31 @@ def settings_console() -> str:
               if (valueType === "integer_list" && Array.isArray(value)) return value.join(", ");
               if (typeof value === "object") return JSON.stringify(value);
               return String(value);
+            };
+            const renderOverview = (settings = [], runtimeStatus = null) => {
+              const overrideCount = settings.filter((item) => item.has_override).length;
+              const environment = runtimeStatus?.environment || [];
+              const missingRequired = environment.filter((item) => item.required && !item.configured).length;
+              let focus = "先刷新，把可改设置和只读环境状态都拉下来。";
+              let note = "页面先判断哪些能改、哪些只能看，再决定是否保存覆盖值。";
+              if (missingRequired > 0) {
+                focus = `先补齐 ${missingRequired} 项必填环境配置`;
+                note = "这些项不在页面里修改，需要回服务器环境变量或部署配置中补齐。";
+              } else if (overrideCount > 0) {
+                focus = `当前已有 ${overrideCount} 项数据库覆盖`;
+                note = "保存前先确认是否真的需要覆盖环境默认，避免历史覆盖长期遗留。";
+              } else if (settings.length > 0) {
+                focus = "设置已加载，可以按卡片逐项修改";
+                note = "优先改确实需要热更新的运行参数，改完再看只读环境状态是否匹配。";
+              }
+              overviewSettingsCountEl.textContent = String(settings.length);
+              overviewOverridesCountEl.textContent = String(overrideCount);
+              overviewMissingCountEl.textContent = String(missingRequired);
+              overviewFocusEl.textContent = focus;
+              overviewFocusNoteEl.textContent = note;
+              if (heroFocusEl) {
+                heroFocusEl.textContent = focus;
+              }
             };
 
             const readDraft = () => {
@@ -3643,7 +4058,7 @@ def settings_console() -> str:
               try {
                 await work();
               } catch (error) {
-                setStatus("操作失败");
+                setStatus("操作失败", "warn");
                 renderOutput(error.message || String(error));
               } finally {
                 setButtonBusy(button, false);
@@ -3794,9 +4209,15 @@ def settings_console() -> str:
             const loadAll = async () => {
               saveDraft();
               setStatus("加载中");
-              const [settings, runtimeStatus] = await Promise.all([loadSettings(), loadRuntimeStatus()]);
-              renderOutput({ settings, runtime_status: runtimeStatus });
-              setStatus(`已加载 · ${settings.length} 项设置 / ${runtimeStatus.environment.length} 项环境状态`);
+              setDataBusy(true);
+              try {
+                const [settings, runtimeStatus] = await Promise.all([loadSettings(), loadRuntimeStatus()]);
+                renderOverview(settings, runtimeStatus);
+                renderOutput({ settings, runtime_status: runtimeStatus });
+                setStatus(`已加载 · ${settings.length} 项设置 / ${runtimeStatus.environment.length} 项环境状态`);
+              } finally {
+                setDataBusy(false);
+              }
             };
 
             const updateSetting = async (setting, card, resetToDefault = false) => {
@@ -3864,9 +4285,10 @@ def settings_console() -> str:
             });
 
             readDraft();
+            renderOverview([], null);
             if (tokenEl.value.trim()) {
               loadAll().catch((error) => {
-                setStatus("加载失败");
+                setStatus("加载失败", "warn");
                 renderOutput(error.message || String(error));
               });
             }
