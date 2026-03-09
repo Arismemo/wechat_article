@@ -500,11 +500,16 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             .button-link {{
               border: none;
               padding: 14px 16px;
+              min-height: 48px;
+              display: inline-flex;
+              align-items: center;
+              justify-content: center;
               cursor: pointer;
               background: var(--accent);
               color: #f7faf8;
               text-decoration: none;
               text-align: center;
+              line-height: 1.35;
               transition: transform 120ms ease, background 120ms ease, opacity 120ms ease;
             }}
             button:hover,
@@ -877,8 +882,11 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             }}
             .action-grid {{
               display: grid;
-              grid-template-columns: repeat(4, minmax(0, 1fr));
+              grid-template-columns: repeat(2, minmax(0, 1fr));
               gap: 10px;
+            }}
+            .action-grid.single {{
+              grid-template-columns: 1fr;
             }}
             .action-grid.compact {{
               grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1802,8 +1810,11 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                   label: "推草稿",
                 }});
               }}
+              const actionGridClass = actionButtons.length === 1
+                ? " single"
+                : (actionButtons.length === 2 ? " compact" : "");
               const actionHtml = actionButtons.length
-                ? `<div class="action-grid${{actionButtons.length <= 2 ? " compact" : ""}}">${{actionButtons.map((button) => `
+                ? `<div class="action-grid${{actionGridClass}}">${{actionButtons.map((button) => `
                     <button
                       type="button"
                       id="${{button.id}}"

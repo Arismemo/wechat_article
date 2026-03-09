@@ -200,6 +200,7 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("scrollTaskDetailIntoView", response.text)
         self.assertIn("workspace-overview", response.text)
         self.assertIn("workspace-layout", response.text)
+        self.assertIn("action-grid.single", response.text)
         self.assertIn("当前筛选下没有任务。换个筛选看看。", response.text)
 
     def test_admin_phase6_page_renders(self) -> None:
