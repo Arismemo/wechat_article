@@ -12,6 +12,7 @@ import app.models  # noqa: F401
 from app.db.base import Base
 from app.db.redis_client import get_redis_client
 from app.db.session import get_engine, get_session_factory
+from app.models.audit_log import AuditLog
 from app.models.content_brief import ContentBrief
 from app.models.generation import Generation
 from app.models.system_setting import SystemSetting
@@ -257,6 +258,115 @@ class FeedbackSyncServiceTests(unittest.TestCase):
         self.assertEqual(result.imported_day_offsets, [2, 5])
         metrics = service.feedback.list_task_metrics(self.task_id)
         self.assertEqual({item.day_offset for item in metrics}, {2, 5})
+        session.close()
+
+    def test_run_prefers_manually_selected_generation_and_draft(self) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "FEEDBACK_SYNC_PROVIDER": "http",
+                "FEEDBACK_SYNC_HTTP_URL": "https://feedback.example.test/sync",
+            },
+            clear=False,
+        ):
+            get_settings.cache_clear()
+            session = self.Session()
+            brief = session.query(ContentBrief).filter(ContentBrief.task_id == self.task_id).one()
+            selected_generation = Generation(
+                task_id=self.task_id,
+                brief_id=brief.id,
+                version_no=2,
+                prompt_type="phase4_write",
+                prompt_version="phase4-v1",
+                model_name="glm-5",
+                title="历史稳定稿",
+                markdown_content="# 历史稳定稿",
+                status="accepted",
+            )
+            session.add(selected_generation)
+            session.flush()
+            session.add(
+                WechatDraft(
+                    task_id=self.task_id,
+                    generation_id=selected_generation.id,
+                    media_id="media-selected-history",
+                    push_status="success",
+                )
+            )
+            session.add(
+                AuditLog(
+                    task_id=self.task_id,
+                    action="phase5.manual_review.selected_generation",
+                    operator="editor",
+                    payload={"generation_id": selected_generation.id, "selected_version_no": 2},
+                )
+            )
+            session.commit()
+
+            service = FeedbackSyncService(session)
+            with patch(
+                "app.services.feedback_sync_service.httpx.post",
+                return_value=DummyResponse(
+                    {
+                        "provider": "http-metrics",
+                        "snapshots": [
+                            {
+                                "day_offset": 1,
+                                "snapshot_at": "2026-03-08T09:30:00+08:00",
+                                "read_count": 1666,
+                                "like_count": 101,
+                                "share_count": 18,
+                                "comment_count": 6,
+                                "click_rate": 0.2031,
+                                "wechat_media_id": "media-selected-history",
+                            }
+                        ],
+                    }
+                ),
+            ) as mocked_post:
+                result = service.run(self.task_id, day_offsets=[1], operator="sync-bot")
+
+            request_payload = mocked_post.call_args.kwargs["json"]
+            self.assertEqual(request_payload["generation_id"], selected_generation.id)
+            self.assertEqual(request_payload["generation_version"], 2)
+            self.assertEqual(request_payload["prompt_version"], "phase4-v1")
+            self.assertEqual(request_payload["wechat_media_id"], "media-selected-history")
+            self.assertEqual(result.generation_id, selected_generation.id)
+            self.assertEqual(result.wechat_media_id, "media-selected-history")
+            session.close()
+
+    def test_run_prefers_manually_selected_generation_and_matching_draft(self) -> None:
+        session = self.Session()
+        latest_generation = Generation(
+            task_id=self.task_id,
+            brief_id=session.query(ContentBrief).filter(ContentBrief.task_id == self.task_id).one().id,
+            version_no=5,
+            prompt_type="phase4_write",
+            prompt_version="phase4-v3",
+            model_name="glm-5",
+            title="最新稿",
+            markdown_content="# 最新稿",
+            status="accepted",
+        )
+        session.add(latest_generation)
+        session.flush()
+        session.add(
+            AuditLog(
+                task_id=self.task_id,
+                action="phase5.manual_review.selected_generation",
+                operator="editor",
+                payload={"generation_id": self.generation_id, "selected_version_no": 4},
+            )
+        )
+        session.commit()
+
+        service = FeedbackSyncService(session)
+        result = service.run(self.task_id, day_offsets=[1], operator="sync-bot")
+
+        self.assertEqual(result.generation_id, self.generation_id)
+        self.assertEqual(result.wechat_media_id, "media-sync-1")
+        metrics = service.feedback.list_task_metrics(self.task_id)
+        self.assertTrue(any(item.generation_id == self.generation_id for item in metrics))
         session.close()
 
 

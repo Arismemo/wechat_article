@@ -1,5 +1,47 @@
 # Changelog
 
+## v1.1.1 - 2026-03-10
+
+围绕 `v1.1.0` 之后的 4 个收口任务做一次补丁发布，重点把“参考文章可查看 / 历史稿人工采用 / 流水线时间线 / AI 去痕触发原因可见化”真正发布到线上。
+
+### Added
+
+- `GET /api/v1/tasks/{task_id}/workspace` 新增：
+  - `related_articles`
+  - `selected_generation`
+  - `timeline`
+  - generation 级 `ai_trace_diagnosis`
+  - `is_selected`
+  - `draft_saved`
+  - `wechat_media_id`
+- `POST /internal/v1/tasks/{task_id}/select-generation`
+- `TaskWorkspaceQueryService`
+- `TaskGenerationSelectionService`
+- `/admin/phase5` 新增：
+  - 参考文章点击查看
+  - 当前采用版本展示
+  - 历史稿人工采用
+  - AI 去痕诊断
+  - 流水线时间线
+- `/admin` 新增：
+  - 当前采用版本摘要
+  - 参考文章摘要
+  - AI 去痕诊断摘要
+  - 流水线时间线摘要
+
+### Changed
+
+- 项目版本提升为 `1.1.1`
+- 微信草稿推送、反馈导入、反馈同步都优先跟随“当前采用版本”
+- `/admin` 与 `/admin/phase5` 改为复用同一份 `workspace` 聚合逻辑，减少字段漂移
+- “采用此版本”动作只允许直接采用已 `accepted` 的版本，避免页面语义和服务端冲突规则不一致
+
+### Verified
+
+- `pytest -q` -> `93 passed`
+- `python3 -m compileall app tests` -> 通过
+- 线上 smoke test 结果见 `docs/release-v1.1.1.md`
+
 ## v1.1.0 - 2026-03-09
 
 第二个正式版本，完成 Phase 7E 收口，并将当前后台/审稿/worker 运行态增强整理为可发布版本。

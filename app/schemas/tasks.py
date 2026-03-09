@@ -140,6 +140,25 @@ class ReviewReportResponse(APIModel):
     humanize_block_ids: list[str] = Field(default_factory=list)
 
 
+class GenerationAiTraceDiagnosisResponse(APIModel):
+    state: str
+    triggered: bool = False
+    applied: bool = False
+    threshold_score: float
+    ai_trace_score: Optional[float] = None
+    rewrite_target_count: int = 0
+    rewrite_target_block_ids: list[str] = Field(default_factory=list)
+    policy_risk_score: Optional[float] = None
+    policy_risk_max: float
+    factual_risk_score: Optional[float] = None
+    factual_risk_max: float
+    reason_codes: list[str] = Field(default_factory=list)
+    reasons: list[str] = Field(default_factory=list)
+    last_event_action: Optional[str] = None
+    last_event_at: Optional[datetime] = None
+    rewritten_block_ids: list[str] = Field(default_factory=list)
+
+
 class TaskDraftResponse(APIModel):
     task_id: str
     status: str
@@ -170,6 +189,18 @@ class AuditLogResponse(APIModel):
     created_at: datetime
 
 
+class TaskTimelineEventResponse(APIModel):
+    action: str
+    stage: str
+    status: str
+    title: str
+    summary: str
+    created_at: datetime
+    generation_id: Optional[str] = None
+    review_report_id: Optional[str] = None
+    payload: Optional[dict] = None
+
+
 class WechatPushPolicyResponse(APIModel):
     mode: str
     can_push: bool
@@ -182,6 +213,23 @@ class WechatPushPolicyResponse(APIModel):
 class GenerationWorkspaceResponse(GenerationResponse):
     created_at: datetime
     review: Optional[ReviewReportResponse] = None
+    ai_trace_diagnosis: Optional[GenerationAiTraceDiagnosisResponse] = None
+    is_selected: bool = False
+    draft_saved: bool = False
+    wechat_media_id: Optional[str] = None
+
+
+class SelectedGenerationResponse(APIModel):
+    generation_id: str
+    version_no: int
+    title: Optional[str] = None
+    status: str
+    decision: Optional[str] = None
+    source: str
+    source_action: Optional[str] = None
+    operator: Optional[str] = None
+    note: Optional[str] = None
+    selected_at: Optional[datetime] = None
 
 
 class TaskWorkspaceResponse(APIModel):
@@ -206,5 +254,8 @@ class TaskWorkspaceResponse(APIModel):
     source_article: Optional[SourceArticleDetailResponse] = None
     analysis: Optional[ArticleAnalysisResponse] = None
     brief: Optional[ContentBriefResponse] = None
+    related_articles: list[RelatedArticleResponse] = Field(default_factory=list)
+    selected_generation: Optional[SelectedGenerationResponse] = None
     generations: list[GenerationWorkspaceResponse]
+    timeline: list[TaskTimelineEventResponse] = Field(default_factory=list)
     audits: list[AuditLogResponse]

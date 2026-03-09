@@ -9,6 +9,7 @@ from app.schemas.common import APIModel
 
 
 class ManualReviewActionRequest(APIModel):
+    generation_id: Optional[str] = None
     operator: Optional[str] = None
     note: Optional[str] = None
 

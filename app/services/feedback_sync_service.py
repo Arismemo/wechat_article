@@ -17,6 +17,7 @@ from app.repositories.task_repository import TaskRepository
 from app.repositories.wechat_draft_repository import WechatDraftRepository
 from app.services.feedback_queue_service import FeedbackQueueService, FeedbackSyncEnqueueResult
 from app.services.feedback_service import FeedbackImportResult, FeedbackService
+from app.services.task_generation_selection_service import TaskGenerationSelectionService
 from app.services.system_setting_service import SystemSettingService
 from app.settings import get_settings
 
@@ -258,6 +259,7 @@ class FeedbackSyncService:
         self.feedback = FeedbackService(session)
         self.system_settings = SystemSettingService(session)
         self.queue = FeedbackQueueService()
+        self.selection = TaskGenerationSelectionService(session)
 
     def run(
         self,
@@ -444,13 +446,16 @@ class FeedbackSyncService:
         return task
 
     def _resolve_generation(self, task_id: str) -> Generation:
-        generation = self.generations.get_latest_accepted_by_task_id(task_id) or self.generations.get_latest_by_task_id(task_id)
+        generation = self.selection.resolve_current_accepted_generation(task_id) or self.generations.get_latest_by_task_id(task_id)
         if generation is None:
             raise ValueError("Generation not found for task.")
         return generation
 
     def _resolve_draft(self, task_id: str, generation_id: str) -> WechatDraft:
-        draft = self.wechat_drafts.get_latest_by_generation_id(generation_id) or self.wechat_drafts.get_latest_by_task_id(task_id)
+        draft = (
+            self.wechat_drafts.get_latest_by_generation_id(generation_id)
+            or self.wechat_drafts.get_latest_successful_by_task_id(task_id)
+        )
         if draft is None or draft.push_status != "success" or not draft.media_id:
             raise ValueError("Successful wechat draft not found for task.")
         return draft

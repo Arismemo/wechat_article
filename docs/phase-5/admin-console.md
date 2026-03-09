@@ -1,7 +1,7 @@
 # 阶段 5 后台工作台与人工审核
 
 更新时间：2026-03-09
-状态：已收口并纳入 v1.1.0
+状态：Phase 5 已收口；`2026-03-09` 补充能力待服务器 smoke test
 
 ## 1. 目标
 
@@ -14,6 +14,9 @@
 - 任务聚合详情页
 - 生成稿版本与审稿结果对比
 - generation 间版本差异视图
+- 参考文章可点击查看
+- 历史稿人工采用与当前采用版本展示
+- 流水线时间线与 AI 去痕诊断
 - 人工确认通过 / 驳回重写
 - 人工“允许推草稿 / 禁止推草稿”
 - 审计轨迹展示
@@ -38,7 +41,11 @@
 - 最近一次 `source_article`
 - 最近一次 `article_analysis`
 - 最近一次 `content_brief`
+- 入选 `related_articles`
+- 当前采用版本 `selected_generation`
 - 最近 8 个 generation 及各自最新 review
+- generation 级 `ai_trace_diagnosis`
+- 任务级 `timeline`
 - 最近 25 条 audit log
 - 当前微信草稿推送许可状态
 
@@ -49,6 +56,9 @@
 - 分数
 - 最新审稿结论
 - 正文 Markdown
+- `is_selected`
+- `draft_saved`
+- `wechat_media_id`
 
 当前 generation 的 `prompt_type` / `prompt_version` 已开始真实落库。
 
@@ -71,6 +81,7 @@
 - `入队 Phase3`
 - `同步执行 Phase4`
 - `入队 Phase4`
+- `采用此版本`
 - `人工确认通过`
 - `人工驳回重写`
 - `允许推草稿`
@@ -84,6 +95,7 @@
 - `POST /internal/v1/tasks/{task_id}/enqueue-phase3`
 - `POST /internal/v1/tasks/{task_id}/run-phase4`
 - `POST /internal/v1/tasks/{task_id}/enqueue-phase4`
+- `POST /internal/v1/tasks/{task_id}/select-generation`
 - `POST /internal/v1/tasks/{task_id}/approve-latest-generation`
 - `POST /internal/v1/tasks/{task_id}/reject-latest-generation`
 - `POST /internal/v1/tasks/{task_id}/allow-wechat-draft-push`
@@ -92,6 +104,9 @@
 
 人工审核动作的约束：
 
+- `select-generation` 会把指定 generation 设为当前采用版本，并写入 `phase5.manual_review.selected_generation`
+- `select-generation` 当前只允许直接采用已经 `accepted` 的版本；如果想保留最新待审稿，先走“人工确认通过”
+- 如果其他 generation 已成功推送到微信草稿箱，而当前选择的 generation 没有对应成功草稿，接口会返回 `409 conflict`
 - `approve-latest-generation` 会把 latest generation 标为 `accepted`
 - 如果该 generation 已经有成功的微信草稿记录，任务状态会保持 / 回补为 `draft_saved`
 - `reject-latest-generation` 会把 latest generation 标为 `rejected`，并把任务打回 `needs_regenerate`
@@ -120,12 +135,34 @@
 - 展示标题前后变化
 - 展示摘要前后变化
 - 展示正文 Markdown 的行级 unified diff
+- 支持从版本卡片直接“采用此版本”
+- 会明确标出“当前采用版本”和“该版本是否已推草稿”
 
 任务工作台当前也会展示推草稿许可：
 
 - `default`：默认允许，尚未人工干预
 - `allowed`：已人工放行
 - `blocked`：已人工禁止推草稿
+
+任务工作台当前新增这些信息模块：
+
+- 参考文章
+  - 展示标题、来源站点、摘要、相关度等字段
+  - 可直接点击打开原文
+- AI 去痕诊断
+  - 展示 `ai_trace_score`
+  - 展示阈值、改写目标数、风险门控结果
+  - 展示最近事件和跳过/失败原因
+- 流水线时间线
+  - 默认按时间顺序展示摘要
+  - 可展开查看原始 payload
+- 当前采用版本
+  - 展示来源、操作人、备注、选择时间与草稿状态
+
+与主控台的分工：
+
+- `/admin` 现在也会展示“当前采用版本 / 参考文章 / AI 去痕诊断 / 最近流水线时间线”的摘要层
+- 需要做历史稿对比、展开完整 diff、查看完整审计 payload 或执行“采用此版本”时，仍以 `/admin/phase5` 为主
 
 ## 5. 人工审核 SOP
 
@@ -135,8 +172,9 @@
 - 研究输入不够时先回补 Phase 3
 - 写稿质量不够时直接重跑 Phase 4
 - 人工审核备注会随 approve / reject 一起写入 audit log
+- 如果最新稿被驳回但历史稿更稳，可以直接在版本卡片里点“采用此版本”
 - 如果任务还不准备进入微信草稿箱，先点“禁止推草稿”
-- 只有 `latest accepted generation` 且推稿许可为 `default/allowed` 时才允许推草稿
+- 推稿、反馈同步和后续默认 generation 解析，都会优先跟随“当前采用版本”
 - 推送后要核对 audit log，避免重复操作
 
 ## 6. 当前边界
@@ -149,6 +187,7 @@
 - 后台人工编辑正文
 - 审稿意见逐条确认流
 - 发布后的反馈回收
+- 服务器端已部署验证的 UI 截图证据
 
 ## 7. 验收结果
 
@@ -157,10 +196,12 @@
 - `/admin/phase5` 页面渲染测试
 - `/admin/phase5` Basic Auth 保护测试
 - `/api/v1/tasks/{task_id}/workspace` API 测试
-- `ManualReviewService` 人工通过 / 驳回 / 冲突保护测试
-- 全量测试通过
+- `ManualReviewService` 人工通过 / 驳回 / 采用历史稿 / 冲突保护测试
+- `WechatDraftPublishService` 当前采用版本推稿测试
+- `FeedbackSyncService` 当前采用版本反馈同步测试
+- 全量测试通过：`pytest -q -> 93 passed`
 
-服务器已完成：
+截至 `v1.1.0` 已在服务器验证的旧能力：
 
 - `GET /admin/phase5`
 - `/admin/phase5` 未登录返回 `401`，带 Basic Auth 返回 `200`
@@ -172,6 +213,15 @@
 - `POST /internal/v1/tasks/{task_id}/allow-wechat-draft-push`
 - 被 `blocked` 的任务调用 `POST /internal/v1/tasks/{task_id}/push-wechat-draft` 返回 `409`
 
+本轮新增的这些能力目前已本地实现并验证，但尚未补服务器 smoke test：
+
+- `POST /internal/v1/tasks/{task_id}/select-generation`
+- `workspace.related_articles`
+- `workspace.selected_generation`
+- `workspace.timeline`
+- `generation.ai_trace_diagnosis`
+- `/admin/phase5` 里的“参考文章 / AI 去痕诊断 / 流水线时间线 / 采用此版本”
+
 本轮推稿许可烟测样例：
 
 - `task_id`: `8a8d25d7-8cc7-4758-bda6-56c975d0add6`
@@ -182,7 +232,7 @@
 
 当前测试结果：
 
-- `pytest -q` -> `37 passed`
+- `pytest -q` -> `93 passed`
 - `python3 -m compileall app tests` -> 通过
 
 ## 8. 下一步建议

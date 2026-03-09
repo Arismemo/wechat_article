@@ -29,7 +29,7 @@
    - `app/main.py`
 3. 更新发布与阶段文档
    - `docs/README.md`
-   - 当前版本发布说明，例如 `docs/release-v1.1.0.md`
+   - 当前版本发布说明，例如 `docs/release-v1.1.1.md`
    - 相关阶段文档与部署记录
 4. 运行验证
    - `pytest -q`
@@ -68,20 +68,20 @@ pytest -q
 4. 创建 tag，例如：
 
 ```bash
-git tag -a v1.1.0 -m "Release v1.1.0"
+git tag -a v1.1.1 -m "Release v1.1.1"
 ```
 
 5. 推送分支和 tag：
 
 ```bash
 git push origin main
-git push origin v1.1.0
+git push origin v1.1.1
 ```
 
 6. 使用标准部署路径发布：
 
 ```bash
-BASE_IMAGE=wechat_artical:v1.1.0-amd64 \
+BASE_IMAGE=wechat_artical:v1.1.1-amd64 \
 SERVICES="api phase2_worker phase3_worker phase4_worker feedback_worker" \
 bash scripts/deploy_prebuilt_from_local.sh
 ```

@@ -30,6 +30,17 @@ class WechatDraftRepository:
         )
         return self.session.scalar(statement)
 
+    def get_latest_successful_by_task_id(self, task_id: str) -> Optional[WechatDraft]:
+        statement = (
+            select(WechatDraft)
+            .where(WechatDraft.task_id == task_id)
+            .where(WechatDraft.push_status == "success")
+            .where(WechatDraft.media_id.is_not(None))
+            .order_by(WechatDraft.created_at.desc())
+            .limit(1)
+        )
+        return self.session.scalar(statement)
+
     def list_recent_successful(self, limit: int = 20) -> list[WechatDraft]:
         statement = (
             select(WechatDraft)

@@ -470,6 +470,42 @@ def create_style_asset(
 
 
 @router.post(
+    "/tasks/{task_id}/select-generation",
+    response_model=ManualReviewActionResponse,
+    dependencies=[Depends(verify_bearer_token)],
+)
+def select_generation(
+    task_id: str,
+    payload: ManualReviewActionRequest,
+    session: Session = Depends(get_db_session),
+) -> ManualReviewActionResponse:
+    try:
+        if not payload.generation_id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="generation_id is required.")
+        result = ManualReviewService(session).select_generation(
+            task_id,
+            generation_id=payload.generation_id,
+            operator=payload.operator,
+            note=payload.note,
+        )
+    except ManualReviewConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except ValueError as exc:
+        _raise_value_error_for_internal(exc)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+
+    return ManualReviewActionResponse(
+        task_id=result.task_id,
+        status=result.status,
+        generation_id=result.generation_id,
+        decision=result.decision,
+    )
+
+
+@router.post(
     "/tasks/{task_id}/approve-latest-generation",
     response_model=ManualReviewActionResponse,
     dependencies=[Depends(verify_bearer_token)],

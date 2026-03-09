@@ -1443,6 +1443,105 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               ? `已定点润色 ${{Array.isArray(review?.humanize_block_ids) ? review.humanize_block_ids.length : 0}} 段`
               : "未触发";
             const reviewVoiceSummary = (review) => shorten(review?.voice_summary || "", 120) || "暂无";
+            const aiTraceStateLabel = (diagnosis) => {{
+              if (!diagnosis) return "暂无诊断";
+              if (diagnosis.state === "completed") return diagnosis.applied ? "已执行并生效" : "已执行";
+              if (diagnosis.state === "running") return "执行中";
+              if (diagnosis.state === "skipped") return "已跳过";
+              if (diagnosis.state === "failed") return "执行失败";
+              return diagnosis.triggered ? "已评估" : "未触发";
+            }};
+            const selectionSourceLabel = (selected) => {{
+              if (!selected) return "默认跟随最新已通过版本";
+              if (selected.source === "manual_selected") return "人工改选历史版本";
+              if (selected.source === "manual_approved") return "人工确认当前版本";
+              if (selected.source === "latest_accepted") return "默认采用最新已通过版本";
+              return "默认采用最新版本";
+            }};
+            const renderAiTraceDiagnosisCompact = (diagnosis) => {{
+              if (!diagnosis) {{
+                return '<div class="action-empty">当前版本还没有 AI 去痕诊断。</div>';
+              }}
+              const reasons = Array.isArray(diagnosis.reasons) && diagnosis.reasons.length
+                ? diagnosis.reasons.join("；")
+                : "暂无额外说明";
+              const targetIds = Array.isArray(diagnosis.rewrite_target_block_ids) && diagnosis.rewrite_target_block_ids.length
+                ? diagnosis.rewrite_target_block_ids.join(", ")
+                : "无";
+              const rewrittenIds = Array.isArray(diagnosis.rewritten_block_ids) && diagnosis.rewritten_block_ids.length
+                ? diagnosis.rewritten_block_ids.join(", ")
+                : "无";
+              return `
+                <div class="section-metrics">
+                  <div class="metric-item"><strong>诊断状态</strong><span>${{escapeHtml(aiTraceStateLabel(diagnosis))}}</span></div>
+                  <div class="metric-item"><strong>AI 痕迹 / 阈值</strong><span>${{escapeHtml(diagnosis.ai_trace_score ?? "暂无")}} / ${{escapeHtml(diagnosis.threshold_score)}}</span></div>
+                  <div class="metric-item"><strong>改写目标</strong><span>${{escapeHtml(targetIds)}}</span></div>
+                  <div class="metric-item"><strong>实际改写</strong><span>${{escapeHtml(rewrittenIds)}}</span></div>
+                  <div class="metric-item"><strong>最近事件</strong><span>${{escapeHtml(diagnosis.last_event_action || "暂无")}} · ${{escapeHtml(formatDateTime(diagnosis.last_event_at))}}</span></div>
+                </div>
+                <p class="section-hint">${{escapeHtml(reasons)}}</p>
+              `;
+            }};
+            const renderRelatedArticlesCompact = (articles) => {{
+              if (!Array.isArray(articles) || articles.length === 0) {{
+                return '<div class="action-empty">当前还没有入选参考文章。</div>';
+              }}
+              return `
+                <div class="detail-sections">
+                  ${{articles.map((item) => `
+                    <article class="detail-section">
+                      <div class="detail-section-head">
+                        <div>
+                          <strong>${{escapeHtml(item.title || item.url)}}</strong>
+                          <span>${{escapeHtml(item.source_site || "未知站点")}} · ${{escapeHtml(formatDateTime(item.published_at))}}</span>
+                        </div>
+                        <div class="section-actions">
+                          <a href="${{escapeHtml(item.url)}}" target="_blank" rel="noreferrer" class="button-link ghost">打开原文</a>
+                        </div>
+                      </div>
+                      <div class="section-metrics">
+                        <div class="metric-item"><strong>查询词</strong><span>${{escapeHtml(item.query_text || "暂无")}}</span></div>
+                        <div class="metric-item"><strong>相关 / 多样性</strong><span>${{escapeHtml(item.relevance_score ?? "-")}} / ${{escapeHtml(item.diversity_score ?? "-")}}</span></div>
+                        <div class="metric-item"><strong>是否入选</strong><span>${{escapeHtml(item.selected ? "已入选" : "未入选")}}</span></div>
+                      </div>
+                      <p class="section-hint">${{escapeHtml(shorten(item.summary || "", 160) || "暂无摘要")}}</p>
+                    </article>
+                  `).join("")}}
+                </div>
+              `;
+            }};
+            const timelineTone = (status) => {{
+              if (["completed", "selected", "reused"].includes(status)) return "done";
+              if (["failed", "blocked"].includes(status)) return "fail";
+              if (["manual", "skipped"].includes(status)) return "waiting";
+              return "";
+            }};
+            const renderTimelineCompact = (items) => {{
+              if (!Array.isArray(items) || items.length === 0) {{
+                return '<div class="action-empty">当前还没有流水线时间线。</div>';
+              }}
+              const recentItems = [...items].reverse().slice(0, 6);
+              return `
+                <div class="detail-sections">
+                  ${{recentItems.map((item) => `
+                    <article class="detail-section">
+                      <div class="detail-section-head">
+                        <div>
+                          <strong>${{escapeHtml(item.title || item.action)}}</strong>
+                          <span>${{escapeHtml(item.summary || "暂无摘要")}}</span>
+                        </div>
+                        <span class="status-chip ${{timelineTone(item.status)}}">${{escapeHtml(item.status || "info")}}</span>
+                      </div>
+                      <div class="section-metrics">
+                        <div class="metric-item"><strong>时间</strong><span>${{escapeHtml(formatDateTime(item.created_at))}}</span></div>
+                        <div class="metric-item"><strong>阶段</strong><span>${{escapeHtml(item.stage || "system")}}</span></div>
+                        <div class="metric-item"><strong>动作</strong><span>${{escapeHtml(item.action || "unknown")}}</span></div>
+                      </div>
+                    </article>
+                  `).join("")}}
+                </div>
+              `;
+            }};
 
             const statusLabel = (status) => STATUS_LABELS[status] || status || "未知";
 
@@ -1840,13 +1939,17 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                 ? state.snapshot.workspace
                 : null;
               const latestGeneration = workspace?.generations?.[0] || null;
+              const selectedGeneration = workspace?.selected_generation || null;
+              const activeGeneration = workspace?.generations?.find((item) => item.generation_id === selectedGeneration?.generation_id)
+                || latestGeneration;
               const latestDecision = latestGeneration?.review?.final_decision || latestGeneration?.status || "暂无";
+              const activeDecision = selectedGeneration?.decision || activeGeneration?.review?.final_decision || activeGeneration?.status || latestDecision;
               const rawSourceUrl = task.source_url || "";
               const sourceUrl = escapeHtml(rawSourceUrl);
               const sourceLabel = escapeHtml(compactUrl(rawSourceUrl, 80));
               const title = escapeHtml(task.title || workspace?.source_article?.title || "未命名任务");
               const hint = escapeHtml(nextStepText(task));
-              const digest = escapeHtml(latestGeneration?.digest || "这里会显示最新一稿的摘要。");
+              const digest = escapeHtml(activeGeneration?.digest || "这里会显示当前采用版本的摘要。");
               const rawMediaId = task.wechat_media_id || workspace?.wechat_media_id || "";
               const rawDraftUrl = workspace?.wechat_draft_url || task.wechat_draft_url || "";
               const rawDraftHint = workspace?.wechat_draft_url_hint || task.wechat_draft_url_hint || "";
@@ -1856,7 +1959,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               const draftHint = escapeHtml(rawDraftHint || "还没有微信草稿记录。");
               const draftLinkLabel = rawDraftDirect ? "打开微信草稿" : "打开公众号后台";
               const deleteArmed = state.deleteConfirmTaskId === task.task_id;
-              const previewAvailable = Boolean(latestGeneration?.generation_id);
+              const previewAvailable = Boolean(activeGeneration?.generation_id);
               const canRetry = !ACTIVE.has(task.status);
               const canApprove = task.status === "needs_manual_review";
               const canReject = ["needs_manual_review", "review_passed"].includes(task.status);
@@ -1913,12 +2016,21 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                 ? `<a href="${{sourceUrl}}" title="${{sourceUrl}}" target="_blank" rel="noreferrer">${{sourceLabel}}</a>`
                 : "";
               const taskCode = escapeHtml(task.task_code || task.task_id);
+              const adoptedVersionLabel = escapeHtml(activeGeneration ? `v${{activeGeneration.version_no}}` : "暂无");
+              const adoptedSourceLabel = escapeHtml(selectionSourceLabel(selectedGeneration));
               const latestTitle = escapeHtml(latestGeneration?.title || "还没有生成稿件");
               const latestPromptVersion = escapeHtml(latestGeneration?.prompt_version || "未记录 Prompt 版本");
               const latestAiTrace = escapeHtml(reviewAiTraceLabel(latestGeneration?.review));
               const latestHumanize = escapeHtml(reviewHumanizeLabel(latestGeneration?.review));
               const latestPatternCount = escapeHtml(reviewAiTracePatternCount(latestGeneration?.review));
               const latestVoiceSummary = escapeHtml(reviewVoiceSummary(latestGeneration?.review));
+              const activeTitle = escapeHtml(activeGeneration?.title || "还没有生成稿件");
+              const activePromptVersion = escapeHtml(activeGeneration?.prompt_version || "未记录 Prompt 版本");
+              const activeAiTrace = escapeHtml(reviewAiTraceLabel(activeGeneration?.review));
+              const activeHumanize = escapeHtml(reviewHumanizeLabel(activeGeneration?.review));
+              const activePatternCount = escapeHtml(reviewAiTracePatternCount(activeGeneration?.review));
+              const activeVoiceSummary = escapeHtml(reviewVoiceSummary(activeGeneration?.review));
+              const activeDiagnosis = activeGeneration?.ai_trace_diagnosis || null;
               const draftState = rawMediaId
                 ? (rawDraftDirect ? "已有直达草稿" : "已记录后台入口")
                 : "还没进草稿";
@@ -1969,9 +2081,14 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                     <p>${{escapeHtml(draftState)}}${{rawDraftUrl ? ` · ${{compactUrl(rawDraftUrl, 42)}}` : ""}}</p>
                   </article>
                   <article class="workspace-overview-card">
-                    <strong>AI 痕迹</strong>
-                    <span>${{latestAiTrace}}</span>
-                    <p>${{latestHumanize}} · 命中 ${{latestPatternCount}} 类模式</p>
+                    <strong>当前采用版本</strong>
+                    <span>${{adoptedVersionLabel}}</span>
+                    <p>${{escapeHtml(activeDecision)}} · ${{adoptedSourceLabel}}</p>
+                  </article>
+                  <article class="workspace-overview-card">
+                    <strong>AI 去痕诊断</strong>
+                    <span>${{escapeHtml(aiTraceStateLabel(activeDiagnosis))}}</span>
+                    <p>${{activeAiTrace}} · ${{activeHumanize}} · 命中 ${{activePatternCount}} 类模式</p>
                   </article>
                 </div>
 
@@ -1980,13 +2097,13 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                     <div class="detail-section-head">
                       <div>
                         <strong>成稿预览</strong>
-                        <span>主工作区只放最近一版 HTML 成稿，先在这里看排版，再去公众号后台补细节。</span>
+                        <span>这里优先展示当前采用版本，避免你在总览页看见的内容和实际将推送的版本不一致。</span>
                       </div>
                     </div>
                     ${{previewAvailable
-                      ? `<div class="article-preview-shell" data-generation-html="${{escapeHtml(latestGeneration.generation_id)}}"></div>`
+                      ? `<div class="article-preview-shell" data-generation-html="${{escapeHtml(activeGeneration.generation_id)}}"></div>`
                       : '<div class="empty">还没有生成稿件，所以这里暂时没有预览。</div>'}}
-                    ${{previewAvailable ? `<div class="latest-box"><strong>最新一稿</strong><p>${{latestTitle}}</p><p class="mini">${{latestPromptVersion}} · ${{escapeHtml(latestDecision)}} · AI 痕迹 ${{latestAiTrace}}</p><p class="mini">${{latestHumanize}}</p><p>${{digest}}</p><p class="mini">${{latestVoiceSummary}}</p></div>` : ""}}
+                    ${{previewAvailable ? `<div class="latest-box"><strong>当前采用版本</strong><p>${{activeTitle}}</p><p class="mini">${{activePromptVersion}} · ${{escapeHtml(activeDecision)}} · AI 痕迹 ${{activeAiTrace}}</p><p class="mini">${{activeHumanize}} · ${{adoptedSourceLabel}}</p><p>${{digest}}</p><p class="mini">${{activeVoiceSummary}}</p>${{latestGeneration && activeGeneration && latestGeneration.generation_id !== activeGeneration.generation_id ? `<p class="mini">最新生成稿：${{latestTitle}} · ${{escapeHtml(latestDecision)}}</p>` : ""}}</div>` : ""}}
                   </section>
 
                   <div class="workspace-stack">
@@ -2002,10 +2119,10 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                         ${{utilityButtons}}
                       </div>
                       <div class="section-metrics">
-                        <div class="metric-item"><strong>版本结论</strong><span>${{escapeHtml(latestDecision)}}</span></div>
-                        <div class="metric-item"><strong>最新版本</strong><span>${{latestTitle}}</span></div>
-                        <div class="metric-item"><strong>AI 痕迹</strong><span>${{latestAiTrace}}</span></div>
-                        <div class="metric-item"><strong>定点润色</strong><span>${{latestHumanize}}</span></div>
+                        <div class="metric-item"><strong>当前采用版本</strong><span>${{adoptedVersionLabel}}</span></div>
+                        <div class="metric-item"><strong>版本结论</strong><span>${{escapeHtml(activeDecision)}}</span></div>
+                        <div class="metric-item"><strong>AI 痕迹</strong><span>${{activeAiTrace}}</span></div>
+                        <div class="metric-item"><strong>定点润色</strong><span>${{activeHumanize}}</span></div>
                         <div class="metric-item"><strong>参考文章</strong><span>${{task.related_article_count || 0}} 篇</span></div>
                       </div>
                     </section>
@@ -2044,7 +2161,36 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                       <div class="kv"><strong>源文摘要</strong><span>${{escapeHtml(workspace?.source_article?.summary || "暂无")}}</span></div>
                       <div class="kv"><strong>新角度</strong><span>${{escapeHtml(workspace?.brief?.new_angle || "暂无")}}</span></div>
                       <div class="kv"><strong>定位</strong><span>${{escapeHtml(workspace?.brief?.positioning || "暂无")}}</span></div>
+                      <div class="kv"><strong>当前采用版本</strong><span>${{adoptedVersionLabel}} · ${{escapeHtml(activeDecision)}}</span></div>
+                      <div class="kv"><strong>采用来源</strong><span>${{adoptedSourceLabel}}</span></div>
                     </div>
+                    <section class="detail-section">
+                      <div class="detail-section-head">
+                        <div>
+                          <strong>AI 去痕诊断</strong>
+                          <span>这里解释为什么触发、跳过或完成 AI 去痕，便于快速判断这一版是否还能继续沿用。</span>
+                        </div>
+                      </div>
+                      ${{renderAiTraceDiagnosisCompact(activeDiagnosis)}}
+                    </section>
+                    <section class="detail-section">
+                      <div class="detail-section-head">
+                        <div>
+                          <strong>参考文章</strong>
+                          <span>总览页直接给出当前任务的入选素材，方便快速回看，不必跳去 Phase 5 才能打开原文。</span>
+                        </div>
+                      </div>
+                      ${{renderRelatedArticlesCompact(workspace?.related_articles || [])}}
+                    </section>
+                    <section class="detail-section">
+                      <div class="detail-section-head">
+                        <div>
+                          <strong>流水线时间线</strong>
+                          <span>这里只展示最近 6 个关键事件；如果要看完整 payload 和多版本细节，再去 Phase 5 审核台。</span>
+                        </div>
+                      </div>
+                      ${{renderTimelineCompact(workspace?.timeline || [])}}
+                    </section>
                   </div>
                 </details>
 

@@ -242,6 +242,74 @@ class WechatDraftPublishServiceTests(unittest.TestCase):
         self.assertEqual(blocked_attempt.payload["note"], "人工拦截")
         session.close()
 
+    def test_push_latest_accepted_generation_prefers_selected_history_generation(self) -> None:
+        session = self.Session()
+        task = Task(
+            task_code="tsk_push_selected",
+            source_url="https://mp.weixin.qq.com/s/example-selected",
+            normalized_url="https://mp.weixin.qq.com/s/example-selected",
+            source_type="wechat",
+            status=TaskStatus.REVIEW_PASSED.value,
+        )
+        session.add(task)
+        session.flush()
+        session.add(
+            SourceArticle(
+                task_id=task.id,
+                url=task.source_url,
+                title="源标题",
+                author="作者",
+                summary="摘要",
+                cleaned_text="正文",
+                fetch_status="success",
+            )
+        )
+        selected_generation = Generation(
+            task_id=task.id,
+            version_no=1,
+            model_name="glm-5",
+            title="历史通过稿",
+            digest="历史摘要",
+            html_content="<section><h1>历史通过稿</h1><p>正文</p></section>",
+            markdown_content="# 历史通过稿\n\n正文",
+            status="accepted",
+        )
+        latest_generation = Generation(
+            task_id=task.id,
+            version_no=2,
+            model_name="glm-5",
+            title="最新通过稿",
+            digest="最新摘要",
+            html_content="<section><h1>最新通过稿</h1><p>正文</p></section>",
+            markdown_content="# 最新通过稿\n\n正文",
+            status="accepted",
+        )
+        session.add_all([selected_generation, latest_generation])
+        session.flush()
+        session.add(
+            AuditLog(
+                task_id=task.id,
+                action="phase5.manual_review.selected_generation",
+                operator="editor",
+                payload={"generation_id": selected_generation.id, "selected_version_no": 1},
+            )
+        )
+        session.commit()
+
+        service = WechatDraftPublishService(session)
+        service.wechat = MagicMock()
+        service.wechat.build_fallback_thumb.return_value = (b"png", "thumb.png", "image/png")
+        service.wechat.upload_image_material.return_value = {"media_id": "thumb-1"}
+        service.wechat.add_draft.return_value = {"media_id": "draft-selected"}
+
+        result = service.push_latest_accepted_generation(task.id)
+
+        self.assertEqual(result.generation_id, selected_generation.id)
+        draft = session.scalar(select(WechatDraft).where(WechatDraft.task_id == task.id))
+        self.assertIsNotNone(draft)
+        self.assertEqual(draft.generation_id, selected_generation.id)
+        session.close()
+
     def test_push_latest_accepted_generation_renders_html_from_markdown(self) -> None:
         session = self.Session()
         task = Task(
@@ -296,4 +364,73 @@ class WechatDraftPublishServiceTests(unittest.TestCase):
         self.assertIn("<a href=\"https://example.com\"", article.content)
         self.assertIn("<ul", article.content)
         self.assertNotIn("旧 HTML", article.content)
+        session.close()
+
+    def test_push_latest_accepted_generation_prefers_manually_selected_history_version(self) -> None:
+        session = self.Session()
+        task = Task(
+            task_code="tsk_push_selected",
+            source_url="https://mp.weixin.qq.com/s/example-selected",
+            normalized_url="https://mp.weixin.qq.com/s/example-selected",
+            source_type="wechat",
+            status=TaskStatus.REVIEW_PASSED.value,
+        )
+        session.add(task)
+        session.flush()
+        session.add(
+            SourceArticle(
+                task_id=task.id,
+                url=task.source_url,
+                title="源标题",
+                author="作者",
+                summary="摘要",
+                cleaned_text="正文",
+                fetch_status="success",
+            )
+        )
+        historical_generation = Generation(
+            task_id=task.id,
+            version_no=1,
+            model_name="glm-5",
+            title="历史终稿",
+            digest="历史摘要",
+            html_content="<section><h1>历史终稿</h1><p>正文 A</p></section>",
+            markdown_content="# 历史终稿\n\n正文 A",
+            status="accepted",
+        )
+        latest_generation = Generation(
+            task_id=task.id,
+            version_no=2,
+            model_name="glm-5",
+            title="最新终稿",
+            digest="最新摘要",
+            html_content="<section><h1>最新终稿</h1><p>正文 B</p></section>",
+            markdown_content="# 最新终稿\n\n正文 B",
+            status="accepted",
+        )
+        session.add(historical_generation)
+        session.add(latest_generation)
+        session.flush()
+        session.add(
+            AuditLog(
+                task_id=task.id,
+                action="phase5.manual_review.selected_generation",
+                operator="editor",
+                payload={"generation_id": historical_generation.id, "selected_version_no": 1},
+            )
+        )
+        session.commit()
+
+        service = WechatDraftPublishService(session)
+        service.wechat = MagicMock()
+        service.wechat.build_fallback_thumb.return_value = (b"png", "thumb.png", "image/png")
+        service.wechat.upload_image_material.return_value = {"media_id": "thumb-selected"}
+        service.wechat.add_draft.return_value = {"media_id": "draft-selected"}
+
+        result = service.push_latest_accepted_generation(task.id)
+
+        self.assertEqual(result.generation_id, historical_generation.id)
+        draft = session.scalar(select(WechatDraft).where(WechatDraft.task_id == task.id))
+        self.assertIsNotNone(draft)
+        self.assertEqual(draft.generation_id, historical_generation.id)
         session.close()

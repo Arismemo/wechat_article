@@ -19,6 +19,7 @@ from app.repositories.source_article_repository import SourceArticleRepository
 from app.repositories.task_repository import TaskRepository
 from app.repositories.wechat_draft_repository import WechatDraftRepository
 from app.services.source_fetch_service import SourceFetchService
+from app.services.task_generation_selection_service import TaskGenerationSelectionService
 from app.services.wechat_push_policy_service import WechatPushBlockedError, WechatPushPolicyService
 from app.services.wechat_layout_service import WechatLayoutService
 from app.services.wechat_service import WechatDraftArticle, WechatService
@@ -44,13 +45,14 @@ class WechatDraftPublishService:
         self.audit_logs = AuditLogRepository(session)
         self.wechat_drafts = WechatDraftRepository(session)
         self.push_policy = WechatPushPolicyService(session)
+        self.selection = TaskGenerationSelectionService(session)
         self.fetcher = SourceFetchService()
         self.wechat = WechatService()
         self.wechat_layout = WechatLayoutService()
 
     def push_latest_accepted_generation(self, task_id: str) -> WechatDraftPublishResult:
         task = self._require_task(task_id)
-        generation = self.generations.get_latest_accepted_by_task_id(task_id)
+        generation = self.selection.resolve_current_accepted_generation(task_id)
         if generation is None:
             raise ValueError("No accepted generation is available.")
         return self.push_generation(task, generation)

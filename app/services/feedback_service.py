@@ -25,6 +25,7 @@ from app.repositories.publication_metric_repository import PublicationMetricRepo
 from app.repositories.style_asset_repository import StyleAssetRepository
 from app.repositories.task_repository import TaskRepository
 from app.repositories.wechat_draft_repository import WechatDraftRepository
+from app.services.task_generation_selection_service import TaskGenerationSelectionService
 
 
 @dataclass
@@ -76,6 +77,7 @@ class FeedbackService:
         self.style_assets = StyleAssetRepository(session)
         self.audit_logs = AuditLogRepository(session)
         self.wechat_drafts = WechatDraftRepository(session)
+        self.selection = TaskGenerationSelectionService(session)
 
     def import_publication_metric(
         self,
@@ -378,7 +380,7 @@ class FeedbackService:
         if generation is not None and generation.task_id != task_id:
             raise ValueError("Generation does not belong to task.")
         if generation is None:
-            generation = self.generations.get_latest_accepted_by_task_id(task_id) or self.generations.get_latest_by_task_id(task_id)
+            generation = self.selection.resolve_current_accepted_generation(task_id) or self.generations.get_latest_by_task_id(task_id)
         if generation is None:
             raise ValueError("Generation not found for task.")
         return generation

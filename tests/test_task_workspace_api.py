@@ -18,6 +18,7 @@ from app.models.article_analysis import ArticleAnalysis
 from app.models.audit_log import AuditLog
 from app.models.content_brief import ContentBrief
 from app.models.generation import Generation
+from app.models.related_article import RelatedArticle
 from app.models.review_report import ReviewReport
 from app.models.source_article import SourceArticle
 from app.models.task import Task
@@ -76,7 +77,7 @@ class TaskWorkspaceApiTests(unittest.TestCase):
         get_session_factory.cache_clear()
         self.temp_dir.cleanup()
 
-    def test_task_workspace_returns_source_brief_generations_and_audits(self) -> None:
+    def test_task_workspace_returns_source_brief_generations_related_articles_and_timeline(self) -> None:
         session = self.Session()
         task = Task(
             task_code="tsk_workspace",
@@ -153,8 +154,17 @@ class TaskWorkspaceApiTests(unittest.TestCase):
                 readability_score=66,
                 title_score=60,
                 novelty_score=62,
-                issues={"items": ["太像原文"]},
-                suggestions={"items": ["重写结构"]},
+                issues={"items": ["太像原文"], "ai_trace_score": 88},
+                suggestions={
+                    "items": ["重写结构"],
+                    "rewrite_targets": [
+                        {
+                            "block_id": "b1",
+                            "reason": "首段有模板化表达。",
+                            "instruction": "改成更自然的开场。",
+                        }
+                    ],
+                },
                 final_decision="reject",
             )
         )
@@ -173,18 +183,24 @@ class TaskWorkspaceApiTests(unittest.TestCase):
                     "ai_trace_patterns": ["表达自然，基本无模板味"],
                     "voice_summary": "整体像编辑写的讲解稿，节奏自然。",
                 },
-                suggestions={
-                    "items": ["可推稿"],
-                    "rewrite_targets": [
-                        {
-                            "block_id": "b3",
-                            "reason": "如需进一步润色，可以补一点细节。",
-                            "instruction": "把判断写得更有场景感。",
-                        }
-                    ],
-                    "humanize": {"applied": True, "block_ids": ["b3"]},
-                },
+                suggestions={"items": ["可推稿"]},
                 final_decision="pass",
+            )
+        )
+        session.add(
+            RelatedArticle(
+                task_id=task.id,
+                query_text="虚拟内存 常见误区",
+                rank_no=1,
+                url="https://example.com/article-1",
+                title="参考文章 1",
+                source_site="Example",
+                summary="这是一篇可以点开的参考文章。",
+                fetch_status="success",
+                selected=True,
+                relevance_score=0.91,
+                diversity_score=0.73,
+                factual_density_score=0.68,
             )
         )
         session.add(
@@ -196,6 +212,18 @@ class TaskWorkspaceApiTests(unittest.TestCase):
                 push_response={"draft": {"media_id": "mid-1"}},
             )
         )
+        session.add(
+            AuditLog(
+                task_id=task.id,
+                action="phase4.humanize.completed",
+                operator="system",
+                payload={
+                    "generation_id": generation_v2.id,
+                    "source_generation_id": generation_v1.id,
+                    "rewritten_block_ids": ["b1"],
+                },
+            )
+        )
         session.add(AuditLog(task_id=task.id, action="phase4.review.passed", operator="system", payload={"version": 2}))
         session.add(AuditLog(task_id=task.id, action="wechat.push.completed", operator="system", payload={"media_id": "mid-1"}))
         session.add(
@@ -204,6 +232,14 @@ class TaskWorkspaceApiTests(unittest.TestCase):
                 action="phase5.wechat_push.blocked",
                 operator="editor",
                 payload={"note": "先别推草稿"},
+            )
+        )
+        session.add(
+            AuditLog(
+                task_id=task.id,
+                action="phase5.manual_review.selected_generation",
+                operator="editor",
+                payload={"generation_id": generation_v2.id, "selected_version_no": 2, "note": "保留第二版"},
             )
         )
         session.commit()
@@ -220,14 +256,26 @@ class TaskWorkspaceApiTests(unittest.TestCase):
         self.assertEqual(body["status"], "review_passed")
         self.assertEqual(body["source_article"]["title"], "源文标题")
         self.assertEqual(body["brief"]["new_angle"], "从判断框架切入")
+        self.assertEqual(len(body["related_articles"]), 1)
+        self.assertEqual(body["related_articles"][0]["url"], "https://example.com/article-1")
         self.assertEqual(len(body["generations"]), 2)
         self.assertEqual(body["generations"][0]["version_no"], 2)
         self.assertEqual(body["generations"][0]["prompt_version"], "phase4-v1")
         self.assertEqual(body["generations"][0]["review"]["final_decision"], "pass")
         self.assertEqual(body["generations"][0]["review"]["ai_trace_score"], 28.0)
-        self.assertEqual(body["generations"][0]["review"]["rewrite_targets"][0]["block_id"], "b3")
-        self.assertTrue(body["generations"][0]["review"]["humanize_applied"])
-        self.assertEqual(body["generations"][0]["review"]["humanize_block_ids"], ["b3"])
+        self.assertEqual(body["selected_generation"]["generation_id"], generation_v2.id)
+        self.assertEqual(body["selected_generation"]["source"], "manual_selected")
+        self.assertEqual(body["selected_generation"]["operator"], "editor")
+        self.assertEqual(body["selected_generation"]["note"], "保留第二版")
+        self.assertTrue(body["generations"][0]["is_selected"])
+        self.assertTrue(body["generations"][0]["draft_saved"])
+        self.assertEqual(body["generations"][0]["wechat_media_id"], "mid-1")
+        self.assertEqual(body["generations"][0]["ai_trace_diagnosis"]["state"], "completed")
+        self.assertEqual(body["generations"][0]["ai_trace_diagnosis"]["last_event_action"], "phase4.humanize.completed")
+        self.assertEqual(body["generations"][0]["ai_trace_diagnosis"]["rewritten_block_ids"], ["b1"])
+        self.assertEqual(body["generations"][1]["ai_trace_diagnosis"]["state"], "completed")
+        self.assertEqual(body["generations"][1]["ai_trace_diagnosis"]["last_event_action"], "phase4.humanize.completed")
+        self.assertEqual(body["generations"][1]["ai_trace_diagnosis"]["rewritten_block_ids"], ["b1"])
         self.assertEqual(body["wechat_media_id"], "mid-1")
         self.assertEqual(body["wechat_draft_url"], "https://mp.weixin.qq.com/")
         self.assertFalse(body["wechat_draft_url_direct"])
@@ -236,10 +284,19 @@ class TaskWorkspaceApiTests(unittest.TestCase):
         self.assertFalse(body["wechat_push_policy"]["can_push"])
         self.assertEqual(body["wechat_push_policy"]["note"], "先别推草稿")
         self.assertEqual(body["wechat_push_policy"]["operator"], "editor")
-        self.assertEqual(len(body["audits"]), 3)
+        self.assertGreaterEqual(len(body["timeline"]), 1)
+        self.assertEqual(body["timeline"][0]["action"], "task.created")
+        self.assertTrue(any(item["action"] == "phase5.manual_review.selected_generation" for item in body["timeline"]))
+        self.assertEqual(len(body["audits"]), 5)
         self.assertEqual(
             {item["action"] for item in body["audits"]},
-            {"phase4.review.passed", "wechat.push.completed", "phase5.wechat_push.blocked"},
+            {
+                "phase4.humanize.completed",
+                "phase4.review.passed",
+                "wechat.push.completed",
+                "phase5.wechat_push.blocked",
+                "phase5.manual_review.selected_generation",
+            },
         )
 
 

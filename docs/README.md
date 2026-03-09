@@ -1,6 +1,6 @@
 # 项目文档索引
 
-更新时间：2026-03-09
+更新时间：2026-03-10
 
 ## 文档留存原则
 
@@ -12,6 +12,12 @@
 
 ## 当前文档
 
+- `docs/post-v1.1.0-roadmap.md`
+  - `v1.1.0` 之后的单人运营路线图，包含 P0 / P1 / P2 优先级、前端交互优化和明确不纳入项
+- `docs/post-v1.1.0-task-plan.md`
+  - 将下一阶段 4 个重点问题拆成可执行任务包、里程碑、验收与依赖
+- `docs/post-v1.1.0-recording-guide.md`
+  - 规定下一阶段任务的设计、实现、验证、发布记录方式
 - `docs/wechat-content-factory-plan.md`
   - 总体方案、系统架构、状态机、Prompt、阶段计划
 - `docs/phase-0/requirements-freeze.md`
@@ -61,7 +67,9 @@
 - `docs/mvp-closeout-2026-03-08.md`
   - MVP 主链路收口结论与真实验收记录
 - `docs/release-v1.1.0.md`
-  - 第二版发布范围、验证结果、已知边界与 tag 准备结论
+  - 第二版发布范围、验证结果、已知边界与正式发布结果
+- `docs/release-v1.1.1.md`
+  - TP-01 ~ TP-04 收口包发布说明、线上 smoke test 与 tag 结果
 - `docs/release-process.md`
   - 标准版本发布流程、tag 前检查项与部署约束
 - `docs/web-console-plan.md`

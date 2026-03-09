@@ -959,6 +959,48 @@ def phase5_console() -> str:
               grid-auto-rows: max-content;
               gap: 12px;
             }
+            .reference-list, .timeline-list {
+              display: grid;
+              gap: 12px;
+            }
+            .reference-card, .timeline-card {
+              background: #fffdf9;
+              border: 1px solid var(--line);
+              border-radius: 16px;
+              padding: 12px;
+              display: grid;
+              gap: 8px;
+            }
+            .reference-card a, .timeline-card a {
+              color: var(--accent-dark);
+              text-decoration: none;
+              border-bottom: 1px solid rgba(18, 72, 63, 0.22);
+              width: fit-content;
+            }
+            .generation-card.selected {
+              border-color: rgba(45, 123, 79, 0.35);
+              box-shadow: 0 0 0 1px rgba(45, 123, 79, 0.18);
+            }
+            .generation-actions {
+              display: flex;
+              flex-wrap: wrap;
+              gap: 8px;
+              margin-top: 8px;
+            }
+            .generation-actions button {
+              width: auto;
+              min-width: 124px;
+            }
+            .reason-list {
+              margin: 0;
+              padding-left: 18px;
+              color: var(--text);
+              display: grid;
+              gap: 6px;
+            }
+            .reason-list li {
+              line-height: 1.6;
+            }
             .compare-toolbar {
               display: grid;
               grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -1136,6 +1178,8 @@ def phase5_console() -> str:
               .action-grid { grid-template-columns: 1fr; }
               .task-actions { flex-direction: column; }
               .task-actions button { width: 100%; }
+              .generation-actions { flex-direction: column; }
+              .generation-actions button { width: 100%; }
             }
           </style>
         </head>
@@ -1594,6 +1638,117 @@ def phase5_console() -> str:
               ? `已定点润色 ${Array.isArray(review?.humanize_block_ids) ? review.humanize_block_ids.length : 0} 段`
               : "未触发";
             const reviewVoiceSummary = (review) => truncate(review?.voice_summary || "", 120) || "暂无";
+            const aiTraceStateLabel = (diagnosis) => {
+              if (!diagnosis) return "暂无诊断";
+              if (diagnosis.state === "completed") return diagnosis.applied ? "已执行并生效" : "已执行";
+              if (diagnosis.state === "running") return "执行中";
+              if (diagnosis.state === "skipped") return "已跳过";
+              if (diagnosis.state === "failed") return "执行失败";
+              return diagnosis.triggered ? "已评估" : "未触发";
+            };
+            const aiTraceStateClass = (diagnosis) => {
+              if (!diagnosis) return "pill";
+              if (diagnosis.state === "completed") return "pill ok";
+              if (diagnosis.state === "failed") return "pill danger";
+              if (diagnosis.state === "skipped") return "pill warn";
+              if (diagnosis.state === "running") return "pill";
+              return diagnosis.triggered ? "pill warn" : "pill";
+            };
+            const timelineStatusClass = (item) => {
+              if (!item) return "pill";
+              if (["completed", "selected", "reused"].includes(item.status)) return "pill ok";
+              if (["failed", "blocked"].includes(item.status)) return "pill danger";
+              if (["manual", "skipped"].includes(item.status)) return "pill warn";
+              return "pill";
+            };
+            const selectionSourceLabel = (selected) => {
+              if (!selected) return "默认跟随最新已通过版本";
+              if (selected.source === "manual_selected") return "人工改选历史版本";
+              if (selected.source === "manual_approved") return "人工确认当前版本";
+              if (selected.source === "latest_accepted") return "默认采用最新已通过版本";
+              return "默认采用最新版本";
+            };
+            const renderAiTraceDiagnosis = (diagnosis) => {
+              if (!diagnosis) {
+                return '<div class="hint">当前没有 AI 去痕诊断，通常意味着这版还没有审稿结果。</div>';
+              }
+              const reasons = Array.isArray(diagnosis.reasons) && diagnosis.reasons.length
+                ? `<ul class="reason-list">${diagnosis.reasons.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`
+                : '<div class="hint">当前没有额外说明。</div>';
+              const targetIds = Array.isArray(diagnosis.rewrite_target_block_ids) && diagnosis.rewrite_target_block_ids.length
+                ? diagnosis.rewrite_target_block_ids.join(", ")
+                : "无";
+              const rewrittenIds = Array.isArray(diagnosis.rewritten_block_ids) && diagnosis.rewritten_block_ids.length
+                ? diagnosis.rewritten_block_ids.join(", ")
+                : "无";
+              return `
+                <div class="meta">
+                  <div><strong>状态</strong> ${escapeHtml(aiTraceStateLabel(diagnosis))}</div>
+                  <div><strong>AI 痕迹 / 触发阈值</strong> ${escapeHtml(diagnosis.ai_trace_score ?? "暂无")} / ${escapeHtml(diagnosis.threshold_score)}</div>
+                  <div><strong>改写目标数</strong> ${escapeHtml(diagnosis.rewrite_target_count)}</div>
+                  <div><strong>策略风险 / 上限</strong> ${escapeHtml(diagnosis.policy_risk_score ?? "暂无")} / ${escapeHtml(diagnosis.policy_risk_max)}</div>
+                  <div><strong>事实风险 / 上限</strong> ${escapeHtml(diagnosis.factual_risk_score ?? "暂无")} / ${escapeHtml(diagnosis.factual_risk_max)}</div>
+                  <div><strong>目标段落</strong> ${escapeHtml(targetIds)}</div>
+                  <div><strong>实际改写段落</strong> ${escapeHtml(rewrittenIds)}</div>
+                  <div><strong>最近事件</strong> ${escapeHtml(diagnosis.last_event_action || "暂无")} · ${escapeHtml(formatDate(diagnosis.last_event_at))}</div>
+                </div>
+                ${reasons}
+              `;
+            };
+            const renderRelatedArticles = (articles) => {
+              if (!Array.isArray(articles) || articles.length === 0) {
+                return '<div class="hint">当前任务还没有入选参考文章。</div>';
+              }
+              return `
+                <div class="reference-list">
+                  ${articles.map((item) => `
+                    <article class="reference-card">
+                      <div class="generation-header">
+                        <span class="pill">#${escapeHtml(item.rank_no)}</span>
+                        <span class="pill">${escapeHtml(item.source_site || "未知站点")}</span>
+                        <span class="pill">${escapeHtml(item.fetch_status || "unknown")}</span>
+                      </div>
+                      <a href="${escapeHtml(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.title || item.url)}</a>
+                      <div class="meta">
+                        <div><strong>查询词</strong> ${escapeHtml(item.query_text || "暂无")}</div>
+                        <div><strong>发布时间</strong> ${escapeHtml(formatDate(item.published_at))}</div>
+                        <div><strong>相关 / 热度 / 多样性</strong> ${escapeHtml(item.relevance_score ?? "-")} / ${escapeHtml(item.popularity_score ?? "-")} / ${escapeHtml(item.diversity_score ?? "-")}</div>
+                        <div><strong>事实密度</strong> ${escapeHtml(item.factual_density_score ?? "-")}</div>
+                        <div><strong>摘要</strong> ${escapeHtml(truncate(item.summary || "", 180) || "暂无")}</div>
+                      </div>
+                    </article>
+                  `).join("")}
+                </div>
+              `;
+            };
+            const renderTimeline = (items) => {
+              if (!Array.isArray(items) || items.length === 0) {
+                return '<div class="hint">当前还没有流水线时间线。</div>';
+              }
+              return `
+                <div class="timeline-list">
+                  ${items.map((item) => `
+                    <article class="timeline-card">
+                      <div class="generation-header">
+                        <span class="${timelineStatusClass(item)}">${escapeHtml(item.status || "info")}</span>
+                        <span class="pill">${escapeHtml(item.stage || "system")}</span>
+                        ${item.generation_id ? `<span class="pill">gen ${escapeHtml(item.generation_id.slice(0, 8))}</span>` : ""}
+                      </div>
+                      <h3>${escapeHtml(item.title || item.action)}</h3>
+                      <div class="meta">
+                        <div><strong>时间</strong> ${escapeHtml(formatDate(item.created_at))}</div>
+                        <div><strong>摘要</strong> ${escapeHtml(item.summary || "暂无")}</div>
+                        <div><strong>动作</strong> ${escapeHtml(item.action)}</div>
+                      </div>
+                      <details>
+                        <summary>展开事件详情</summary>
+                        <pre>${escapeHtml(JSON.stringify(item.payload || {}, null, 2))}</pre>
+                      </details>
+                    </article>
+                  `).join("")}
+                </div>
+              `;
+            };
             const diffFieldCard = (label, before, after) => `
               <div class="diff-card">
                 <strong>${escapeHtml(label)}</strong>
@@ -1718,11 +1873,17 @@ def phase5_console() -> str:
 
             const renderWorkspace = (workspace) => {
               const latest = workspace.generations[0];
+              const selectedGeneration = workspace.selected_generation || null;
+              const activeGeneration = workspace.generations.find((item) => item.generation_id === selectedGeneration?.generation_id) || latest;
               const latestReview = latest?.review;
+              const activeReview = activeGeneration?.review || latestReview;
+              const activeDiagnosis = activeGeneration?.ai_trace_diagnosis || null;
               const pushPolicy = workspace.wechat_push_policy;
               const latestAiTrace = reviewAiTraceLabel(latestReview);
               const latestHumanize = reviewHumanizeLabel(latestReview);
               const latestPatternCount = reviewAiTracePatternCount(latestReview);
+              const adoptedVersionLabel = activeGeneration ? `v${activeGeneration.version_no}` : "暂无";
+              const adoptedDecision = selectedGeneration?.decision || activeReview?.final_decision || activeGeneration?.status || "暂无";
               workspaceEl.innerHTML = `
                 <div class="summary-grid">
                   <div class="summary-item">
@@ -1736,6 +1897,10 @@ def phase5_console() -> str:
                   <div class="summary-item">
                     <strong>最新 generation</strong>
                     <span>${escapeHtml(workspace.generation_id || "暂无")}</span>
+                  </div>
+                  <div class="summary-item">
+                    <strong>当前采用版本</strong>
+                    <span>${escapeHtml(adoptedVersionLabel)} · ${escapeHtml(adoptedDecision)}</span>
                   </div>
                   <div class="summary-item">
                     <strong>微信草稿 media_id</strong>
@@ -1758,6 +1923,10 @@ def phase5_console() -> str:
                     <span>${escapeHtml(workspace.related_article_count)}</span>
                   </div>
                   <div class="summary-item">
+                    <strong>AI 去痕诊断</strong>
+                    <span>${escapeHtml(aiTraceStateLabel(activeDiagnosis))}</span>
+                  </div>
+                  <div class="summary-item">
                     <strong>最近更新时间</strong>
                     <span>${escapeHtml(formatDate(workspace.updated_at))}</span>
                   </div>
@@ -1772,9 +1941,11 @@ def phase5_console() -> str:
                     <div><strong>错误</strong> ${escapeHtml(workspace.error || "无")}</div>
                     <div><strong>推草稿许可</strong> ${escapeHtml(pushPolicyLabel(pushPolicy))}</div>
                     <div><strong>许可备注</strong> ${escapeHtml(pushPolicy?.note || "无")}</div>
+                    <div><strong>草稿入口说明</strong> ${escapeHtml(workspace.wechat_draft_url_hint || "暂无")}</div>
                   </div>
                   <div class="link-row">
                     <a href="${escapeHtml(workspace.source_url)}" target="_blank" rel="noreferrer">打开原文</a>
+                    ${workspace.wechat_draft_url ? `<a href="${escapeHtml(workspace.wechat_draft_url)}" target="_blank" rel="noreferrer">${escapeHtml(workspace.wechat_draft_url_direct ? "打开微信草稿" : "打开微信后台")}</a>` : ""}
                   </div>
                 </div>
 
@@ -1807,18 +1978,49 @@ def phase5_console() -> str:
                       <pre>${escapeHtml(JSON.stringify(workspace.brief || {}, null, 2))}</pre>
                     </details>
                   </div>
+
+                  <div class="detail-card">
+                    <h3>当前采用版本</h3>
+                    <div class="generation-header">
+                      <span class="pill ok">${escapeHtml(adoptedVersionLabel)}</span>
+                      <span class="${scorePillClass(adoptedDecision)}">${escapeHtml(adoptedDecision)}</span>
+                      <span class="pill">${escapeHtml(selectionSourceLabel(selectedGeneration))}</span>
+                    </div>
+                    <div class="meta">
+                      <div><strong>标题</strong> ${escapeHtml(activeGeneration?.title || "暂无")}</div>
+                      <div><strong>model / prompt</strong> ${escapeHtml(activeGeneration?.model_name || "暂无")} / ${escapeHtml(activeGeneration?.prompt_version || "未记录")}</div>
+                      <div><strong>操作人</strong> ${escapeHtml(selectedGeneration?.operator || "system")}</div>
+                      <div><strong>选择时间</strong> ${escapeHtml(formatDate(selectedGeneration?.selected_at))}</div>
+                      <div><strong>备注</strong> ${escapeHtml(selectedGeneration?.note || "无")}</div>
+                      <div><strong>草稿状态</strong> ${escapeHtml(activeGeneration?.draft_saved ? `已推送 ${activeGeneration?.wechat_media_id || ""}` : "尚未推送")}</div>
+                    </div>
+                  </div>
+
+                  <div class="detail-card">
+                    <h3>AI 去痕诊断</h3>
+                    <div class="hint">这里解释为什么触发、跳过或完成 AI 去痕，便于判断是否继续重写或直接人工处理。</div>
+                    ${renderAiTraceDiagnosis(activeDiagnosis)}
+                  </div>
+
+                  <div class="detail-card">
+                    <h3>参考文章</h3>
+                    <div class="hint">这些是 Phase 3 入选的同题素材，现在可以直接点开逐篇查看。</div>
+                    ${renderRelatedArticles(workspace.related_articles)}
+                  </div>
                 </div>
 
                 <div class="detail-card">
                   <h3>生成稿版本与审稿结论</h3>
                   <div class="generation-list">
                     ${workspace.generations.length ? workspace.generations.map((generation) => `
-                      <div class="generation-card">
+                      <div class="generation-card ${generation.is_selected ? "selected" : ""}">
                         <div class="generation-header">
                           <span class="pill">v${escapeHtml(generation.version_no)}</span>
                           <span class="${scorePillClass(generation.review?.final_decision)}">${escapeHtml(generation.review?.final_decision || generation.status)}</span>
                           <span class="pill">model: ${escapeHtml(generation.model_name)}</span>
                           <span class="pill">prompt: ${escapeHtml(generation.prompt_version || "未记录")}</span>
+                          ${generation.is_selected ? '<span class="pill ok">当前采用</span>' : ""}
+                          ${generation.draft_saved ? `<span class="pill ok">已推草稿 ${escapeHtml(generation.wechat_media_id || "")}</span>` : ""}
                         </div>
                         <h3>${escapeHtml(generation.title || "未命名稿件")}</h3>
                         <div class="meta">
@@ -1828,7 +2030,28 @@ def phase5_console() -> str:
                           <div><strong>AI 痕迹 / 命中模式 / 定点润色</strong> ${escapeHtml(reviewAiTraceLabel(generation.review))} / ${escapeHtml(reviewAiTracePatternCount(generation.review))} / ${escapeHtml(reviewHumanizeLabel(generation.review))}</div>
                           <div><strong>语气诊断</strong> ${escapeHtml(reviewVoiceSummary(generation.review))}</div>
                           <div><strong>摘要</strong> ${escapeHtml(generation.digest || "暂无")}</div>
+                          <div><strong>采用状态</strong> ${escapeHtml(generation.is_selected ? "当前采用版本" : "未采用")}</div>
                         </div>
+                        <div class="generation-actions">
+                          <button
+                            data-action="select-generation"
+                            data-task-id="${escapeHtml(workspace.task_id)}"
+                            data-generation-id="${escapeHtml(generation.generation_id)}"
+                            class="${generation.is_selected ? "secondary" : ""}"
+                            ${generation.is_selected || generation.status !== "accepted" ? "disabled" : ""}
+                          >${escapeHtml(
+                            generation.is_selected
+                              ? "当前采用版本"
+                              : (generation.status === "accepted" ? "采用此版本" : "仅可采用已通过版本")
+                          )}</button>
+                        </div>
+                        ${!generation.is_selected && generation.status !== "accepted"
+                          ? '<div class="hint">这版还不是已通过版本。若要保留当前新稿，请先用上方“人工通过”。</div>'
+                          : ""}
+                        <details>
+                          <summary>展开 AI 去痕诊断</summary>
+                          ${renderAiTraceDiagnosis(generation.ai_trace_diagnosis)}
+                        </details>
                         <details>
                           <summary>展开审稿风险与建议</summary>
                           <pre>${escapeHtml(JSON.stringify(generation.review || {}, null, 2))}</pre>
@@ -1848,16 +2071,24 @@ def phase5_console() -> str:
 
                 ${renderGenerationDiff(workspace.generations)}
 
-                <div class="detail-card">
-                  <h3>审计轨迹</h3>
-                  <div class="audit-list">
-                    ${workspace.audits.length ? workspace.audits.map((log) => `
-                      <div class="audit-card">
-                        <div><strong>${escapeHtml(log.action)}</strong></div>
-                        <div class="meta">${escapeHtml(formatDate(log.created_at))} · ${escapeHtml(log.operator)}</div>
-                        <pre>${escapeHtml(JSON.stringify(log.payload || {}, null, 2))}</pre>
-                      </div>
-                    `).join("") : '<div class="hint">暂无审计日志。</div>'}
+                <div class="grid">
+                  <div class="detail-card">
+                    <h3>流水线时间线</h3>
+                    <div class="hint">这里按时间顺序串起写稿、审稿、人工介入、AI 去痕和推草稿动作。</div>
+                    ${renderTimeline(workspace.timeline)}
+                  </div>
+
+                  <div class="detail-card">
+                    <h3>审计轨迹</h3>
+                    <div class="audit-list">
+                      ${workspace.audits.length ? workspace.audits.map((log) => `
+                        <div class="audit-card">
+                          <div><strong>${escapeHtml(log.action)}</strong></div>
+                          <div class="meta">${escapeHtml(formatDate(log.created_at))} · ${escapeHtml(log.operator)}</div>
+                          <pre>${escapeHtml(JSON.stringify(log.payload || {}, null, 2))}</pre>
+                        </div>
+                      `).join("") : '<div class="hint">暂无审计日志。</div>'}
+                    </div>
                   </div>
                 </div>
               `;
@@ -1988,7 +2219,8 @@ def phase5_console() -> str:
                 note: "phase5-console",
               };
             };
-            const buildManualReviewPayload = () => ({
+            const buildManualReviewPayload = ({ generationId = null } = {}) => ({
+              generation_id: generationId,
               operator: deviceEl.value.trim() || "phase5-console",
               note: reviewNoteEl.value.trim() || null,
             });
@@ -2212,6 +2444,27 @@ def phase5_console() -> str:
                   await refreshRecent();
                   await fetchWorkspace(taskId);
                 }
+              });
+            });
+
+            workspaceEl.addEventListener("click", async (event) => {
+              const button = event.target.closest('button[data-action="select-generation"]');
+              if (!button) return;
+              const taskId = button.getAttribute("data-task-id") || taskEl.value.trim();
+              const generationId = button.getAttribute("data-generation-id");
+              if (!taskId || !generationId) return;
+              setTaskId(taskId);
+
+              withButtonBusy(button, "采用中...", async () => {
+                setStatus("切换当前采用版本");
+                const result = await request(
+                  "POST",
+                  `/internal/v1/tasks/${taskId}/select-generation`,
+                  buildManualReviewPayload({ generationId }),
+                );
+                renderOutput(result);
+                await refreshRecent();
+                await fetchWorkspace(taskId);
               });
             });
 
