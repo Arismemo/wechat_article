@@ -10,6 +10,7 @@ from sqlalchemy.orm import sessionmaker
 
 import app.models  # noqa: F401
 from app.core.enums import TaskStatus
+from app.core.prompt_versions import CURRENT_PHASE4_PROMPT_VERSION
 from app.db.base import Base
 from app.db.redis_client import get_redis_client
 from app.models.article_analysis import ArticleAnalysis
@@ -122,7 +123,7 @@ class Phase4PipelineServiceTests(unittest.TestCase):
         self.assertEqual(len(review_rows), 1)
         self.assertEqual(generation_rows[0].status, "accepted")
         self.assertEqual(generation_rows[0].prompt_type, "phase4_write")
-        self.assertEqual(generation_rows[0].prompt_version, "phase4-v2")
+        self.assertEqual(generation_rows[0].prompt_version, CURRENT_PHASE4_PROMPT_VERSION)
         self.assertGreater(float(generation_rows[0].score_overall or 0), 75)
         self.assertIn("<h1", generation_rows[0].html_content or "")
         self.assertNotIn("**", generation_rows[0].html_content or "")
@@ -130,8 +131,113 @@ class Phase4PipelineServiceTests(unittest.TestCase):
         self.assertIn("已验证风格资产", service.llm.complete_json.call_args_list[0].kwargs["user_prompt"])
         self.assertIn("先给反直觉结论，再拆误区", service.llm.complete_json.call_args_list[0].kwargs["user_prompt"])
         self.assertIn("只允许使用以下 Markdown 子集", service.llm.complete_json.call_args_list[0].kwargs["user_prompt"])
+        self.assertIn("避免整篇都用“首先/其次/最后/总之", service.llm.complete_json.call_args_list[0].kwargs["user_prompt"])
         self.assertEqual(service.llm.complete_json.call_args_list[0].kwargs["timeout_seconds"], 180)
         self.assertEqual(service.llm.complete_json.call_args_list[1].kwargs["timeout_seconds"], 90)
+        session.close()
+
+    def test_phase4_pipeline_runs_targeted_humanize_pass_for_high_ai_trace(self) -> None:
+        session = self.Session()
+        task = self._seed_phase4_ready_task(session, "tsk_phase4_humanize")
+
+        service = Phase4PipelineService(session)
+        service.llm = MagicMock()
+        service.llm.complete_json.side_effect = [
+            {
+                "title": "自动化工作流真正缺的，不是更多工具",
+                "subtitle": "AI 痕迹定点润色测试",
+                "digest": "验证高 AI 痕迹时会触发按块改写。",
+                "markdown_content": (
+                    "# 自动化工作流真正缺的，不是更多工具\n\n"
+                    "## 先把现象摆出来\n\n"
+                    "首先，我们可以看到很多团队都在接入自动化，但协作边界依然很模糊。\n\n"
+                    "## 再看真正的卡点\n\n"
+                    "团队真正卡住的，是流程断点一出现，就没人知道该由谁接手。\n\n"
+                    "## 最后说结论\n\n"
+                    "总之，真正要补的是协作接口，而不是再加一个模型。\n"
+                ),
+            },
+            {
+                "final_decision": "pass",
+                "similarity_score": 0.18,
+                "factual_risk_score": 0.18,
+                "policy_risk_score": 0.04,
+                "readability_score": 84,
+                "title_score": 82,
+                "novelty_score": 83,
+                "ai_trace_score": 88,
+                "ai_trace_patterns": ["承接词偏模板化，像按套路串段落", "结尾有明显总结腔"],
+                "rewrite_targets": [
+                    {
+                        "block_id": "b3",
+                        "reason": "开头段落承接词太像模板",
+                        "instruction": "保留意思，但删掉套话，换成更具体的观察。",
+                    },
+                    {
+                        "block_id": "b7",
+                        "reason": "结尾像标准总结句",
+                        "instruction": "收束得更有判断，不要用总之起句。",
+                    },
+                ],
+                "voice_summary": "信息点是对的，但口吻像规则整齐的 AI 讲解稿。",
+                "issues": ["表达过于工整。"],
+                "suggestions": ["先做定点润色。"],
+            },
+            {
+                "rewritten_blocks": [
+                    {
+                        "block_id": "b3",
+                        "markdown": "很多团队已经接入自动化，但一到真正交接的时候，责任边界还是会立刻变模糊。",
+                    },
+                    {
+                        "block_id": "b7",
+                        "markdown": "真正该补的不是再堆一个模型，而是把协作接口、人工判断和回退机制补齐。",
+                    },
+                ]
+            },
+            {
+                "final_decision": "pass",
+                "similarity_score": 0.18,
+                "factual_risk_score": 0.18,
+                "policy_risk_score": 0.04,
+                "readability_score": 88,
+                "title_score": 82,
+                "novelty_score": 84,
+                "ai_trace_score": 34,
+                "ai_trace_patterns": ["表达已明显自然化"],
+                "rewrite_targets": [],
+                "voice_summary": "整体语气已经更像编辑写作，不再是均匀讲解腔。",
+                "issues": ["通过。"],
+                "suggestions": ["可以进入下一阶段。"],
+            },
+        ]
+
+        result = service.run(task.id)
+
+        self.assertEqual(result.status, TaskStatus.REVIEW_PASSED.value)
+        self.assertTrue(result.auto_revised)
+        generations = list(
+            session.scalars(select(Generation).where(Generation.task_id == task.id).order_by(Generation.version_no.asc()))
+        )
+        reviews = list(
+            session.scalars(
+                select(ReviewReport)
+                .join(Generation, ReviewReport.generation_id == Generation.id)
+                .where(Generation.task_id == task.id)
+                .order_by(Generation.version_no.asc())
+            )
+        )
+        self.assertEqual(len(generations), 2)
+        self.assertEqual(len(reviews), 2)
+        self.assertIn("很多团队已经接入自动化，但一到真正交接的时候", generations[-1].markdown_content or "")
+        self.assertIn("团队真正卡住的，是流程断点一出现，就没人知道该由谁接手。", generations[-1].markdown_content or "")
+        self.assertIn("真正该补的不是再堆一个模型", generations[-1].markdown_content or "")
+        self.assertNotIn("首先，我们可以看到很多团队", generations[-1].markdown_content or "")
+        self.assertNotIn("总之，真正要补的是协作接口", generations[-1].markdown_content or "")
+        self.assertTrue(reviews[-1].suggestions.get("humanize", {}).get("applied"))
+        self.assertEqual(reviews[-1].suggestions.get("humanize", {}).get("block_ids"), ["b3", "b7"])
+        self.assertEqual(service.llm.complete_json.call_count, 4)
+        self.assertIn("只允许改写以下 block_id：b3 / b7", service.llm.complete_json.call_args_list[2].kwargs["user_prompt"])
         session.close()
 
     def test_phase4_pipeline_auto_revises_once_after_revise_decision(self) -> None:
@@ -366,6 +472,52 @@ class Phase4PipelineServiceTests(unittest.TestCase):
         self.assertIn("<a href=\"https://example.com\"", generation.html_content or "")
         self.assertNotIn("```", generation.html_content or "")
         self.assertNotIn("| 列1 | 列2 |", generation.html_content or "")
+        session.close()
+
+    def test_phase4_pipeline_allows_empty_related_articles(self) -> None:
+        session = self.Session()
+        task = self._seed_phase4_ready_task(session, "tsk_phase4_no_related")
+        session.query(RelatedArticle).where(RelatedArticle.task_id == task.id).delete()
+        session.commit()
+
+        service = Phase4PipelineService(session)
+        service.llm = MagicMock()
+        service.llm.complete_json.side_effect = [
+            {
+                "title": "没有同题素材也能完成写稿",
+                "subtitle": "空 related 降级测试",
+                "digest": "验证写稿链路在空 related 下仍可运行。",
+                "markdown_content": (
+                    "# 没有同题素材也能完成写稿\n\n"
+                    "## 先讲清背景\n"
+                    "即便没有同题素材，也可以先把原文重构清楚。\n\n"
+                    "## 再给判断框架\n"
+                    "重点是保持信息顺序和读者收益。\n\n"
+                    "## 最后收束\n"
+                    "- 先说结论\n"
+                    "- 再补背景\n"
+                    "- 最后讲边界\n"
+                ),
+            },
+            {
+                "final_decision": "pass",
+                "similarity_score": 0.24,
+                "factual_risk_score": 0.28,
+                "policy_risk_score": 0.05,
+                "readability_score": 84,
+                "title_score": 82,
+                "novelty_score": 80,
+                "issues": ["通过。"],
+                "suggestions": ["可以进入下一阶段。"],
+            },
+        ]
+
+        result = service.run(task.id)
+
+        self.assertEqual(result.status, TaskStatus.REVIEW_PASSED.value)
+        generation = session.get(Generation, result.generation_id)
+        self.assertIsNotNone(generation)
+        self.assertEqual(generation.status, "accepted")
         session.close()
 
     def _seed_phase4_ready_task(self, session, task_code: str) -> Task:

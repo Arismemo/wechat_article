@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Select, func, or_, select
+from sqlalchemy import Select, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.core.enums import ACTIVE_TASK_STATUSES
@@ -75,6 +75,26 @@ class TaskRepository:
         self.session.add(task)
         self.session.flush()
         return task
+
+    def update_runtime_state(
+        self,
+        task: Task,
+        *,
+        status: str,
+        error_code: Optional[str],
+        error_message: Optional[str],
+    ) -> None:
+        self.session.execute(
+            update(Task)
+            .where(Task.id == task.id)
+            .values(
+                status=status,
+                error_code=error_code,
+                error_message=error_message,
+                updated_at=func.now(),
+            )
+        )
+        self.session.refresh(task)
 
     def delete(self, task: Task) -> None:
         self.session.delete(task)

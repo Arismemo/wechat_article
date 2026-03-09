@@ -2,8 +2,15 @@
 
 微信公众号选题重构与草稿生产系统。
 
-当前正式版本：`v1.0.0`  
-状态：`MVP Closed · main 已进入 Phase 7E`
+当前正式版本：`v1.1.0`
+状态：`Phase 7E Completed · 准备进入 Phase 7F`
+
+第二版收口重点：
+
+- 后台页默认复用 `admin_session`，不再要求在 Phase 5 / 6 / settings / console 页面手动输入 Bearer Token
+- Phase 4 审稿增加 AI 痕迹识别、定点 humanize 和复审闭环
+- 四条 worker 队列补齐持续心跳、queue depth / processing / pending 观测
+- 工作台与任务接口新增结构化审稿元数据，统一并发状态写回逻辑
 
 ## 系统能做什么
 
@@ -148,7 +155,7 @@ bash scripts/repair_server_git_checkout.sh
 执行方式：
 
 ```bash
-BASE_IMAGE=wechat_artical:v1.0.0-amd64 \
+BASE_IMAGE=wechat_artical:v1.1.0-amd64 \
 SERVICES="api phase2_worker phase3_worker phase4_worker feedback_worker" \
 bash scripts/deploy_prebuilt_from_local.sh
 ```
@@ -157,7 +164,7 @@ bash scripts/deploy_prebuilt_from_local.sh
 
 ```bash
 SKIP_LOCAL_BUILD=1 \
-BASE_IMAGE=wechat_artical:v1.0.0-amd64 \
+BASE_IMAGE=wechat_artical:v1.1.0-amd64 \
 SERVICES="api phase2_worker phase3_worker phase4_worker feedback_worker" \
 bash scripts/deploy_prebuilt_from_local.sh
 ```
@@ -215,7 +222,7 @@ Phase 7B 只开放“可热修改的运行参数”，当前读取顺序为：
 1. `system_settings`
 2. `.env`
 
-Phase 7C / 7D 的监控快照接口、环境状态接口和统一控制台不会直接暴露密钥明文；实时流仍然通过后台 Basic Auth 保护，数据接口继续要求 `API_BEARER_TOKEN`。
+Phase 7C / 7D 的监控快照接口、环境状态接口和统一控制台不会直接暴露密钥明文；实时流仍然通过后台 Basic Auth 保护，数据接口仍支持 `API_BEARER_TOKEN`，而通过后台页进入后的动作默认复用 `admin_session`。
 
 也就是说，网页设置不会直接重写 `.env`。当前仍然只允许通过环境变量管理的值包括：
 
@@ -226,6 +233,11 @@ Phase 7C / 7D 的监控快照接口、环境状态接口和统一控制台不会
 - `WECHAT_APP_SECRET`
 - `FEEDBACK_SYNC_HTTP_URL`
 - `FEEDBACK_SYNC_API_KEY`
+
+## 发布文档
+
+- 第二版发布说明：`docs/release-v1.1.0.md`
+- 标准发布流程：`docs/release-process.md`
 
 ## 自动反馈 Provider 协议
 

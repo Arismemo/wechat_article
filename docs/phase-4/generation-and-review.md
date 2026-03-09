@@ -1,7 +1,7 @@
 # 阶段 4 生成、审稿与重生成
 
-更新时间：2026-03-07
-状态：已完成服务器验收，并支持手动或按开关自动推送到微信草稿箱
+更新时间：2026-03-09
+状态：已收口并纳入 v1.1.0
 
 ## 1. 目标
 
@@ -9,11 +9,12 @@
 
 `brief_ready -> generation -> review -> review_passed / needs_regenerate / needs_manual_review`
 
-本轮实现范围只覆盖：
+当前正式范围覆盖：
 
 - 基于 `content_brief`、`article_analysis`、原文与入选素材生成新稿
 - 对新稿做结构化审稿与评分
 - 对 `revise` 结果自动修订一次
+- 对高 AI 痕迹稿件做定点 humanize pass 并自动复审
 - 支持将最新 `review_passed` 稿件手动推送到微信草稿箱
 - 支持通过 `PHASE4_AUTO_PUSH_WECHAT_DRAFT=true` 在 `review_passed` 后自动推送
 
@@ -38,6 +39,14 @@
   - 会额外读取 `style_assets` 中的 active 资产，并把已验证的开头、标题方向、结构资产注入写稿 Prompt
   - 审稿结论支持 `pass / revise / reject`
   - `revise` 会自动修订一次并重新审稿
+  - 当审稿返回较高 `ai_trace_score` 且不命中 `reject` 时，会触发定点 humanize pass
+  - humanize 会按 `rewrite_targets` 只改指定 block，随后再做一轮审稿
+  - 审稿结果会额外产出：
+    - `ai_trace_score`
+    - `ai_trace_patterns`
+    - `rewrite_targets`
+    - `voice_summary`
+    - `humanize_applied`
 - `Phase4QueueService`
 - `scripts/run_phase4_worker.py`
 - 内部接口：
@@ -56,6 +65,7 @@
 - 本地测试已覆盖：
   - 正常生成并审稿通过
   - `revise -> 自动修订一次 -> 审稿通过`
+  - 高 AI 痕迹触发定点 humanize -> 复审通过
   - 取最新 accepted generation 并推微信草稿箱
 
 ## 4. 服务器验收结果
@@ -98,7 +108,9 @@
 - 新 generation 会真实落库：
   - `prompt_type`
   - `prompt_version`
-  当前写稿版本为 `phase4-v2`
+  当前写稿版本为 `phase4-v3`
+- 审稿元数据继续复用 `review_reports.issues / suggestions`，不额外引入新表结构。
+- 工作台与任务接口要能稳定透出结构化审稿元数据，不能只保留前端文案。
 
 ## 6. 状态流
 
@@ -115,6 +127,7 @@
 - 生产环境默认仍不会把 Phase 4 成稿在 `review_passed` 后自动推到微信草稿箱，需显式打开 `PHASE4_AUTO_PUSH_WECHAT_DRAFT`
 - 仍未做后台审稿台与人工重生成页
 - 审稿 fallback 目前是启发式规则，不是外部事实校验服务
+- 定点 humanize 目前仍属于单轮、按块改写，不做整稿多轮风格重写
 
 ## 8. 验收标准
 
@@ -123,3 +136,4 @@
 - `revise` 能触发一次自动修订
 - 审稿低于阈值的稿件不会进入 `review_passed`
 - `GET /api/v1/tasks/{task_id}/draft` 可返回最新生成稿和最新审稿结果
+- `GET /api/v1/tasks/{task_id}/workspace` 可返回 `ai_trace_score`、`rewrite_targets`、`humanize_applied` 等结构化审稿元数据

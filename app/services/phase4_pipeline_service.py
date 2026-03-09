@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 from typing import Any, Optional
 
 from sqlalchemy.orm import Session
 
 from app.core.enums import TaskStatus
 from app.core.prompt_versions import CURRENT_PHASE4_PROMPT_VERSION, DEFAULT_GENERATION_PROMPT_TYPE
+from app.core.review_metadata import ReviewMetadata, build_review_storage_payloads, extract_review_metadata
 from app.models.article_analysis import ArticleAnalysis
 from app.models.audit_log import AuditLog
 from app.models.content_brief import ContentBrief
@@ -43,9 +45,24 @@ class Phase4PipelineResult:
     auto_revised: bool
 
 
+@dataclass(frozen=True)
+class MarkdownBlock:
+    block_id: str
+    markdown: str
+
+
+@dataclass(frozen=True)
+class HumanizePassResult:
+    generation: Generation
+    rewritten_block_ids: list[str]
+
+
 class Phase4PipelineService:
     _MAX_STYLE_ASSETS = 6
     _MAX_STYLE_ASSETS_PER_TYPE = 2
+    _AI_TRACE_REWRITE_THRESHOLD = 70.0
+    _MAX_HUMANIZE_TARGETS = 4
+    _REVIEW_BLOCK_CONTEXT_MAX_CHARS = 7000
 
     def __init__(self, session: Session) -> None:
         self.session = session
@@ -93,10 +110,40 @@ class Phase4PipelineService:
             raise
 
         decision = self._normalize_decision(review.final_decision)
+        humanize_applied = False
+        if decision != "reject" and self._should_run_humanize(review):
+            humanize_result = self._try_humanize_generation(
+                task=task,
+                source=source,
+                brief=brief,
+                generation=generation,
+                review=review,
+            )
+            if humanize_result is not None:
+                generation = humanize_result.generation
+                humanize_applied = True
+                try:
+                    review = self._review_generation(
+                        task=task,
+                        source=source,
+                        brief=brief,
+                        related=related,
+                        generation=generation,
+                        humanize_block_ids=humanize_result.rewritten_block_ids,
+                    )
+                except Exception as exc:
+                    self._fail_task(task, TaskStatus.REVIEW_FAILED, "phase4_humanize_review_failed", str(exc))
+                    raise
+                decision = self._normalize_decision(review.final_decision)
+            elif decision == "pass":
+                decision = "revise"
+
         if decision == "pass" and self._passes_thresholds(review):
-            return self._mark_review_passed(task, generation, review, auto_revised=False)
+            return self._mark_review_passed(task, generation, review, auto_revised=humanize_applied)
         if decision == "reject":
-            return self._mark_needs_regenerate(task, generation, review)
+            return self._mark_needs_regenerate(task, generation, review, auto_revised=humanize_applied)
+        if humanize_applied:
+            return self._mark_needs_manual_review(task, generation, review, auto_revised=True)
         if decision == "revise" and self.settings.phase4_max_auto_revisions > 0:
             return self._auto_revise_once(task, source, analysis, brief, related, generation, review)
         return self._mark_needs_manual_review(task, generation, review, auto_revised=False)
@@ -110,7 +157,7 @@ class Phase4PipelineService:
         brief = self.briefs.get_latest_by_task_id(task.id)
         related = self.related_articles.list_selected_by_task_id(task.id)
 
-        if source is not None and analysis is not None and brief is not None and related:
+        if source is not None and analysis is not None and brief is not None:
             return source, analysis, brief, related
 
         Phase3PipelineService(self.session).run(task.id)
@@ -119,7 +166,7 @@ class Phase4PipelineService:
         analysis = self.analyses.get_latest_by_task_id(task.id)
         brief = self.briefs.get_latest_by_task_id(task.id)
         related = self.related_articles.list_selected_by_task_id(task.id)
-        if source is None or analysis is None or brief is None or not related:
+        if source is None or analysis is None or brief is None:
             raise ValueError("Phase 3 prerequisites are not ready.")
         return source, analysis, brief, related
 
@@ -228,17 +275,40 @@ class Phase4PipelineService:
         brief: ContentBrief,
         related: list[RelatedArticle],
         generation: Generation,
+        humanize_block_ids: Optional[list[str]] = None,
     ) -> ReviewReport:
         self._set_task_status(task, TaskStatus.REVIEWING)
         self._log_action(task.id, "phase4.review.started", {"generation_id": generation.id})
         self.session.commit()
 
+        blocks = self._split_markdown_blocks(generation.markdown_content or "")
         payload = self._build_review_payload(
             task_id=task.id,
             source=source,
             brief=brief,
             related=related,
             generation=generation,
+            blocks=blocks,
+        )
+        heuristic_metadata = self._estimate_ai_trace_metadata(blocks)
+        rewrite_targets = self._normalize_rewrite_targets(
+            payload.get("rewrite_targets"),
+            {block.block_id for block in blocks},
+        )
+        if not rewrite_targets:
+            rewrite_targets = [
+                {"block_id": item.block_id, "reason": item.reason, "instruction": item.instruction}
+                for item in heuristic_metadata.rewrite_targets
+            ]
+        issues_payload, suggestions_payload = build_review_storage_payloads(
+            issues=payload.get("issues"),
+            suggestions=payload.get("suggestions"),
+            ai_trace_score=payload.get("ai_trace_score", heuristic_metadata.ai_trace_score),
+            ai_trace_patterns=payload.get("ai_trace_patterns") or heuristic_metadata.ai_trace_patterns,
+            rewrite_targets=rewrite_targets,
+            voice_summary=payload.get("voice_summary") or heuristic_metadata.voice_summary,
+            humanize_applied=bool(humanize_block_ids),
+            humanize_block_ids=humanize_block_ids,
         )
         report = self.reviews.create(
             ReviewReport(
@@ -249,12 +319,13 @@ class Phase4PipelineService:
                 readability_score=self._coerce_float(payload.get("readability_score")),
                 title_score=self._coerce_float(payload.get("title_score")),
                 novelty_score=self._coerce_float(payload.get("novelty_score")),
-                issues=self._wrap_list(payload.get("issues")),
-                suggestions=self._wrap_list(payload.get("suggestions")),
+                issues=issues_payload,
+                suggestions=suggestions_payload,
                 final_decision=self._normalize_decision(str(payload.get("final_decision") or "revise")),
             )
         )
         self._apply_review_scores(generation, report)
+        metadata = extract_review_metadata(report.issues, report.suggestions)
         self._log_action(
             task.id,
             "phase4.review.completed",
@@ -263,10 +334,139 @@ class Phase4PipelineService:
                 "review_report_id": report.id,
                 "decision": report.final_decision,
                 "overall_score": generation.score_overall,
+                "ai_trace_score": metadata.ai_trace_score,
+                "humanize_applied": metadata.humanize_applied,
             },
         )
         self.session.commit()
         return report
+
+    def _try_humanize_generation(
+        self,
+        *,
+        task: Task,
+        source: SourceArticle,
+        brief: ContentBrief,
+        generation: Generation,
+        review: ReviewReport,
+    ) -> Optional[HumanizePassResult]:
+        metadata = extract_review_metadata(review.issues, review.suggestions)
+        target_ids = [item.block_id for item in metadata.rewrite_targets][: self._MAX_HUMANIZE_TARGETS]
+        if not target_ids:
+            return None
+
+        blocks = self._split_markdown_blocks(generation.markdown_content or "")
+        if not blocks:
+            return None
+
+        self._set_task_status(task, TaskStatus.GENERATING)
+        self._log_action(
+            task.id,
+            "phase4.humanize.started",
+            {
+                "generation_id": generation.id,
+                "review_report_id": review.id,
+                "target_block_ids": target_ids,
+                "ai_trace_score": metadata.ai_trace_score,
+            },
+        )
+        self.session.commit()
+
+        try:
+            payload, model_name = self._build_humanize_payload(
+                task_id=task.id,
+                source=source,
+                brief=brief,
+                generation=generation,
+                review=review,
+                blocks=blocks,
+            )
+            rewritten_blocks = self._extract_rewritten_blocks(payload, valid_block_ids=set(target_ids))
+            if not rewritten_blocks:
+                self._log_action(
+                    task.id,
+                    "phase4.humanize.skipped",
+                    {"generation_id": generation.id, "reason": "no_valid_rewrites"},
+                )
+                self.session.commit()
+                return None
+
+            rewritten_markdown = self._apply_rewritten_blocks(blocks, rewritten_blocks)
+            rewritten_markdown = self.wechat_layout.ensure_title_heading(
+                rewritten_markdown,
+                generation.title,
+                generation.subtitle,
+            )
+            rendered_layout = self.wechat_layout.render_markdown(rewritten_markdown)
+            if rendered_layout.residual_markdown_markers:
+                raise ValueError(
+                    "Humanize pass still contains unsupported markdown markers: "
+                    + ", ".join(rendered_layout.residual_markdown_markers)
+                )
+            if rendered_layout.normalization_warnings:
+                self._log_action(
+                    task.id,
+                    "phase4.layout.normalized",
+                    {
+                        "warnings": rendered_layout.normalization_warnings,
+                        "revision_from_generation_id": generation.id,
+                        "humanize_pass": True,
+                    },
+                )
+
+            if (rendered_layout.normalized_markdown or "").strip() == (generation.markdown_content or "").strip():
+                self._log_action(
+                    task.id,
+                    "phase4.humanize.skipped",
+                    {"generation_id": generation.id, "reason": "markdown_unchanged"},
+                )
+                self.session.commit()
+                return None
+
+            rewritten_generation = self.generations.create(
+                Generation(
+                    task_id=task.id,
+                    brief_id=generation.brief_id,
+                    version_no=self.generations.get_next_version_no(task.id),
+                    prompt_type=DEFAULT_GENERATION_PROMPT_TYPE,
+                    prompt_version=CURRENT_PHASE4_PROMPT_VERSION,
+                    model_name=model_name,
+                    title=generation.title,
+                    subtitle=generation.subtitle,
+                    digest=generation.digest,
+                    markdown_content=rendered_layout.normalized_markdown,
+                    html_content=rendered_layout.html,
+                    status="generated",
+                )
+            )
+            rewritten_block_ids = list(rewritten_blocks.keys())
+            self._log_action(
+                task.id,
+                "phase4.humanize.completed",
+                {
+                    "generation_id": rewritten_generation.id,
+                    "source_generation_id": generation.id,
+                    "rewritten_block_ids": rewritten_block_ids,
+                    "model_name": model_name,
+                },
+            )
+            self.session.commit()
+            return HumanizePassResult(
+                generation=rewritten_generation,
+                rewritten_block_ids=rewritten_block_ids,
+            )
+        except Exception as exc:
+            self._log_action(
+                task.id,
+                "phase4.humanize.failed",
+                {
+                    "generation_id": generation.id,
+                    "review_report_id": review.id,
+                    "reason": str(exc)[:500],
+                },
+            )
+            self.session.commit()
+            return None
 
     def _auto_revise_once(
         self,
@@ -310,7 +510,7 @@ class Phase4PipelineService:
         if decision == "pass" and self._passes_thresholds(revised_review):
             return self._mark_review_passed(task, revised_generation, revised_review, auto_revised=True)
         if decision == "reject":
-            return self._mark_needs_regenerate(task, revised_generation, revised_review)
+            return self._mark_needs_regenerate(task, revised_generation, revised_review, auto_revised=True)
         return self._mark_needs_manual_review(task, revised_generation, revised_review, auto_revised=True)
 
     def _mark_review_passed(
@@ -384,13 +584,20 @@ class Phase4PipelineService:
                 auto_revised=auto_revised,
             )
 
-    def _mark_needs_regenerate(self, task: Task, generation: Generation, review: ReviewReport) -> Phase4PipelineResult:
+    def _mark_needs_regenerate(
+        self,
+        task: Task,
+        generation: Generation,
+        review: ReviewReport,
+        *,
+        auto_revised: bool = False,
+    ) -> Phase4PipelineResult:
         generation.status = "rejected"
         self._set_task_status(task, TaskStatus.NEEDS_REGENERATE)
         self._log_action(
             task.id,
             "phase4.review.rejected",
-            {"generation_id": generation.id, "review_report_id": review.id},
+            {"generation_id": generation.id, "review_report_id": review.id, "auto_revised": auto_revised},
         )
         self.session.commit()
         return Phase4PipelineResult(
@@ -399,7 +606,7 @@ class Phase4PipelineService:
             generation_id=generation.id,
             review_report_id=review.id,
             decision=review.final_decision,
-            auto_revised=False,
+            auto_revised=auto_revised,
         )
 
     def _mark_needs_manual_review(
@@ -443,6 +650,7 @@ class Phase4PipelineService:
             "你是微信公众号资深编辑。"
             "请基于输入的原文分析、content_brief 和同题素材，输出严格 JSON。"
             "如果提供了风格资产，只吸收其中已验证的结构、节奏和写法优势，不要逐句照抄。"
+            "避免写成套路化的 AI 讲解稿。"
             "不要输出 Markdown 解释，不要输出代码块。"
         )
         user_prompt = (
@@ -452,7 +660,9 @@ class Phase4PipelineService:
             "markdown_content 只允许使用以下 Markdown 子集：# / ## / ### 标题、普通段落、> 引用、"
             "- 或 1. 列表、**加粗**、[链接](https://...)、![配图说明](https://...)、--- 分隔线。"
             "不要输出代码块、表格、任务列表、原始 HTML、过量 emoji。"
-            "每段控制在 2 到 4 句，尽量保持移动端阅读的短段落节奏。\n\n"
+            "每段控制在 2 到 4 句，尽量保持移动端阅读的短段落节奏。"
+            "避免整篇都用“首先/其次/最后/总之/不难发现/值得注意的是/我们可以看到”这类模板承接词。"
+            "不要把段落写成平均用力的提纲扩写，要多写具体判断、反直觉观察、场景感和细节颗粒度。\n\n"
             f"原文标题：{source.title or '未知'}\n"
             f"原文摘要：{source.summary or '无'}\n"
             f"原文分析主题：{analysis.theme or '未知'}\n"
@@ -520,6 +730,7 @@ class Phase4PipelineService:
         brief: ContentBrief,
         related: list[RelatedArticle],
         generation: Generation,
+        blocks: list[MarkdownBlock],
     ) -> dict[str, Any]:
         system_prompt = (
             "你是内容审稿编辑。"
@@ -529,10 +740,15 @@ class Phase4PipelineService:
         user_prompt = (
             "请返回 JSON，字段固定为："
             "final_decision,similarity_score,factual_risk_score,policy_risk_score,"
-            "readability_score,title_score,novelty_score,issues,suggestions。"
+            "readability_score,title_score,novelty_score,ai_trace_score,ai_trace_patterns,"
+            "rewrite_targets,voice_summary,issues,suggestions。"
             "其中 final_decision 只能是 pass/revise/reject；"
             "similarity_score/factual_risk_score/policy_risk_score 使用 0 到 1 浮点数；"
-            "其余分数使用 0 到 100 数值；issues/suggestions 为字符串数组。\n\n"
+            "readability_score/title_score/novelty_score/ai_trace_score 使用 0 到 100 数值；"
+            "ai_trace_patterns 为字符串数组；"
+            "rewrite_targets 为数组，每项必须包含 block_id,reason,instruction，且 block_id 只能引用下方 block_map 中出现过的编号；"
+            "voice_summary 用一句话总结这篇稿件当前的表达气质；"
+            "issues/suggestions 为字符串数组。\n\n"
             f"原文标题：{source.title or '未知'}\n"
             f"原文摘要：{source.summary or '无'}\n"
             f"新角度：{brief.new_angle or '未提供'}\n"
@@ -541,7 +757,7 @@ class Phase4PipelineService:
             f"参考素材：{self._related_titles(related)}\n"
             f"生成稿标题：{generation.title or '无'}\n"
             f"生成稿摘要：{generation.digest or '无'}\n"
-            f"生成稿正文：{(generation.markdown_content or '')[:4500]}\n"
+            f"block_map：\n{self._format_block_context(blocks)}\n"
         )
         review_model = self.system_settings.phase4_review_model()
         try:
@@ -559,7 +775,69 @@ class Phase4PipelineService:
                 "phase4.review.fallback",
                 {"reason": str(exc)[:500], "generation_id": generation.id},
             )
-            return self._build_review_fallback(source=source, brief=brief, related=related, generation=generation)
+            return self._build_review_fallback(
+                source=source,
+                brief=brief,
+                related=related,
+                generation=generation,
+                blocks=blocks,
+            )
+
+    def _build_humanize_payload(
+        self,
+        *,
+        task_id: str,
+        source: SourceArticle,
+        brief: ContentBrief,
+        generation: Generation,
+        review: ReviewReport,
+        blocks: list[MarkdownBlock],
+    ) -> tuple[dict[str, Any], str]:
+        metadata = extract_review_metadata(review.issues, review.suggestions)
+        target_ids = [item.block_id for item in metadata.rewrite_targets][: self._MAX_HUMANIZE_TARGETS]
+        system_prompt = (
+            "你是中文微信公众号资深润色编辑。"
+            "你只负责降低 AI 痕迹，不改变事实立场，不扩写不存在的信息。"
+            "只改写指定 block_id，输出严格 JSON。"
+        )
+        user_prompt = (
+            "请返回 JSON，字段固定为：rewritten_blocks。"
+            "rewritten_blocks 为数组，每项包含 block_id,markdown。"
+            "只允许改写以下 block_id："
+            f"{' / '.join(target_ids) or '无'}。"
+            "不要新增 block，不要删除 block，不要改写未点名的 block。"
+            "保留 Markdown 层级和事实含义，只在表达层面去掉套话、总结腔、均匀腔，改成更自然、更具体、更像人写的口吻。"
+            "禁止输出代码块、表格、原始 HTML。\n\n"
+            f"原文标题：{source.title or '未知'}\n"
+            f"稿件标题：{generation.title or '无'}\n"
+            f"稿件定位：{brief.positioning or '未提供'}\n"
+            f"目标读者：{brief.target_reader or '泛技术读者'}\n"
+            f"新角度：{brief.new_angle or '未提供'}\n"
+            f"声音诊断：{metadata.voice_summary or '整体表达偏整齐，需要更自然的中文节奏。'}\n"
+            f"命中模式：{'；'.join(metadata.ai_trace_patterns) or '未提供'}\n"
+            f"改写目标：{self._rewrite_target_context(metadata)}\n"
+            f"block_map：\n{self._format_block_context(blocks, focus_block_ids=set(target_ids))}\n"
+        )
+        write_model = self.system_settings.phase4_write_model()
+        try:
+            return (
+                self.llm.complete_json(
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
+                    model=write_model,
+                    temperature=0.45,
+                    json_mode=True,
+                    timeout_seconds=self.settings.llm_write_timeout_seconds,
+                ),
+                write_model,
+            )
+        except Exception as exc:
+            self._log_action(
+                task_id,
+                "phase4.humanize.fallback",
+                {"reason": str(exc)[:500], "generation_id": generation.id},
+            )
+            raise
 
     def _build_generation_fallback(
         self,
@@ -641,6 +919,7 @@ class Phase4PipelineService:
         brief: ContentBrief,
         related: list[RelatedArticle],
         generation: Generation,
+        blocks: list[MarkdownBlock],
     ) -> dict[str, Any]:
         markdown = generation.markdown_content or ""
         similarity = self._similarity_heuristic(source.cleaned_text or "", markdown)
@@ -649,6 +928,7 @@ class Phase4PipelineService:
         novelty = 84.0 if (brief.new_angle or "") and (brief.new_angle or "") not in (source.title or "") else 72.0
         policy_risk = 0.15 if not self._contains_policy_keywords(markdown) else 0.55
         factual_risk = 0.2 if len(related) >= 3 else 0.38
+        ai_trace_metadata = self._estimate_ai_trace_metadata(blocks)
 
         issues: list[str] = []
         suggestions: list[str] = []
@@ -680,6 +960,13 @@ class Phase4PipelineService:
             "readability_score": readability,
             "title_score": title_score,
             "novelty_score": novelty,
+            "ai_trace_score": ai_trace_metadata.ai_trace_score,
+            "ai_trace_patterns": ai_trace_metadata.ai_trace_patterns,
+            "rewrite_targets": [
+                {"block_id": item.block_id, "reason": item.reason, "instruction": item.instruction}
+                for item in ai_trace_metadata.rewrite_targets
+            ],
+            "voice_summary": ai_trace_metadata.voice_summary,
             "issues": issues or ["未发现明显结构性问题。"],
             "suggestions": suggestions or ["可以进入下一阶段。"],
         }
@@ -711,11 +998,13 @@ class Phase4PipelineService:
         similarity = float(review.similarity_score or 0)
         policy_risk = float(review.policy_risk_score or 0)
         factual_risk = float(review.factual_risk_score or 0)
+        metadata = extract_review_metadata(review.issues, review.suggestions)
         return (
             overall >= self.settings.phase4_review_pass_score
             and similarity <= self.settings.phase4_similarity_max
             and policy_risk <= self.settings.phase4_policy_risk_max
             and factual_risk <= self.settings.phase4_factual_risk_max
+            and (metadata.ai_trace_score is None or metadata.ai_trace_score <= self._AI_TRACE_REWRITE_THRESHOLD)
         )
 
     def _overall_score(self, review: ReviewReport) -> float:
@@ -733,6 +1022,217 @@ class Phase4PipelineService:
             + (100.0 - policy_risk * 100.0) * 0.1
             + (100.0 - factual_risk * 100.0) * 0.05
         )
+
+    def _should_run_humanize(self, review: ReviewReport) -> bool:
+        metadata = extract_review_metadata(review.issues, review.suggestions)
+        if metadata.ai_trace_score is None or metadata.ai_trace_score < self._AI_TRACE_REWRITE_THRESHOLD:
+            return False
+        if not metadata.rewrite_targets:
+            return False
+        if float(review.policy_risk_score or 0) > self.settings.phase4_policy_risk_max:
+            return False
+        if float(review.factual_risk_score or 0) > self.settings.phase4_factual_risk_max:
+            return False
+        return True
+
+    def _split_markdown_blocks(self, markdown: str) -> list[MarkdownBlock]:
+        segments = [segment.strip() for segment in re.split(r"\n\s*\n", str(markdown or "").strip()) if segment.strip()]
+        return [MarkdownBlock(block_id=f"b{index}", markdown=segment) for index, segment in enumerate(segments, start=1)]
+
+    def _format_block_context(
+        self,
+        blocks: list[MarkdownBlock],
+        *,
+        focus_block_ids: Optional[set[str]] = None,
+    ) -> str:
+        if not blocks:
+            return "无"
+
+        visible_ids = set(focus_block_ids or [])
+        if visible_ids:
+            for index, block in enumerate(blocks):
+                if block.block_id not in visible_ids:
+                    continue
+                if index > 0:
+                    visible_ids.add(blocks[index - 1].block_id)
+                if index + 1 < len(blocks):
+                    visible_ids.add(blocks[index + 1].block_id)
+            selected_blocks = [block for block in blocks if block.block_id in visible_ids]
+        else:
+            selected_blocks = list(blocks)
+
+        rendered_blocks: list[str] = []
+        current_length = 0
+        for block in selected_blocks:
+            chunk = f"[{block.block_id}]\n{block.markdown}"
+            if rendered_blocks and current_length + len(chunk) > self._REVIEW_BLOCK_CONTEXT_MAX_CHARS:
+                rendered_blocks.append("...[已截断剩余 block]...")
+                break
+            rendered_blocks.append(chunk)
+            current_length += len(chunk) + 2
+        return "\n\n".join(rendered_blocks)
+
+    def _estimate_ai_trace_metadata(self, blocks: list[MarkdownBlock]) -> ReviewMetadata:
+        formula_terms = (
+            "首先",
+            "其次",
+            "再次",
+            "最后",
+            "总之",
+            "综上",
+            "不难发现",
+            "值得注意的是",
+            "我们可以看到",
+            "换句话说",
+            "从某种意义上说",
+        )
+        heading_prefixes = ("先", "再", "最后", "总结", "收尾", "第一", "第二", "第三")
+
+        paragraph_blocks = [block for block in blocks if not block.markdown.lstrip().startswith("#")]
+        score = 34.0
+        patterns: list[str] = []
+        rewrite_targets: list[dict[str, str]] = []
+
+        formula_hits: list[tuple[MarkdownBlock, list[str]]] = []
+        for block in paragraph_blocks:
+            hits = [term for term in formula_terms if term in block.markdown]
+            if hits:
+                formula_hits.append((block, hits))
+        if formula_hits:
+            patterns.append("承接词偏模板化，像按套路串段落")
+            score += min(26.0, 10.0 + 6.0 * len(formula_hits))
+            for block, hits in formula_hits:
+                self._append_rewrite_target(
+                    rewrite_targets,
+                    block=block,
+                    reason=f"出现模板化承接词：{' / '.join(hits[:2])}",
+                    instruction="保留原有信息点，去掉首先/其次/总之等串联词，改成更具体的判断或观察。",
+                )
+
+        heading_hits = [
+            block
+            for block in blocks
+            if block.markdown.startswith("## ")
+            and any(block.markdown[3:].strip().startswith(prefix) for prefix in heading_prefixes)
+        ]
+        if len(heading_hits) >= 2:
+            patterns.append("小标题推进过于工整，像提纲展开")
+            score += 12.0
+            for block in heading_hits[:2]:
+                self._append_rewrite_target(
+                    rewrite_targets,
+                    block=block,
+                    reason="二级标题太像模板推进",
+                    instruction="保留章节意思，但把标题改得更具体、更有判断，而不是“先/再/最后”式的提纲口吻。",
+                )
+
+        paragraph_lengths = [length for length in (self._visible_markdown_length(block.markdown) for block in paragraph_blocks) if length > 0]
+        if len(paragraph_lengths) >= 3 and max(paragraph_lengths) - min(paragraph_lengths) <= 24:
+            patterns.append("段落节奏过匀，像机器平均发力")
+            score += 8.0
+            if paragraph_blocks:
+                self._append_rewrite_target(
+                    rewrite_targets,
+                    block=paragraph_blocks[0],
+                    reason="段落长度和句式太平均",
+                    instruction="打破均匀讲解腔，补一点具体细节、判断力度或口语化停顿。",
+                )
+
+        if not patterns:
+            score = 42.0
+
+        voice_summary = (
+            "整体信息是清楚的，但表达过于整齐，承接词和段落推进都有明显模板味。"
+            if patterns
+            else "整体口吻基本自然，但还可以再多一点具体观察和起伏。"
+        )
+        normalized_targets = extract_review_metadata({}, {"rewrite_targets": rewrite_targets}).rewrite_targets
+        return ReviewMetadata(
+            ai_trace_score=round(min(score, 96.0), 4),
+            ai_trace_patterns=patterns[:4],
+            rewrite_targets=normalized_targets[: self._MAX_HUMANIZE_TARGETS],
+            voice_summary=voice_summary,
+        )
+
+    def _append_rewrite_target(
+        self,
+        targets: list[dict[str, str]],
+        *,
+        block: MarkdownBlock,
+        reason: str,
+        instruction: str,
+    ) -> None:
+        if len(targets) >= self._MAX_HUMANIZE_TARGETS:
+            return
+        if any(item.get("block_id") == block.block_id for item in targets):
+            return
+        targets.append(
+            {
+                "block_id": block.block_id,
+                "reason": self._limit(reason, 120),
+                "instruction": self._limit(instruction, 220),
+            }
+        )
+
+    def _normalize_rewrite_targets(self, payload: Any, valid_block_ids: set[str]) -> list[dict[str, str]]:
+        metadata = extract_review_metadata({}, {"rewrite_targets": payload})
+        targets: list[dict[str, str]] = []
+        for item in metadata.rewrite_targets:
+            if item.block_id not in valid_block_ids:
+                continue
+            targets.append(
+                {
+                    "block_id": item.block_id,
+                    "reason": item.reason,
+                    "instruction": item.instruction,
+                }
+            )
+            if len(targets) >= self._MAX_HUMANIZE_TARGETS:
+                break
+        return targets
+
+    def _rewrite_target_context(self, metadata: ReviewMetadata) -> str:
+        if not metadata.rewrite_targets:
+            return "无"
+        return " | ".join(
+            f"{item.block_id}：{item.reason}；改写要求：{item.instruction}"
+            for item in metadata.rewrite_targets[: self._MAX_HUMANIZE_TARGETS]
+        )
+
+    def _extract_rewritten_blocks(self, payload: dict[str, Any], *, valid_block_ids: set[str]) -> dict[str, str]:
+        raw_items = payload.get("rewritten_blocks")
+        if not isinstance(raw_items, list):
+            return {}
+
+        rewritten: dict[str, str] = {}
+        for item in raw_items:
+            if not isinstance(item, dict):
+                continue
+            block_id = str(item.get("block_id") or "").strip()
+            if block_id not in valid_block_ids or block_id in rewritten:
+                continue
+            markdown = str(item.get("markdown") or item.get("content") or "").strip()
+            if not markdown:
+                continue
+            rewritten[block_id] = markdown
+            if len(rewritten) >= self._MAX_HUMANIZE_TARGETS:
+                break
+        return rewritten
+
+    def _apply_rewritten_blocks(self, blocks: list[MarkdownBlock], rewritten_blocks: dict[str, str]) -> str:
+        parts: list[str] = []
+        for block in blocks:
+            parts.append(rewritten_blocks.get(block.block_id, block.markdown).strip())
+        return "\n\n".join(part for part in parts if part).strip()
+
+    def _visible_markdown_length(self, markdown: str) -> int:
+        text = re.sub(r"^#{1,3}\s+", "", markdown, flags=re.MULTILINE)
+        text = re.sub(r"^>\s?", "", text, flags=re.MULTILINE)
+        text = re.sub(r"^[-*]\s+", "", text, flags=re.MULTILINE)
+        text = re.sub(r"^\d+\.\s+", "", text, flags=re.MULTILINE)
+        text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+        text = text.replace("**", "")
+        return len(text.replace("\n", "").strip())
 
     def _related_context(self, related: list[RelatedArticle]) -> str:
         lines: list[str] = []
@@ -917,15 +1417,20 @@ class Phase4PipelineService:
         return task
 
     def _set_task_status(self, task: Task, status: TaskStatus) -> None:
-        task.status = status.value
-        task.error_code = None
-        task.error_message = None
-        self.session.flush()
+        self.tasks.update_runtime_state(
+            task,
+            status=status.value,
+            error_code=None,
+            error_message=None,
+        )
 
     def _fail_task(self, task: Task, status: TaskStatus, error_code: str, error_message: str) -> None:
-        task.status = status.value
-        task.error_code = error_code
-        task.error_message = error_message[:500]
+        self.tasks.update_runtime_state(
+            task,
+            status=status.value,
+            error_code=error_code,
+            error_message=error_message[:500],
+        )
         self._log_action(task.id, "task.failed", {"status": status.value, "error_code": error_code, "error_message": task.error_message})
         self.session.commit()
 

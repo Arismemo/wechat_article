@@ -390,15 +390,20 @@ class Phase2PipelineService:
         return "".join(str(child) for child in soup.body.contents)
 
     def _set_task_status(self, task: Task, status: TaskStatus) -> None:
-        task.status = status.value
-        task.error_code = None
-        task.error_message = None
-        self.session.flush()
+        self.tasks.update_runtime_state(
+            task,
+            status=status.value,
+            error_code=None,
+            error_message=None,
+        )
 
     def _fail_task(self, task: Task, status: TaskStatus, error_code: str, error_message: str) -> None:
-        task.status = status.value
-        task.error_code = error_code
-        task.error_message = error_message[:1000]
+        self.tasks.update_runtime_state(
+            task,
+            status=status.value,
+            error_code=error_code,
+            error_message=error_message[:1000],
+        )
         self._log_action(task.id, f"phase2.failed.{status.value}", {"error_code": error_code, "error_message": error_message})
         self.session.commit()
 

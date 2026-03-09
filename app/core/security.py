@@ -49,18 +49,21 @@ def verify_admin_basic_auth(
 ) -> None:
     settings = get_settings()
     username, password = _get_admin_basic_auth_credentials(settings)
-    if not username and not password:
+    if username or password:
+        if not username or not password:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Admin auth is misconfigured.",
+            )
+        if not _matches_admin_session_cookie(admin_session, settings):
+            _verify_admin_basic_auth_header(authorization, username, password)
+        _set_admin_session_cookie(response, settings, username=username, password=password)
         return
-    if not username or not password:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Admin auth is misconfigured.",
-        )
     if _matches_admin_session_cookie(admin_session, settings):
-        _set_admin_session_cookie(response, settings, username, password)
+        _set_admin_session_cookie(response, settings)
         return
-    _verify_admin_basic_auth_header(authorization, username, password)
-    _set_admin_session_cookie(response, settings, username, password)
+    _set_admin_session_cookie(response, settings)
+
 
 def _get_admin_basic_auth_credentials(settings) -> tuple[str, str]:
     username = (settings.admin_username or "").strip()
@@ -88,22 +91,25 @@ def _matches_admin_session_cookie(admin_session: Optional[str], settings) -> boo
     if not isinstance(admin_session, str) or not admin_session:
         return False
     username, password = _get_admin_basic_auth_credentials(settings)
-    if not username or not password:
+    if (username and not password) or (password and not username):
         return False
-    expected = _build_admin_session_value(settings, username, password)
+    expected = _build_admin_session_value(settings, username=username or None, password=password or None)
     return secrets.compare_digest(admin_session, expected)
 
 
-def _build_admin_session_value(settings, username: str, password: str) -> str:
-    payload = f"{username}:{password}".encode("utf-8")
+def _build_admin_session_value(settings, username: Optional[str] = None, password: Optional[str] = None) -> str:
+    if username and password:
+        payload = f"basic:{username}:{password}".encode("utf-8")
+    else:
+        payload = b"admin-ui-session"
     secret = settings.api_bearer_token.encode("utf-8")
     return hmac.new(secret, payload, hashlib.sha256).hexdigest()
 
 
-def _set_admin_session_cookie(response: Response, settings, username: str, password: str) -> None:
+def _set_admin_session_cookie(response: Response, settings, username: Optional[str] = None, password: Optional[str] = None) -> None:
     response.set_cookie(
         key=ADMIN_SESSION_COOKIE_NAME,
-        value=_build_admin_session_value(settings, username, password),
+        value=_build_admin_session_value(settings, username=username, password=password),
         httponly=True,
         samesite="lax",
         secure=settings.app_base_url.startswith("https://"),

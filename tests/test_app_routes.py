@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from app.core.security import verify_bearer_token
+from app.core.security import ADMIN_SESSION_COOKIE_NAME, verify_bearer_token
 from app.db.redis_client import get_redis_client
 from app.settings import get_settings
 
@@ -130,9 +130,12 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("人工驳回重写", response.text)
         self.assertIn("允许推稿", response.text)
         self.assertIn("禁止推稿", response.text)
-        self.assertIn("高级鉴权兜底", response.text)
         self.assertIn('aria-label="后台分区"', response.text)
         self.assertIn('aria-current="page"', response.text)
+        self.assertIn("section-nav-shell", response.text)
+        self.assertLess(response.text.index("section-nav-shell"), response.text.index('<section class="hero">'))
+        self.assertNotIn("高级鉴权兜底", response.text)
+        self.assertNotIn("Bearer Token（仅兜底）", response.text)
         self.assertIn("const apiUrl = (path) => new URL(path, window.location.origin).toString();", response.text)
         self.assertIn("const scrollWorkspaceIntoView = () => {", response.text)
 
@@ -143,20 +146,29 @@ class AppRouteTests(unittest.TestCase):
         response = client.get("/admin/console")
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn("统一控制台", response.text)
-        self.assertIn("统一任务监控首页", response.text)
+        self.assertIn("高级监控台", response.text)
+        self.assertIn("ADVANCED OPERATIONS MONITOR", response.text)
+        self.assertIn("只读排障页", response.text)
+        self.assertIn("不在这里做日常操作。这里只用于队列、worker 和任务卡点排查。", response.text)
         self.assertIn("自动实时更新（优先 SSE，失败时回退轮询）", response.text)
         self.assertIn("跳到监控主区", response.text)
-        self.assertIn("监控概览", response.text)
+        self.assertIn("监控快照", response.text)
         self.assertIn("这页负责什么", response.text)
+        self.assertIn("回到总览主控台", response.text)
         self.assertIn("队列与 Worker 观测", response.text)
         self.assertIn("打开 Phase 5 审核台", response.text)
         self.assertIn("打开 Phase 6 反馈台", response.text)
         self.assertIn('aria-label="后台分区"', response.text)
         self.assertIn('role="status"', response.text)
         self.assertIn(">总览<", response.text)
+        self.assertIn("section-nav-shell", response.text)
+        self.assertLess(response.text.index("section-nav-shell"), response.text.index('<section class="hero">'))
+        self.assertNotIn('aria-current="page"', response.text)
         self.assertIn("当前筛选下没有任务。换个筛选看看。", response.text)
+        self.assertIn("var(--accent-dark, var(--accent-strong, var(--accent)))", response.text)
         self.assertIn("下一步", response.text)
+        self.assertNotIn("Bearer Token", response.text)
+        self.assertNotIn("API_BEARER_TOKEN", response.text)
 
     def test_admin_settings_page_renders(self) -> None:
         app_module = reload(import_module("app.main"))
@@ -175,10 +187,13 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn('role="status"', response.text)
         self.assertIn(">设置<", response.text)
         self.assertIn(">审核<", response.text)
+        self.assertIn("section-nav-shell", response.text)
+        self.assertLess(response.text.index("section-nav-shell"), response.text.index('<section class="hero">'))
         self.assertIn("辅助工具", response.text)
         self.assertIn("测试告警", response.text)
         self.assertIn("环境状态", response.text)
-        self.assertIn("高级鉴权兜底", response.text)
+        self.assertNotIn("高级鉴权兜底", response.text)
+        self.assertNotIn("Bearer Token（仅兜底）", response.text)
         self.assertIn("const apiUrl = (path) => new URL(path, window.location.origin).toString();", response.text)
 
     def test_admin_portal_page_renders(self) -> None:
@@ -201,6 +216,8 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("任务列表 / 当前动作 / 微信草稿 / 成稿预览 / 危险操作", response.text)
         self.assertIn('aria-label="后台分区"', response.text)
         self.assertIn('role="status"', response.text)
+        self.assertIn("section-nav-shell", response.text)
+        self.assertLess(response.text.index("section-nav-shell"), response.text.index('<section class="hero">'))
         self.assertIn(">反馈<", response.text)
         self.assertIn("详细信息", response.text)
         self.assertIn("危险操作", response.text)
@@ -208,6 +225,7 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("页面内会再确认一次", response.text)
         self.assertIn("清空", response.text)
         self.assertIn("这里只收微信公众号文章链接。", response.text)
+        self.assertIn("打开高级监控页", response.text)
         self.assertIn("composer-actions", response.text)
         self.assertIn("alignSelectedTaskToVisibleTasks", response.text)
         self.assertIn("scrollTaskDetailIntoView", response.text)
@@ -224,6 +242,9 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("summary.filtered_review_passed > 0", response.text)
         self.assertIn("showBusy = true", response.text)
         self.assertIn("loadSnapshot({ showBusy: false })", response.text)
+        self.assertIn("const STATUS_PROGRESS = {", response.text)
+        self.assertIn('cache: "no-store"', response.text)
+        self.assertIn("applyOptimisticTaskState", response.text)
         self.assertIn("当前筛选下没有任务。换个筛选看看。", response.text)
 
     def test_admin_phase6_page_renders(self) -> None:
@@ -248,11 +269,26 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("立即同步", response.text)
         self.assertIn("导入 CSV", response.text)
         self.assertIn("新建资产", response.text)
-        self.assertIn("高级鉴权兜底", response.text)
         self.assertIn('aria-label="后台分区"', response.text)
         self.assertIn('role="status"', response.text)
         self.assertIn(">反馈<", response.text)
+        self.assertIn("section-nav-shell", response.text)
+        self.assertLess(response.text.index("section-nav-shell"), response.text.index('<section class="hero">'))
+        self.assertNotIn("高级鉴权兜底", response.text)
+        self.assertNotIn("Bearer Token（仅兜底）", response.text)
         self.assertIn("const apiUrl = (path) => new URL(path, window.location.origin).toString();", response.text)
+
+    def test_admin_page_sets_session_cookie_without_basic_auth(self) -> None:
+        app_module = reload(import_module("app.main"))
+        client = TestClient(app_module.create_app())
+
+        response = client.get("/admin/phase5")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(f"{ADMIN_SESSION_COOKIE_NAME}=", response.headers.get("set-cookie", ""))
+        session_cookie = client.cookies.get(ADMIN_SESSION_COOKIE_NAME)
+        self.assertTrue(session_cookie)
+        verify_bearer_token(admin_session=session_cookie)
 
     def test_verify_bearer_token_accepts_admin_basic_auth_when_configured(self) -> None:
         with patch.dict(os.environ, {"ADMIN_USERNAME": "admin", "ADMIN_PASSWORD": "secret-pass"}, clear=False):
@@ -280,7 +316,7 @@ class AppRouteTests(unittest.TestCase):
 
             console_authorized = client.get("/admin/console", headers={"Authorization": f"Basic {encoded}"})
             self.assertEqual(console_authorized.status_code, 200)
-            self.assertIn("统一任务监控首页", console_authorized.text)
+            self.assertIn("高级监控台", console_authorized.text)
 
             settings_unauthorized = client.get("/admin/settings")
             self.assertEqual(settings_unauthorized.status_code, 401)

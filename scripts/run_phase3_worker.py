@@ -11,6 +11,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from app.db.session import get_session_factory
 from app.services.phase3_pipeline_service import Phase3PipelineService
 from app.services.phase3_queue_service import Phase3QueueService
+from app.services.worker_heartbeat import heartbeat_refresh_interval, keep_worker_heartbeat
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -19,6 +20,7 @@ logger = logging.getLogger("phase3-worker")
 
 def main() -> None:
     queue = Phase3QueueService()
+    heartbeat_interval = heartbeat_refresh_interval(queue.settings.worker_heartbeat_stale_seconds)
     recovered = queue.requeue_processing_jobs()
     if recovered:
         logger.info("recovered %s in-flight phase3 job(s) back to the queue", recovered)
@@ -33,11 +35,16 @@ def main() -> None:
             queue.idle_sleep()
             continue
 
-        queue.mark_worker_heartbeat(task_id)
         logger.info("processing task %s", task_id)
         session = session_factory()
         try:
-            Phase3PipelineService(session).run(task_id)
+            with keep_worker_heartbeat(
+                queue.mark_worker_heartbeat,
+                current_task_id=task_id,
+                interval_seconds=heartbeat_interval,
+                logger=logger,
+            ):
+                Phase3PipelineService(session).run(task_id)
             logger.info("task %s completed", task_id)
         except Exception:  # noqa: BLE001
             logger.exception("task %s failed", task_id)

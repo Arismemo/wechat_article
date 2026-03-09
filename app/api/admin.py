@@ -1142,6 +1142,7 @@ def phase5_console() -> str:
         <body>
           <a class="skip-link" href="#review-region">跳到审核主区</a>
           <main>
+            __ADMIN_SECTION_NAV__
             <section class="hero">
               <div class="hero-grid">
                 <div class="hero-copy">
@@ -1168,7 +1169,6 @@ def phase5_console() -> str:
                   </div>
                 </aside>
               </div>
-              __ADMIN_SECTION_NAV__
             </section>
 
             <section class="overview-strip" aria-label="审核概览">
@@ -1203,17 +1203,7 @@ def phase5_console() -> str:
               <div class="stack">
                 <section class="panel">
                   <h2>先选任务</h2>
-                  <p class="panel-intro">默认会复用后台登录态。左边只负责选任务和触发动作，右边统一看工作区内容；只有当前环境没启用后台登录时，才需要展开下面的鉴权兜底。</p>
-                  <details class="fold">
-                    <summary>高级鉴权兜底</summary>
-                    <div class="grid single" style="margin-top: 12px;">
-                      <div class="field">
-                        <label for="fallback-token">Bearer Token（仅兜底）</label>
-                        <input id="fallback-token" type="password" placeholder="仅在未启用后台登录态时填写" aria-describedby="fallback-token-hint" />
-                      </div>
-                      <p class="field-hint" id="fallback-token-hint">页面会先复用当前后台登录态。只有请求返回 401 且当前环境没有启用后台 Basic Auth 时，才需要在这里临时填入 `API_BEARER_TOKEN`。</p>
-                    </div>
-                  </details>
+                  <p class="panel-intro">默认直接复用当前后台会话。左边只负责选任务和触发动作，右边统一看工作区内容；如果长时间停留后提示未授权，刷新页面重新进入后台即可。</p>
                   <div class="grid single">
                     <div class="field">
                       <label for="device">device_id</label>
@@ -1343,7 +1333,6 @@ def phase5_console() -> str:
           </main>
 
           <script>
-            const fallbackTokenEl = document.getElementById("fallback-token");
             const urlEl = document.getElementById("url");
             const taskEl = document.getElementById("task");
             const reviewNoteEl = document.getElementById("review-note");
@@ -1419,6 +1408,7 @@ def phase5_console() -> str:
               "push_failed",
               "needs_manual_source",
             ]);
+            const SESSION_EXPIRED_MESSAGE = "后台会话已失效，请刷新页面重新进入后台。";
 
             const escapeHtml = (value) => {
               return String(value ?? "")
@@ -1438,7 +1428,6 @@ def phase5_console() -> str:
             };
 
             const loadDraft = () => {
-              fallbackTokenEl.value = localStorage.getItem("phase5_console_fallback_token") || "";
               urlEl.value = localStorage.getItem("phase5_console_url") || "";
               taskEl.value = localStorage.getItem("phase5_console_task") || "";
               reviewNoteEl.value = localStorage.getItem("phase5_console_review_note") || "";
@@ -1448,7 +1437,6 @@ def phase5_console() -> str:
             };
 
             const saveDraft = () => {
-              localStorage.setItem("phase5_console_fallback_token", fallbackTokenEl.value.trim());
               localStorage.setItem("phase5_console_url", urlEl.value.trim());
               localStorage.setItem("phase5_console_task", taskEl.value.trim());
               localStorage.setItem("phase5_console_review_note", reviewNoteEl.value.trim());
@@ -1484,9 +1472,6 @@ def phase5_console() -> str:
               outputEl.textContent = JSON.stringify(payload, null, 2);
             };
 
-            const authErrorMessage = (usedFallbackToken) => usedFallbackToken
-              ? "高级鉴权兜底里的 Bearer Token 未通过校验，请确认填写的是当前环境的 API_BEARER_TOKEN。"
-              : "当前页面默认复用后台登录态。若这个环境没有配置后台登录，请展开“高级鉴权兜底”后填入 Bearer Token。";
             const setButtonBusy = (button, busy, pendingLabel = "处理中...") => {
               if (!button) return;
               if (!button.dataset.defaultLabel) {
@@ -1512,40 +1497,26 @@ def phase5_console() -> str:
 
             const request = async (method, path, body) => {
               saveDraft();
-              const fallbackToken = fallbackTokenEl.value.trim();
-              const execute = async (useFallbackToken = false) => {
-                const headers = {};
-                if (body !== undefined) {
-                  headers["Content-Type"] = "application/json";
-                }
-                if (useFallbackToken && fallbackToken) {
-                  headers["Authorization"] = `Bearer ${fallbackToken}`;
-                }
-                const response = await fetch(apiUrl(path), {
-                  method,
-                  headers,
-                  credentials: "same-origin",
-                  body: body === undefined ? undefined : JSON.stringify(body),
-                });
-                const text = await response.text();
-                let data;
-                try {
-                  data = text ? JSON.parse(text) : {};
-                } catch {
-                  data = { raw: text };
-                }
-                return { response, data };
-              };
-
-              let usedFallbackToken = false;
-              let { response, data } = await execute(false);
-              if (response.status === 401 && fallbackToken) {
-                usedFallbackToken = true;
-                ({ response, data } = await execute(true));
+              const headers = {};
+              if (body !== undefined) {
+                headers["Content-Type"] = "application/json";
+              }
+              const response = await fetch(apiUrl(path), {
+                method,
+                headers,
+                credentials: "same-origin",
+                body: body === undefined ? undefined : JSON.stringify(body),
+              });
+              const text = await response.text();
+              let data;
+              try {
+                data = text ? JSON.parse(text) : {};
+              } catch {
+                data = { raw: text };
               }
               if (!response.ok) {
                 if (response.status === 401) {
-                  throw new Error(authErrorMessage(usedFallbackToken));
+                  throw new Error(SESSION_EXPIRED_MESSAGE);
                 }
                 throw new Error(data.detail || data.raw || `HTTP ${response.status}`);
               }
@@ -1609,6 +1580,20 @@ def phase5_console() -> str:
               if (policy.mode === "allowed") return "已人工允许";
               return "默认允许";
             };
+            const reviewAiTraceScore = (review) => (review && review.ai_trace_score !== null && review.ai_trace_score !== undefined)
+              ? Number(review.ai_trace_score)
+              : null;
+            const reviewAiTraceLabel = (review) => {
+              const score = reviewAiTraceScore(review);
+              return score === null ? "暂无" : `${Math.round(score)}分`;
+            };
+            const reviewAiTracePatternCount = (review) => Array.isArray(review?.ai_trace_patterns)
+              ? review.ai_trace_patterns.length
+              : 0;
+            const reviewHumanizeLabel = (review) => review?.humanize_applied
+              ? `已定点润色 ${Array.isArray(review?.humanize_block_ids) ? review.humanize_block_ids.length : 0} 段`
+              : "未触发";
+            const reviewVoiceSummary = (review) => truncate(review?.voice_summary || "", 120) || "暂无";
             const diffFieldCard = (label, before, after) => `
               <div class="diff-card">
                 <strong>${escapeHtml(label)}</strong>
@@ -1735,6 +1720,9 @@ def phase5_console() -> str:
               const latest = workspace.generations[0];
               const latestReview = latest?.review;
               const pushPolicy = workspace.wechat_push_policy;
+              const latestAiTrace = reviewAiTraceLabel(latestReview);
+              const latestHumanize = reviewHumanizeLabel(latestReview);
+              const latestPatternCount = reviewAiTracePatternCount(latestReview);
               workspaceEl.innerHTML = `
                 <div class="summary-grid">
                   <div class="summary-item">
@@ -1756,6 +1744,14 @@ def phase5_console() -> str:
                   <div class="summary-item">
                     <strong>推草稿许可</strong>
                     <span>${escapeHtml(pushPolicyLabel(pushPolicy))}</span>
+                  </div>
+                  <div class="summary-item">
+                    <strong>AI 痕迹</strong>
+                    <span>${escapeHtml(latestAiTrace)}</span>
+                  </div>
+                  <div class="summary-item">
+                    <strong>定点润色</strong>
+                    <span>${escapeHtml(latestHumanize)} · ${escapeHtml(latestPatternCount)} 类模式</span>
                   </div>
                   <div class="summary-item">
                     <strong>已选同题素材</strong>
@@ -1829,6 +1825,8 @@ def phase5_console() -> str:
                           <div><strong>创建时间</strong> ${escapeHtml(formatDate(generation.created_at))}</div>
                           <div><strong>综合分</strong> ${escapeHtml(generation.score_overall ?? "暂无")}</div>
                           <div><strong>标题 / 可读性 / 新颖度 / 风险</strong> ${escapeHtml(generation.score_title ?? "-")} / ${escapeHtml(generation.score_readability ?? "-")} / ${escapeHtml(generation.score_novelty ?? "-")} / ${escapeHtml(generation.score_risk ?? "-")}</div>
+                          <div><strong>AI 痕迹 / 命中模式 / 定点润色</strong> ${escapeHtml(reviewAiTraceLabel(generation.review))} / ${escapeHtml(reviewAiTracePatternCount(generation.review))} / ${escapeHtml(reviewHumanizeLabel(generation.review))}</div>
+                          <div><strong>语气诊断</strong> ${escapeHtml(reviewVoiceSummary(generation.review))}</div>
                           <div><strong>摘要</strong> ${escapeHtml(generation.digest || "暂无")}</div>
                         </div>
                         <details>
@@ -2133,7 +2131,6 @@ def phase5_console() -> str:
               });
             });
 
-            fallbackTokenEl.addEventListener("change", saveDraft);
             [recentStatusEl, recentLimitEl, recentActiveEl].forEach((element) => {
               element.addEventListener("change", async () => {
                 try {
@@ -2672,6 +2669,7 @@ def phase6_console() -> str:
         <body>
           <a class="skip-link" href="#feedback-region">跳到反馈主区</a>
           <main>
+            __ADMIN_SECTION_NAV__
             <section class="hero">
               <div class="hero-grid">
                 <div class="hero-copy">
@@ -2681,7 +2679,7 @@ def phase6_console() -> str:
                 </div>
                 <aside class="hero-status-card" aria-label="反馈页状态">
                   <span class="status" id="status">等待输入</span>
-                  <p class="hero-status-copy" id="flash-message" role="status" aria-live="polite" aria-atomic="true">默认复用后台登录态。先补 task_id，再选择“查反馈”“同步”或“导入”。</p>
+                  <p class="hero-status-copy" id="flash-message" role="status" aria-live="polite" aria-atomic="true">默认复用后台会话。先补 task_id，再选择“查反馈”“同步”或“导入”。</p>
                   <div class="hero-summary" aria-label="首屏提示">
                     <div class="hero-summary-card">
                       <strong>这页负责什么</strong>
@@ -2689,7 +2687,7 @@ def phase6_console() -> str:
                     </div>
                     <div class="hero-summary-card">
                       <strong>需要准备什么</strong>
-                      <span>task_id，以及必要时的 generation_id 和操作人标识；默认复用后台登录态。</span>
+                      <span>task_id，以及必要时的 generation_id 和操作人标识；默认复用后台会话。</span>
                     </div>
                     <div class="hero-summary-card wide">
                       <strong>当前建议</strong>
@@ -2698,7 +2696,6 @@ def phase6_console() -> str:
                   </div>
                 </aside>
               </div>
-              __ADMIN_SECTION_NAV__
             </section>
 
             <section class="overview-strip" aria-label="反馈概览">
@@ -2728,17 +2725,7 @@ def phase6_console() -> str:
               <div class="stack">
                 <section class="panel">
                   <h2>先准备</h2>
-                  <p class="panel-intro">这一列负责任务上下文。页面默认复用后台登录态；查实验、查资产可以独立执行，但导入反馈、同步反馈、沉淀资产最好先带上当前任务。</p>
-                  <details class="fold">
-                    <summary>高级鉴权兜底</summary>
-                    <div class="grid single" style="margin-top: 12px;">
-                      <div class="field">
-                        <label for="fallback-token">Bearer Token（仅兜底）</label>
-                        <input id="fallback-token" type="password" placeholder="仅在未启用后台登录态时填写" aria-describedby="fallback-token-hint" />
-                      </div>
-                      <p class="field-hint" id="fallback-token-hint">页面会先复用当前后台登录态。只有请求返回 401 且当前环境没有启用后台 Basic Auth 时，才需要在这里临时填入 `API_BEARER_TOKEN`。</p>
-                    </div>
-                  </details>
+                  <p class="panel-intro">这一列负责任务上下文。页面默认复用当前后台会话；查实验、查资产可以独立执行，但导入反馈、同步反馈、沉淀资产最好先带上当前任务。如果停留太久后提示未授权，刷新页面重新进入后台即可。</p>
                   <div class="grid single">
                     <div class="field">
                       <label for="task-id">Task ID</label>
@@ -2928,7 +2915,6 @@ def phase6_console() -> str:
           </main>
 
           <script>
-            const fallbackTokenEl = document.getElementById("fallback-token");
             const taskIdEl = document.getElementById("task-id");
             const generationIdEl = document.getElementById("generation-id");
             const operatorEl = document.getElementById("operator");
@@ -2965,6 +2951,7 @@ def phase6_console() -> str:
             let currentTaskFeedbackCount = 0;
             let currentExperimentItems = [];
             let currentAssetItems = [];
+            const SESSION_EXPIRED_MESSAGE = "后台会话已失效，请刷新页面重新进入后台。";
 
             const escapeHtml = (value) => String(value ?? "")
               .replaceAll("&", "&amp;")
@@ -3023,9 +3010,6 @@ def phase6_console() -> str:
                 setButtonBusy(button, false);
               }
             };
-            const authErrorMessage = (usedFallbackToken) => usedFallbackToken
-              ? "高级鉴权兜底里的 Bearer Token 未通过校验，请确认填写的是当前环境的 API_BEARER_TOKEN。"
-              : "当前页面默认复用后台登录态。若这个环境没有配置后台登录，请展开“高级鉴权兜底”后填入 Bearer Token。";
             const renderOverview = () => {
               const taskId = taskIdEl.value.trim();
               overviewFeedbackCountEl.textContent = String(currentTaskFeedbackCount);
@@ -3057,7 +3041,6 @@ def phase6_console() -> str:
             };
 
             const loadDraft = () => {
-              fallbackTokenEl.value = localStorage.getItem("phase6_console_fallback_token") || "";
               taskIdEl.value = localStorage.getItem("phase6_console_task_id") || "";
               generationIdEl.value = localStorage.getItem("phase6_console_generation_id") || "";
               operatorEl.value = localStorage.getItem("phase6_console_operator") || "admin-console";
@@ -3066,7 +3049,6 @@ def phase6_console() -> str:
             };
 
             const saveDraft = () => {
-              localStorage.setItem("phase6_console_fallback_token", fallbackTokenEl.value.trim());
               localStorage.setItem("phase6_console_task_id", taskIdEl.value.trim());
               localStorage.setItem("phase6_console_generation_id", generationIdEl.value.trim());
               localStorage.setItem("phase6_console_operator", operatorEl.value.trim());
@@ -3076,36 +3058,22 @@ def phase6_console() -> str:
 
             const request = async (method, path, body) => {
               saveDraft();
-              const fallbackToken = fallbackTokenEl.value.trim();
-              const execute = async (useFallbackToken = false) => {
-                const headers = {};
-                if (body !== undefined) {
-                  headers["Content-Type"] = "application/json";
-                }
-                if (useFallbackToken && fallbackToken) {
-                  headers["Authorization"] = `Bearer ${fallbackToken}`;
-                }
-                const response = await fetch(apiUrl(path), {
-                  method,
-                  headers,
-                  credentials: "same-origin",
-                  body: body === undefined ? undefined : JSON.stringify(body)
-                });
-                const text = await response.text();
-                let payload = text;
-                try { payload = JSON.parse(text); } catch (_) {}
-                return { response, payload };
-              };
-
-              let usedFallbackToken = false;
-              let { response, payload } = await execute(false);
-              if (response.status === 401 && fallbackToken) {
-                usedFallbackToken = true;
-                ({ response, payload } = await execute(true));
+              const headers = {};
+              if (body !== undefined) {
+                headers["Content-Type"] = "application/json";
               }
+              const response = await fetch(apiUrl(path), {
+                method,
+                headers,
+                credentials: "same-origin",
+                body: body === undefined ? undefined : JSON.stringify(body)
+              });
+              const text = await response.text();
+              let payload = text;
+              try { payload = JSON.parse(text); } catch (_) {}
               if (!response.ok) {
                 if (response.status === 401) {
-                  throw new Error(authErrorMessage(usedFallbackToken));
+                  throw new Error(SESSION_EXPIRED_MESSAGE);
                 }
                 throw new Error(typeof payload === "string" ? payload : JSON.stringify(payload, null, 2));
               }
@@ -3401,7 +3369,7 @@ def phase6_console() -> str:
               renderOutput("等待输入...");
             });
 
-            [fallbackTokenEl, taskIdEl, generationIdEl, operatorEl, syncDayOffsetsEl, syncLimitEl].forEach((element) => {
+            [taskIdEl, generationIdEl, operatorEl, syncDayOffsetsEl, syncLimitEl].forEach((element) => {
               const eventName = element === taskIdEl ? "input" : "change";
               element.addEventListener(eventName, () => {
                 if (element === taskIdEl) {
@@ -3418,7 +3386,7 @@ def phase6_console() -> str:
             Promise.allSettled([refreshExperiments(), refreshStyleAssets()]).then((results) => {
               const failed = results.find((item) => item.status === "rejected");
               if (!failed) return;
-              setStatus("待鉴权", "warn", failed.reason?.message || "初始数据加载失败，详见输出区域。");
+              setStatus("加载失败", "warn", failed.reason?.message || "初始数据加载失败，详见输出区域。");
               renderOutput(failed.reason?.message || "初始数据加载失败。");
             });
           </script>

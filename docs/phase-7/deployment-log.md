@@ -281,3 +281,66 @@ Phase 7 当前已具备：
 
 - 告警分级、去重和静默
 - 趋势图与时间序列统计
+
+## 20. v1.1.0 发布前收口
+
+更新时间：2026-03-09
+
+本次收口目标不是继续扩 Phase 7 范围，而是把已经上线运行的后台会话、审稿闭环和 worker 观测能力整理为可打 tag 的第二版。
+
+本次同步整理：
+
+- 版本号从 `v1.0.0` 提升到 `v1.1.0`
+- 补齐 `README.md`、`CHANGELOG.md`、`docs/release-v1.1.0.md`、`docs/release-process.md`
+- 更新 Phase 5 / 6 / 7 文档中关于后台会话与 Bearer Token 的旧描述
+- 本地忽略并清理 `output/` 等运行产物
+- 清理服务器 `.deploy-backup/`、`output/` 和 AppleDouble `._*` 残留
+
+## 21. v1.1.0 本地验证
+
+- `pytest -q`
+  - 结果：`85 passed`
+- `PYTHONPYCACHEPREFIX=/tmp/pycache python3 -m compileall app tests`
+  - 结果：通过
+
+重点覆盖：
+
+- 后台会话与页面路由
+- Phase 3 降级继续产出 brief
+- Phase 4 AI 痕迹识别、定点 humanize 与复审
+- 工作台审稿元数据响应
+- worker heartbeat
+- 并发 session 下状态写回
+
+## 22. v1.1.0 当前服务器状态
+
+当前服务器已确认：
+
+- `/admin` 页面包含：
+  - `STATUS_PROGRESS`
+  - `applyOptimisticTaskState`
+  - `cache: "no-store"`
+- `/admin/phase5` 页面包含：
+  - `AI 痕迹`
+  - `已定点润色`
+  - `语气诊断`
+- `/admin/console/stream?once=true&limit=3`
+  - 已返回 `event: snapshot`
+  - 4 个 worker 当前都为 `healthy`
+
+## 23. v1.1.0 发布要求
+
+正式打 tag 前仍应满足：
+
+- 当前工作区完成提交
+- tag 指向明确 release commit
+- 服务器从脏工作树运行态回到 Git 可追踪状态
+- 正式发布使用标准路径：
+  - `scripts/deploy_prebuilt_from_local.sh`
+  - 或 `scripts/deploy_from_git.sh`
+
+## 24. 结论
+
+截至 2026-03-09，`v1.1.0` 的代码、文档和验证结果已经具备打 tag 条件。
+
+第二版的主要价值不是新增一个全新 phase，而是把现有 MVP 主链路后的后台交互、审稿闭环和 worker 运行态增强整理为正式版本。

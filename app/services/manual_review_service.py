@@ -49,9 +49,12 @@ class ManualReviewService:
         has_saved_draft = bool(existing_draft and existing_draft.push_status == "success")
 
         generation.status = "accepted"
-        task.status = TaskStatus.DRAFT_SAVED.value if has_saved_draft else TaskStatus.REVIEW_PASSED.value
-        task.error_code = None
-        task.error_message = None
+        self.tasks.update_runtime_state(
+            task,
+            status=TaskStatus.DRAFT_SAVED.value if has_saved_draft else TaskStatus.REVIEW_PASSED.value,
+            error_code=None,
+            error_message=None,
+        )
         self._log_action(
             task.id,
             action="phase5.manual_review.approved",
@@ -90,9 +93,12 @@ class ManualReviewService:
         previous_task_status = task.status
         previous_generation_status = generation.status
         generation.status = "rejected"
-        task.status = TaskStatus.NEEDS_REGENERATE.value
-        task.error_code = None
-        task.error_message = None
+        self.tasks.update_runtime_state(
+            task,
+            status=TaskStatus.NEEDS_REGENERATE.value,
+            error_code=None,
+            error_message=None,
+        )
         self._log_action(
             task.id,
             action="phase5.manual_review.rejected",

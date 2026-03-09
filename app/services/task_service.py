@@ -114,25 +114,34 @@ class TaskService:
         return task
 
     def mark_queued_for_phase2(self, task: Task, reason: str) -> Task:
-        task.status = TaskStatus.QUEUED.value
-        task.error_code = None
-        task.error_message = None
+        self.tasks.update_runtime_state(
+            task,
+            status=TaskStatus.QUEUED.value,
+            error_code=None,
+            error_message=None,
+        )
         self._log_action(task.id, "phase2.enqueued", {"reason": reason})
         self.session.commit()
         return task
 
     def mark_queued_for_phase3(self, task: Task, reason: str) -> Task:
-        task.status = TaskStatus.QUEUED.value
-        task.error_code = None
-        task.error_message = None
+        self.tasks.update_runtime_state(
+            task,
+            status=TaskStatus.QUEUED.value,
+            error_code=None,
+            error_message=None,
+        )
         self._log_action(task.id, "phase3.enqueued", {"reason": reason})
         self.session.commit()
         return task
 
     def mark_queued_for_phase4(self, task: Task, reason: str) -> Task:
-        task.status = TaskStatus.QUEUED.value
-        task.error_code = None
-        task.error_message = None
+        self.tasks.update_runtime_state(
+            task,
+            status=TaskStatus.QUEUED.value,
+            error_code=None,
+            error_message=None,
+        )
         self._log_action(task.id, "phase4.enqueued", {"reason": reason})
         self.session.commit()
         return task

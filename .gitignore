@@ -9,3 +9,8 @@ __pycache__/
 data/
 dist/
 build/
+output/
+.deploy-backup/
+task_plan.md
+findings.md
+progress.md

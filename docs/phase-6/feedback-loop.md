@@ -189,7 +189,7 @@ Phase 6 先不强依赖微信官方分析接口，优先把“手工反馈导入
 - 查看 Prompt 实验榜
 - 创建与浏览风格资产
 
-页面本身仍受可选 `ADMIN_USERNAME` / `ADMIN_PASSWORD` Basic Auth 保护；实际写操作仍要求 `API_BEARER_TOKEN`。
+页面本身仍受可选 `ADMIN_USERNAME` / `ADMIN_PASSWORD` Basic Auth 保护；进入后台后默认复用当前 `admin_session`，不再要求在页面内手动输入 `API_BEARER_TOKEN`。
 
 ## 验证
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 DEFAULT_GENERATION_PROMPT_TYPE = "phase4_write"
 LEGACY_PHASE4_PROMPT_VERSION = "phase4-v1"
-CURRENT_PHASE4_PROMPT_VERSION = "phase4-v2"
+CURRENT_PHASE4_PROMPT_VERSION = "phase4-v3"
 
 
 def resolve_generation_prompt_version(

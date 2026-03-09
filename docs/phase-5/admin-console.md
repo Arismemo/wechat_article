@@ -1,7 +1,7 @@
 # 阶段 5 后台工作台与人工审核
 
-更新时间：2026-03-07
-状态：第三轮已落地，并完成服务器 smoke test
+更新时间：2026-03-09
+状态：已收口并纳入 v1.1.0
 
 ## 1. 目标
 
@@ -23,8 +23,8 @@
 
 - `GET /admin/phase5`
 
-页面本身不内置服务端密钥，所有写操作仍依赖手动输入 Bearer Token。
-如果服务器配置了 `ADMIN_USERNAME` / `ADMIN_PASSWORD`，浏览器访问 `/admin/phase2`、`/admin/phase5` 时会先弹出 Basic Auth 登录框。
+`/admin/phase5` 默认复用当前后台会话，不再要求页面内手动输入 Bearer Token。
+如果服务器配置了 `ADMIN_USERNAME` / `ADMIN_PASSWORD`，浏览器首次访问后台页时会先弹出 Basic Auth 登录框；登录成功后页面动作通过 `admin_session` 继续复用会话。
 
 ## 3. 聚合详情接口
 
@@ -52,8 +52,14 @@
 
 当前 generation 的 `prompt_type` / `prompt_version` 已开始真实落库。
 
-- 新生成稿会记录当前写稿 Prompt 版本，例如 `phase4-v2`
+- 新生成稿会记录当前写稿 Prompt 版本，例如 `phase4-v3`
 - 历史 generation 如果还没有落库字段，后台会回退到兼容映射
+- 工作台现在还会展示审稿元数据：
+  - `ai_trace_score`
+  - `ai_trace_patterns`
+  - `rewrite_targets`
+  - `voice_summary`
+  - `humanize_applied`
 
 ## 4. 后台操作流
 
@@ -98,7 +104,8 @@
 
 - `/admin/*` 现在支持最小登录保护
 - 只要服务端配置了 `ADMIN_USERNAME` 与 `ADMIN_PASSWORD`，后台页就会要求浏览器先通过 Basic Auth
-- 这层保护只负责页面入口；页面内的写操作仍然需要手动输入 `API_BEARER_TOKEN`
+- 进入后台后，页面动作默认复用 `admin_session`
+- 后台会话失效时，页面会提示刷新重新进入；服务端 API 仍支持 `API_BEARER_TOKEN` 作为显式调用方式
 
 任务看板当前支持这些筛选能力：
 

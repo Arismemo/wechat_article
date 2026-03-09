@@ -11,6 +11,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from app.db.session import get_session_factory
 from app.services.feedback_queue_service import FeedbackQueueService
 from app.services.feedback_sync_service import FeedbackSyncService
+from app.services.worker_heartbeat import heartbeat_refresh_interval, keep_worker_heartbeat
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -19,6 +20,7 @@ logger = logging.getLogger("feedback-worker")
 
 def main() -> None:
     queue = FeedbackQueueService()
+    heartbeat_interval = heartbeat_refresh_interval(queue.settings.worker_heartbeat_stale_seconds)
     recovered = queue.requeue_processing_jobs()
     if recovered:
         logger.info("recovered %s in-flight feedback job(s) back to the queue", recovered)
@@ -33,15 +35,20 @@ def main() -> None:
             queue.idle_sleep()
             continue
 
-        queue.mark_worker_heartbeat(job.task_id)
         logger.info("syncing feedback for task %s day_offsets=%s", job.task_id, job.day_offsets)
         session = session_factory()
         try:
-            FeedbackSyncService(session).run(
-                job.task_id,
-                day_offsets=job.day_offsets,
-                operator=job.operator,
-            )
+            with keep_worker_heartbeat(
+                queue.mark_worker_heartbeat,
+                current_task_id=job.task_id,
+                interval_seconds=heartbeat_interval,
+                logger=logger,
+            ):
+                FeedbackSyncService(session).run(
+                    job.task_id,
+                    day_offsets=job.day_offsets,
+                    operator=job.operator,
+                )
             logger.info("feedback sync completed for task %s", job.task_id)
         except Exception:  # noqa: BLE001
             logger.exception("feedback sync failed for task %s", job.task_id)

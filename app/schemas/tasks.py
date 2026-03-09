@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
+from pydantic import Field
+
 from app.schemas.common import APIModel
 
 
@@ -113,6 +115,12 @@ class GenerationResponse(APIModel):
     status: str
 
 
+class ReviewRewriteTargetResponse(APIModel):
+    block_id: str
+    reason: str
+    instruction: str
+
+
 class ReviewReportResponse(APIModel):
     review_report_id: str
     similarity_score: Optional[float] = None
@@ -124,6 +132,12 @@ class ReviewReportResponse(APIModel):
     issues: Optional[dict] = None
     suggestions: Optional[dict] = None
     final_decision: Optional[str] = None
+    ai_trace_score: Optional[float] = None
+    ai_trace_patterns: list[str] = Field(default_factory=list)
+    rewrite_targets: list[ReviewRewriteTargetResponse] = Field(default_factory=list)
+    voice_summary: Optional[str] = None
+    humanize_applied: bool = False
+    humanize_block_ids: list[str] = Field(default_factory=list)
 
 
 class TaskDraftResponse(APIModel):

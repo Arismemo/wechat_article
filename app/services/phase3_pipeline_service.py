@@ -94,14 +94,30 @@ class Phase3PipelineService:
                 query_texts=queries,
                 results=raw_results,
             )
-            if not ranked_results:
-                raise RuntimeError("No related search results were found.")
-
-            self._set_task_status(task, TaskStatus.FETCHING_RELATED)
             self.related_articles.delete_by_task_id(task.id)
-            fetched_related = self._fetch_related_articles(task, ranked_results)
-            if not fetched_related:
-                raise RuntimeError("All selected related article fetches failed.")
+            if not ranked_results:
+                fetched_related = []
+                self._log_action(
+                    task.id,
+                    "phase3.search.degraded",
+                    {
+                        "reason": "no_related_results",
+                        "queries": queries,
+                    },
+                )
+            else:
+                self._set_task_status(task, TaskStatus.FETCHING_RELATED)
+                fetched_related = self._fetch_related_articles(task, ranked_results)
+                if not fetched_related:
+                    self._log_action(
+                        task.id,
+                        "phase3.search.degraded",
+                        {
+                            "reason": "all_related_fetches_failed",
+                            "queries": queries,
+                            "candidate_count": len(ranked_results),
+                        },
+                    )
             self._log_action(
                 task.id,
                 "phase3.search.completed",
@@ -457,15 +473,20 @@ class Phase3PipelineService:
         return task
 
     def _set_task_status(self, task: Task, status: TaskStatus) -> None:
-        task.status = status.value
-        task.error_code = None
-        task.error_message = None
-        self.session.flush()
+        self.tasks.update_runtime_state(
+            task,
+            status=status.value,
+            error_code=None,
+            error_message=None,
+        )
 
     def _fail_task(self, task: Task, status: TaskStatus, error_code: str, error_message: str) -> None:
-        task.status = status.value
-        task.error_code = error_code
-        task.error_message = error_message[:1000]
+        self.tasks.update_runtime_state(
+            task,
+            status=status.value,
+            error_code=error_code,
+            error_message=error_message[:1000],
+        )
         self._log_action(task.id, f"phase3.failed.{status.value}", {"error_code": error_code, "error_message": error_message})
         self.session.commit()
 

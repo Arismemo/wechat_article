@@ -1,6 +1,6 @@
 # 项目文档索引
 
-更新时间：2026-03-08
+更新时间：2026-03-09
 
 ## 文档留存原则
 
@@ -53,15 +53,19 @@
 - `docs/phase-7/console-monitoring.md`
   - Phase 7 统一控制台、实时流、统计卡片和历史筛选说明
 - `docs/phase-7/deployment-log.md`
-  - Phase 7A / 7B / 7C 服务器部署与实时监控验收记录
+  - Phase 7D / 7E 服务器部署、运行观测与发布收口记录
 - `docs/phase-7/runtime-settings.md`
-  - Phase 7 运行参数设置、`.env` 只读状态和测试告警说明
+  - Phase 7 运行参数设置、后台会话、`.env` 只读状态和测试告警说明
 - `docs/research-wechat-fetch-and-browser-options-2026-03-07.md`
   - 微信公众号读取方案、Claude Code skill 和浏览器自动化方案调研
 - `docs/mvp-closeout-2026-03-08.md`
   - MVP 主链路收口结论与真实验收记录
+- `docs/release-v1.1.0.md`
+  - 第二版发布范围、验证结果、已知边界与 tag 准备结论
+- `docs/release-process.md`
+  - 标准版本发布流程、tag 前检查项与部署约束
 - `docs/web-console-plan.md`
-  - 网页端控制台现状、缺口与下一阶段实现建议
+  - 网页端控制台历史规划文档与下一阶段建议
 - `docs/adr/0001-git-based-deploy.md`
   - 从文件拷贝切换到 Git 部署的技术决策
 

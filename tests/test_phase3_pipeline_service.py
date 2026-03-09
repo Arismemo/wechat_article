@@ -306,3 +306,72 @@ class Phase3PipelineServiceTests(unittest.TestCase):
         self.assertEqual(article.title, "源文章标题")
 
         session.close()
+
+    def test_phase3_pipeline_degrades_when_related_search_returns_nothing(self) -> None:
+        session = self.Session()
+        task = Task(
+            task_code="tsk_phase3_no_related",
+            source_url="https://mp.weixin.qq.com/s/example-no-related",
+            normalized_url="https://mp.weixin.qq.com/s/example-no-related",
+            source_type="wechat",
+            status=TaskStatus.SOURCE_READY.value,
+        )
+        session.add(task)
+        session.flush()
+        session.add(
+            SourceArticle(
+                task_id=task.id,
+                url=task.source_url,
+                title="冷门主题文章",
+                author="作者",
+                summary="一篇搜不到同题素材的文章。",
+                cleaned_text="正文里有一些背景，但搜索结果为空。",
+                fetch_status="success",
+                word_count=888,
+            )
+        )
+        session.commit()
+
+        service = Phase3PipelineService(session)
+        service.llm = MagicMock()
+        service.search = MagicMock()
+        service.fetcher = MagicMock()
+        service.llm.complete_json.side_effect = [
+            {
+                "theme": "冷门主题",
+                "audience": "希望快速理解背景的读者",
+                "angle": "从背景和判断框架切入",
+                "tone": "理性拆解",
+                "key_points": ["背景", "关键判断"],
+                "facts": ["事实 1"],
+                "hooks": ["为什么值得关注"],
+                "risks": ["避免绝对化表述"],
+                "gaps": ["需要补足背景"],
+                "structure": [{"section": "背景", "purpose": "先讲清来龙去脉"}],
+            },
+            {
+                "positioning": "在缺少同题素材时，仍然输出可写 brief",
+                "new_angle": "以背景补全和判断框架为主",
+                "target_reader": "泛技术读者",
+                "must_cover": ["背景", "判断框架"],
+                "must_avoid": ["复述原文顺序"],
+                "difference_matrix": [],
+                "outline": [{"heading": "先讲背景", "goal": "补足上下文"}],
+                "title_directions": ["搜不到同题素材时，怎么把文章写稳"],
+            },
+        ]
+        service.search.search_many.return_value = []
+        service.search.rank_results.return_value = []
+
+        result = service.run(task.id)
+
+        self.assertEqual(result.status, TaskStatus.BRIEF_READY.value)
+        self.assertEqual(result.related_count, 0)
+        refreshed_task = session.get(Task, task.id)
+        self.assertEqual(refreshed_task.status, TaskStatus.BRIEF_READY.value)
+        related_rows = list(session.scalars(select(RelatedArticle).where(RelatedArticle.task_id == task.id)))
+        self.assertEqual(related_rows, [])
+        brief = session.scalar(select(ContentBrief).where(ContentBrief.task_id == task.id))
+        self.assertIsNotNone(brief)
+
+        session.close()

@@ -42,6 +42,7 @@ from app.services.feedback_queue_service import FeedbackQueueService
 from app.services.phase2_queue_service import Phase2QueueService
 from app.services.phase3_queue_service import Phase3QueueService
 from app.services.phase4_queue_service import Phase4QueueService
+from app.services.review_report_response_service import build_review_report_response
 from app.services.task_service import TaskService
 from app.services.wechat_draft_metadata_service import build_wechat_draft_metadata
 from app.services.wechat_push_policy_service import WechatPushPolicyService
@@ -143,22 +144,7 @@ class AdminMonitorService:
                     score_risk=float(generation.score_risk) if generation.score_risk is not None else None,
                     status=generation.status,
                     created_at=generation.created_at,
-                    review=(
-                        ReviewReportResponse(
-                            review_report_id=review.id,
-                            similarity_score=float(review.similarity_score) if review.similarity_score is not None else None,
-                            factual_risk_score=float(review.factual_risk_score) if review.factual_risk_score is not None else None,
-                            policy_risk_score=float(review.policy_risk_score) if review.policy_risk_score is not None else None,
-                            readability_score=float(review.readability_score) if review.readability_score is not None else None,
-                            title_score=float(review.title_score) if review.title_score is not None else None,
-                            novelty_score=float(review.novelty_score) if review.novelty_score is not None else None,
-                            issues=review.issues,
-                            suggestions=review.suggestions,
-                            final_decision=review.final_decision,
-                        )
-                        if review
-                        else None
-                    ),
+                    review=build_review_report_response(review),
                 )
             )
 

@@ -1,7 +1,9 @@
 # 网页端控制台规划
 
-更新时间：2026-03-08
-状态：Phase 7E Started
+更新时间：2026-03-09
+状态：Historical Reference · Phase 7E Completed
+
+> 这份文档保留为历史规划记录。当前实际发布状态以 `docs/phase-7/*.md` 和 `docs/release-v1.1.0.md` 为准。
 
 ## 1. 结论
 
@@ -78,7 +80,7 @@
 - Phase 7B 已完成：运行参数网页配置
 - Phase 7C 第一刀已完成：SSE 实时流、监控快照接口、统计卡片
 - Phase 7D 第一刀已完成：环境状态面板、测试告警入口、成功率与异常卡片
-- Phase 7E 第一刀已完成：队列深度、processing、pending 和 worker 心跳观测
+- Phase 7E 已完成：队列深度、processing、pending 和 worker 心跳观测
 - `/admin` 已重设计为主控台：首页直接支持贴链接、看进度、做动作；旧页面保留为高级深链
 
 ## 3. 目标 2：网页端配置与设置

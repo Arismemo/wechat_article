@@ -167,8 +167,23 @@ class TaskWorkspaceApiTests(unittest.TestCase):
                 readability_score=90,
                 title_score=86,
                 novelty_score=84,
-                issues={"items": ["通过"]},
-                suggestions={"items": ["可推稿"]},
+                issues={
+                    "items": ["通过"],
+                    "ai_trace_score": 28,
+                    "ai_trace_patterns": ["表达自然，基本无模板味"],
+                    "voice_summary": "整体像编辑写的讲解稿，节奏自然。",
+                },
+                suggestions={
+                    "items": ["可推稿"],
+                    "rewrite_targets": [
+                        {
+                            "block_id": "b3",
+                            "reason": "如需进一步润色，可以补一点细节。",
+                            "instruction": "把判断写得更有场景感。",
+                        }
+                    ],
+                    "humanize": {"applied": True, "block_ids": ["b3"]},
+                },
                 final_decision="pass",
             )
         )
@@ -209,6 +224,10 @@ class TaskWorkspaceApiTests(unittest.TestCase):
         self.assertEqual(body["generations"][0]["version_no"], 2)
         self.assertEqual(body["generations"][0]["prompt_version"], "phase4-v1")
         self.assertEqual(body["generations"][0]["review"]["final_decision"], "pass")
+        self.assertEqual(body["generations"][0]["review"]["ai_trace_score"], 28.0)
+        self.assertEqual(body["generations"][0]["review"]["rewrite_targets"][0]["block_id"], "b3")
+        self.assertTrue(body["generations"][0]["review"]["humanize_applied"])
+        self.assertEqual(body["generations"][0]["review"]["humanize_block_ids"], ["b3"])
         self.assertEqual(body["wechat_media_id"], "mid-1")
         self.assertEqual(body["wechat_draft_url"], "https://mp.weixin.qq.com/")
         self.assertFalse(body["wechat_draft_url_direct"])
