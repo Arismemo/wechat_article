@@ -4877,7 +4877,7 @@ def settings_console() -> str:
                 const readField = (fieldName) =>
                   (card.querySelector(`[data-field="${fieldName}"]`)?.value || "").trim();
                 const models = readField("models")
-                  .split("\n")
+                  .split("\\n")
                   .map((item) => item.trim())
                   .filter(Boolean);
                 return {
@@ -5045,7 +5045,7 @@ def settings_console() -> str:
                           </div>
                           <div class="field">
                             <label>模型列表（每行一个）</label>
-                            <textarea data-field="models">${escapeHtml((provider.models || []).join("\n"))}</textarea>
+                            <textarea data-field="models">${escapeHtml((provider.models || []).join("\\n"))}</textarea>
                           </div>
                           <div class="field">
                             <label>API Key</label>
