@@ -2,16 +2,15 @@
 
 微信公众号选题重构与草稿生产系统。
 
-当前正式版本：`v1.1.1`
-状态：`Phase 7E Completed · 已发布 TP-01 ~ TP-04 收口包`
+当前正式版本：`v1.1.2`
+状态：`Phase 7F First Cut Released · /admin 会话恢复已收口`
 
 当前版本收口重点：
 
-- 后台页默认复用 `admin_session`，不再要求在 Phase 5 / 6 / settings / console 页面手动输入 Bearer Token
-- Phase 4 审稿增加 AI 痕迹识别、定点 humanize 和复审闭环
-- 四条 worker 队列补齐持续心跳、queue depth / processing / pending 观测
-- 工作台与任务接口新增结构化审稿元数据，统一并发状态写回逻辑
-- 审核台与主控台新增参考文章可点开、历史稿人工采用、流水线时间线和 AI 去痕原因解释
+- `/admin` 主工作台补齐会话失效后的上下文恢复，保留当前任务、主筛选、搜索词和未提交链接
+- `/api/v1/admin/monitor/snapshot` 新增 `alerts` / `trends`
+- `/admin/console` 新增分级告警、稳定 `dedupe_key`、前端临时静默和最近 24 小时趋势视图
+- Phase 7 文档与前端改版方案升级为可执行版本
 
 ## 系统能做什么
 
@@ -32,6 +31,7 @@
 - Phase 7C：统一控制台实时流、统计卡片、SSE 监控快照接口
 - Phase 7D：只读环境状态面板、测试告警入口、成功率与异常卡片
 - Phase 7E：队列深度、worker 心跳与处理态观测面板
+- Phase 7F：最近 24 小时趋势、分级告警、去重 key 与前端临时静默
 
 ## 仓库结构
 
@@ -156,7 +156,7 @@ bash scripts/repair_server_git_checkout.sh
 执行方式：
 
 ```bash
-BASE_IMAGE=wechat_artical:v1.1.1-amd64 \
+BASE_IMAGE=wechat_artical:v1.1.2-amd64 \
 SERVICES="api phase2_worker phase3_worker phase4_worker feedback_worker" \
 bash scripts/deploy_prebuilt_from_local.sh
 ```
@@ -165,7 +165,7 @@ bash scripts/deploy_prebuilt_from_local.sh
 
 ```bash
 SKIP_LOCAL_BUILD=1 \
-BASE_IMAGE=wechat_artical:v1.1.1-amd64 \
+BASE_IMAGE=wechat_artical:v1.1.2-amd64 \
 SERVICES="api phase2_worker phase3_worker phase4_worker feedback_worker" \
 bash scripts/deploy_prebuilt_from_local.sh
 ```
@@ -237,7 +237,7 @@ Phase 7C / 7D 的监控快照接口、环境状态接口和统一控制台不会
 
 ## 发布文档
 
-- 当前版本发布说明：`docs/release-v1.1.1.md`
+- 当前版本发布说明：`docs/release-v1.1.2.md`
 - 第二版发布说明：`docs/release-v1.1.0.md`
 - 标准发布流程：`docs/release-process.md`
 

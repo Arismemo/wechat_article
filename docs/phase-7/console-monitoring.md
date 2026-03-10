@@ -1,11 +1,11 @@
 # Phase 7 统一控制台
 
-更新时间：2026-03-09
-状态：Phase 7E Completed
+更新时间：2026-03-10
+状态：Phase 7F Completed
 
 ## 1. 目标
 
-Phase 7A 先解决“统一入口”，Phase 7B 再接“运行参数设置”，Phase 7C 补上“实时流和统计卡片”，Phase 7D 再补“异常/成功率卡片、告警入口和环境状态面板”，Phase 7E 则继续接上“队列深度与 worker 心跳观测”。
+Phase 7A 先解决“统一入口”，Phase 7B 再接“运行参数设置”，Phase 7C 补上“实时流和统计卡片”，Phase 7D 再补“异常/成功率卡片、告警入口和环境状态面板”，Phase 7E 继续接上“队列深度与 worker 心跳观测”，Phase 7F 则把这些观测整理成“趋势 + 分级告警 + 临时静默”的最小可用排障面板。
 
 本阶段不做：
 
@@ -173,7 +173,46 @@ Phase 7C 新增：
 
 worker 当前通过 Redis 心跳上报自身状态；超过 `WORKER_HEARTBEAT_STALE_SECONDS` 未更新时，会被标为 `stale` 或 `offline`。
 
-## 3.8 当前采用版本与监控一致性
+### 3.8 Phase 7F 补充
+
+本阶段继续补：
+
+- 最近 24 小时趋势
+  - `snapshot.trends`
+  - 固定返回最近 24 小时的 8 个 3 小时桶
+  - 每个桶包含：
+    - `submitted`
+    - `review_outcomes`
+    - `review_successes`
+    - `review_success_rate`
+    - `auto_push_candidates`
+    - `auto_push_successes`
+    - `auto_push_success_rate`
+    - `failed`
+- 分级告警
+  - `snapshot.alerts`
+  - 当前最小覆盖：
+    - worker 观测不可用
+    - worker `stale / offline`
+    - 卡住任务
+    - 失败任务
+  - 每条告警都会返回稳定的：
+    - `key`
+    - `dedupe_key`
+    - `level`
+    - `title`
+    - `summary`
+    - `detail`
+    - `count`
+    - `action_label`
+    - `action_href`
+- 前端临时静默
+  - `/admin/console` 现在支持把单条告警静默 6 小时
+  - 静默只保存在浏览器 `localStorage`
+  - 静默不会改动后端任务状态、队列状态或真实告警来源
+  - 页面支持“一键恢复全部静默”
+
+### 3.9 当前采用版本与监控一致性
 
 Phase 5 新增“采用此版本”后，以下链路都会优先跟随当前采用版本，而不是固定取 latest accepted generation：
 
@@ -197,11 +236,11 @@ Phase 5 新增“采用此版本”后，以下链路都会优先跟随当前采
    - “推草稿”
 7. 需要更深的监控、设置或反馈时，再打开高级页面
 
-## 5. 之后的边界
+## 5. 当前边界
 
-Phase 7E 完成后，下一步应进入：
+Phase 7F 已经补齐“趋势 + 分级告警 + 临时静默”的第一刀，但当前仍然保留这些边界：
 
-- Phase 7F
-  - 更细粒度的任务成功率趋势图
-  - 告警分级与去重
-  - 告警静默与值班策略
+- 静默只在当前浏览器生效，不做后端共享值班策略
+- 告警仍然是基于监控快照实时计算，不做单独告警表或历史归档
+- 趋势仍按固定 `24h / 3h` 视角展示，还不支持自定义窗口和多维钻取
+- 真实外发告警仍只保留测试入口，尚未把分级结果接回 webhook 推送策略

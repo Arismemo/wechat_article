@@ -47,8 +47,36 @@ class AdminMonitorOperationsResponse(APIModel):
     note: Optional[str] = None
 
 
+class AdminMonitorAlertResponse(APIModel):
+    key: str
+    dedupe_key: str
+    level: str
+    title: str
+    summary: str
+    detail: Optional[str] = None
+    count: int = 0
+    action_label: Optional[str] = None
+    action_href: Optional[str] = None
+
+
+class AdminMonitorTrendPointResponse(APIModel):
+    bucket_start: datetime
+    bucket_end: datetime
+    label: str
+    submitted: int = 0
+    review_outcomes: int = 0
+    review_successes: int = 0
+    review_success_rate: Optional[float] = None
+    auto_push_candidates: int = 0
+    auto_push_successes: int = 0
+    auto_push_success_rate: Optional[float] = None
+    failed: int = 0
+
+
 class AdminMonitorSnapshotResponse(APIModel):
     summary: AdminMonitorSummaryResponse
     tasks: list[TaskSummaryResponse]
     operations: AdminMonitorOperationsResponse
+    alerts: list[AdminMonitorAlertResponse] = Field(default_factory=list)
+    trends: list[AdminMonitorTrendPointResponse] = Field(default_factory=list)
     workspace: Optional[TaskWorkspaceResponse] = None

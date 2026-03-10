@@ -1,5 +1,34 @@
 # Changelog
 
+## v1.1.2 - 2026-03-10
+
+围绕 Phase 7F 第一刀和前端收束准备做一次补丁发布，重点把“/admin 会话恢复”“monitor 分级告警与趋势图”“前端优化总方案”收进正式版本。
+
+### Added
+
+- `GET /api/v1/admin/monitor/snapshot` 新增：
+  - `alerts`
+  - `trends`
+- `/admin/console` 新增：
+  - 告警与静默面板
+  - 最近 24 小时趋势面板
+  - 告警本地静默与恢复全部静默
+- 新增前端优化总方案文档：
+  - `docs/post-v1.1.0-frontend-redesign-plan.md`
+
+### Changed
+
+- 项目版本提升为 `1.1.2`
+- `/admin` 在会话失效后会明确提示“刷新后可恢复上下文”，并保留 `task_id`、主筛选、搜索词和未提交链接
+- `AdminMonitorService` 现在会输出稳定 `dedupe_key`，供前端静默和去重使用
+- `README.md`、`docs/README.md`、`docs/phase-7/console-monitoring.md`、路线图与交接文档同步到 Phase 7F 基线
+
+### Verified
+
+- `pytest -q`
+- `python3 -m compileall app tests`
+- 线上 smoke test 结果见 `docs/release-v1.1.2.md`
+
 ## v1.1.1 - 2026-03-10
 
 围绕 `v1.1.0` 之后的 4 个收口任务做一次补丁发布，重点把“参考文章可查看 / 历史稿人工采用 / 流水线时间线 / AI 去痕触发原因可见化”真正发布到线上。

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from zoneinfo import ZoneInfo
 
@@ -11,9 +11,11 @@ from app.core.enums import ACTIVE_TASK_STATUSES, FINAL_FAILURE_STATUSES, TaskSta
 from app.db.redis_client import get_redis_client
 from app.repositories.task_repository import TaskRepository
 from app.schemas.admin_monitor import (
+    AdminMonitorAlertResponse,
     AdminMonitorOperationsResponse,
     AdminMonitorSnapshotResponse,
     AdminMonitorSummaryResponse,
+    AdminMonitorTrendPointResponse,
     QueueWorkerStatusResponse,
 )
 from app.schemas.tasks import TaskSummaryResponse, TaskWorkspaceResponse
@@ -39,6 +41,8 @@ class AdminMonitorFilters:
 
 class AdminMonitorService:
     _STUCK_THRESHOLD_MINUTES = 30
+    _TREND_BUCKET_COUNT = 8
+    _TREND_BUCKET_HOURS = 3
 
     def __init__(self, session: Session) -> None:
         self.session = session
@@ -57,15 +61,19 @@ class AdminMonitorService:
             created_after=filters.created_after,
         )
         task_summaries = [self._build_task_summary_response(item) for item in task_rows]
+        summary = self._build_summary(filters, task_summaries)
+        operations = self._build_operations()
         workspace = None
         if filters.selected_task_id:
             task = self.tasks.get_by_id(filters.selected_task_id)
             if task is not None:
                 workspace = self.build_workspace(task.id)
         return AdminMonitorSnapshotResponse(
-            summary=self._build_summary(filters, task_summaries),
+            summary=summary,
             tasks=task_summaries,
-            operations=self._build_operations(),
+            operations=operations,
+            alerts=self._build_alerts(summary, operations),
+            trends=self._build_trends(filters),
             workspace=workspace,
         )
 
@@ -234,17 +242,157 @@ class AdminMonitorService:
                 note=f"worker observability unavailable: {exc}",
             )
 
+    def _build_alerts(
+        self,
+        summary: AdminMonitorSummaryResponse,
+        operations: AdminMonitorOperationsResponse,
+    ) -> list[AdminMonitorAlertResponse]:
+        alerts: list[AdminMonitorAlertResponse] = []
+        if not operations.available:
+            alerts.append(
+                AdminMonitorAlertResponse(
+                    key="monitor.operations.unavailable",
+                    dedupe_key="monitor.operations.unavailable",
+                    level="critical",
+                    title="Worker 观测不可用",
+                    summary="当前无法读取队列与 worker 观测数据，先恢复监控基础链路。",
+                    detail=operations.note,
+                    count=1,
+                    action_label="留在监控台",
+                    action_href="/admin/console",
+                )
+            )
+            return alerts
+
+        abnormal_workers = [item for item in operations.workers if item.status in {"stale", "offline"}]
+        if abnormal_workers:
+            offline_count = sum(1 for item in abnormal_workers if item.status == "offline")
+            detail = "；".join(
+                f"{item.label}: {item.status} / queue={item.queue_depth} / processing={item.processing_depth}"
+                for item in abnormal_workers
+            )
+            alerts.append(
+                AdminMonitorAlertResponse(
+                    key="monitor.workers.abnormal",
+                    dedupe_key="monitor.workers.abnormal",
+                    level="critical" if offline_count > 0 else "warn",
+                    title="Worker 运行异常",
+                    summary=f"{len(abnormal_workers)} 条队列观测异常，优先排查离线或堆积 worker。",
+                    detail=detail,
+                    count=len(abnormal_workers),
+                    action_label="查看监控详情",
+                    action_href="/admin/console",
+                )
+            )
+
+        if summary.filtered_stuck > 0:
+            alerts.append(
+                AdminMonitorAlertResponse(
+                    key="monitor.tasks.stuck",
+                    dedupe_key="monitor.tasks.stuck",
+                    level="critical" if summary.filtered_stuck >= 3 else "warn",
+                    title="任务推进卡住",
+                    summary=f"当前有 {summary.filtered_stuck} 条任务超过 {summary.stuck_threshold_minutes} 分钟未推进。",
+                    detail="建议先在监控台定位对应状态组，再进任务详情看错误、审计轨迹和当前 generation。",
+                    count=summary.filtered_stuck,
+                    action_label="查看总览主控台",
+                    action_href="/admin",
+                )
+            )
+
+        if summary.filtered_failed > 0:
+            alerts.append(
+                AdminMonitorAlertResponse(
+                    key="monitor.tasks.failed",
+                    dedupe_key="monitor.tasks.failed",
+                    level="critical" if summary.filtered_failed >= 3 else "warn",
+                    title="失败任务需要恢复",
+                    summary=f"当前筛选范围内有 {summary.filtered_failed} 条失败任务，今日累计失败 {summary.today_failed} 条。",
+                    detail="先看失败任务详情和审计轨迹，再决定是重试、补数据还是转去 Phase 5 / Phase 6 收口。",
+                    count=summary.filtered_failed,
+                    action_label="查看总览主控台",
+                    action_href="/admin",
+                )
+            )
+
+        return alerts
+
+    def _build_trends(self, filters: AdminMonitorFilters) -> list[AdminMonitorTrendPointResponse]:
+        zone = self._timezone()
+        bucket_span = timedelta(hours=self._TREND_BUCKET_HOURS)
+        now_local = datetime.now(zone)
+        aligned_hour = now_local.hour - (now_local.hour % self._TREND_BUCKET_HOURS)
+        current_bucket_start_local = now_local.replace(
+            hour=aligned_hour,
+            minute=0,
+            second=0,
+            microsecond=0,
+        )
+        bucket_starts_local = [
+            current_bucket_start_local - bucket_span * (self._TREND_BUCKET_COUNT - index - 1)
+            for index in range(self._TREND_BUCKET_COUNT)
+        ]
+        points = [
+            AdminMonitorTrendPointResponse(
+                bucket_start=start_local.astimezone(timezone.utc),
+                bucket_end=(start_local + bucket_span).astimezone(timezone.utc),
+                label=start_local.strftime("%m-%d %H:%M"),
+            )
+            for start_local in bucket_starts_local
+        ]
+        if not points:
+            return []
+
+        records = self.tasks.list_created_since(
+            created_after=points[0].bucket_start,
+            active_only=filters.active_only,
+            status_filter=filters.status_filter,
+            source_type=filters.source_type,
+            query=filters.query,
+        )
+        review_success_statuses = {TaskStatus.REVIEW_PASSED.value, TaskStatus.DRAFT_SAVED.value}
+        review_outcome_statuses = review_success_statuses | {
+            TaskStatus.NEEDS_REGENERATE.value,
+            TaskStatus.NEEDS_MANUAL_REVIEW.value,
+            TaskStatus.REVIEW_FAILED.value,
+            TaskStatus.PUSH_FAILED.value,
+        }
+        failure_statuses = {item.value for item in FINAL_FAILURE_STATUSES}
+        for task in records:
+            created_at = task.created_at
+            if created_at.tzinfo is None:
+                created_at = created_at.replace(tzinfo=timezone.utc)
+            for point in points:
+                if point.bucket_start <= created_at < point.bucket_end:
+                    point.submitted += 1
+                    if task.status in review_outcome_statuses:
+                        point.review_outcomes += 1
+                    if task.status in review_success_statuses:
+                        point.review_successes += 1
+                    if task.status in {TaskStatus.REVIEW_PASSED.value, TaskStatus.DRAFT_SAVED.value}:
+                        point.auto_push_candidates += 1
+                    if task.status == TaskStatus.DRAFT_SAVED.value:
+                        point.auto_push_successes += 1
+                    if task.status in failure_statuses:
+                        point.failed += 1
+                    break
+
+        for point in points:
+            point.review_success_rate = self._percentage(point.review_successes, point.review_outcomes)
+            point.auto_push_success_rate = self._percentage(point.auto_push_successes, point.auto_push_candidates)
+        return points
+
+    def _timezone(self) -> ZoneInfo:
+        return ZoneInfo(self.settings.timezone or "Asia/Shanghai")
+
     def _start_of_today_utc(self) -> datetime:
-        timezone_name = self.settings.timezone or "Asia/Shanghai"
-        zone = ZoneInfo(timezone_name)
+        zone = self._timezone()
         now_local = datetime.now(zone)
         start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
         return start_local.astimezone(timezone.utc)
 
     @classmethod
     def _stuck_threshold_delta(cls):
-        from datetime import timedelta
-
         return timedelta(minutes=cls._STUCK_THRESHOLD_MINUTES)
 
     @staticmethod

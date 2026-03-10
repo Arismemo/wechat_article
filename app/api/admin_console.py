@@ -3138,6 +3138,8 @@ def unified_console() -> str:
               gap: 10px;
             }
             .metrics[aria-busy="true"],
+            .alerts-grid[aria-busy="true"],
+            .trend-grid[aria-busy="true"],
             .ops-grid[aria-busy="true"],
             .board[aria-busy="true"],
             .workspace[aria-busy="true"] {
@@ -3219,6 +3221,218 @@ def unified_console() -> str:
             }
             .ops-metrics span {
               font-size: 22px;
+              line-height: 1;
+            }
+            .panel-row {
+              display: flex;
+              align-items: flex-start;
+              justify-content: space-between;
+              gap: 14px;
+              margin-bottom: 14px;
+            }
+            .panel-row h2 {
+              margin: 0 0 8px;
+            }
+            .panel-row .panel-intro {
+              margin: 0;
+            }
+            .panel-tools {
+              display: flex;
+              flex-wrap: wrap;
+              justify-content: flex-end;
+              align-items: center;
+              gap: 8px;
+            }
+            .mini-note {
+              color: var(--muted);
+              font-size: 12px;
+              line-height: 1.6;
+            }
+            .alerts-grid {
+              display: grid;
+              gap: 12px;
+            }
+            .alert-card {
+              display: grid;
+              gap: 12px;
+              padding: 16px;
+              border-radius: 20px;
+              border: 1px solid rgba(65, 48, 27, 0.12);
+              background: linear-gradient(180deg, rgba(255, 252, 247, 0.98), rgba(247, 242, 233, 0.96));
+              box-shadow: 0 14px 30px rgba(58, 40, 18, 0.06);
+            }
+            .alert-card.warn {
+              border-color: rgba(176, 122, 24, 0.28);
+              background: linear-gradient(160deg, rgba(255, 248, 235, 0.98), rgba(250, 244, 232, 0.94));
+            }
+            .alert-card.critical {
+              border-color: rgba(158, 64, 50, 0.3);
+              background: linear-gradient(160deg, rgba(255, 244, 241, 0.98), rgba(252, 242, 238, 0.94));
+            }
+            .alert-head {
+              display: flex;
+              align-items: flex-start;
+              justify-content: space-between;
+              gap: 12px;
+            }
+            .alert-head h3 {
+              margin: 6px 0 0;
+              font-size: 17px;
+              line-height: 1.45;
+            }
+            .alert-level {
+              display: inline-flex;
+              align-items: center;
+              border-radius: 999px;
+              padding: 4px 10px;
+              font-size: 12px;
+              letter-spacing: 0.06em;
+              background: rgba(37, 93, 82, 0.12);
+              color: var(--accent-dark);
+            }
+            .alert-level.warn {
+              background: rgba(176, 122, 24, 0.16);
+              color: #8a5c12;
+            }
+            .alert-level.critical {
+              background: rgba(158, 64, 50, 0.14);
+              color: var(--danger);
+            }
+            .alert-body {
+              margin: 0;
+              font-size: 14px;
+              line-height: 1.75;
+            }
+            .alert-meta {
+              margin: 0;
+              color: var(--muted);
+              font-size: 13px;
+              line-height: 1.7;
+            }
+            .alert-actions {
+              display: flex;
+              flex-wrap: wrap;
+              gap: 8px;
+            }
+            .alert-actions button,
+            .alert-actions a {
+              width: auto;
+              min-width: 120px;
+            }
+            .alert-actions a {
+              display: inline-flex;
+              align-items: center;
+              justify-content: center;
+              padding: 12px 16px;
+              border-radius: 14px;
+              border: 1px solid rgba(37, 93, 82, 0.18);
+              background: rgba(255, 253, 249, 0.9);
+              color: var(--accent-dark);
+              text-decoration: none;
+              transition: transform 0.12s ease, border-color 0.12s ease;
+            }
+            .alert-actions a:hover {
+              border-color: rgba(23, 63, 56, 0.3);
+              transform: translateY(-1px);
+            }
+            .alert-muted-note {
+              padding: 14px 16px;
+              border-radius: 18px;
+              border: 1px dashed rgba(65, 48, 27, 0.18);
+              background: rgba(255, 253, 249, 0.74);
+              color: var(--muted);
+              font-size: 13px;
+              line-height: 1.75;
+            }
+            .trend-grid {
+              display: grid;
+              grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+              gap: 12px;
+            }
+            .trend-card {
+              display: grid;
+              gap: 12px;
+              padding: 16px;
+              border-radius: 20px;
+              border: 1px solid rgba(65, 48, 27, 0.12);
+              background: linear-gradient(180deg, rgba(255, 252, 247, 0.98), rgba(247, 242, 233, 0.96));
+              box-shadow: 0 14px 30px rgba(58, 40, 18, 0.05);
+            }
+            .trend-top {
+              display: flex;
+              align-items: baseline;
+              justify-content: space-between;
+              gap: 10px;
+            }
+            .trend-top strong {
+              font-size: 13px;
+              color: var(--muted);
+              font-weight: 600;
+            }
+            .trend-top span {
+              font-size: 13px;
+              color: var(--text);
+            }
+            .trend-bars {
+              display: grid;
+              grid-template-columns: repeat(2, minmax(0, 1fr));
+              gap: 10px;
+              align-items: end;
+              min-height: 110px;
+            }
+            .trend-column {
+              display: grid;
+              justify-items: center;
+              gap: 8px;
+            }
+            .trend-rail {
+              display: flex;
+              align-items: flex-end;
+              justify-content: center;
+              width: 100%;
+              max-width: 56px;
+              height: 88px;
+              padding: 4px;
+              border-radius: 999px;
+              background: rgba(36, 29, 20, 0.08);
+            }
+            .trend-bar {
+              display: block;
+              width: 100%;
+              border-radius: 999px;
+              min-height: 6px;
+              transition: height 180ms ease;
+            }
+            .trend-bar.submitted {
+              background: linear-gradient(180deg, rgba(37, 93, 82, 0.62), rgba(37, 93, 82, 0.96));
+            }
+            .trend-bar.failed {
+              background: linear-gradient(180deg, rgba(158, 64, 50, 0.46), rgba(158, 64, 50, 0.92));
+            }
+            .trend-column label {
+              margin: 0;
+              font-size: 12px;
+              color: var(--muted);
+            }
+            .trend-rates {
+              display: grid;
+              gap: 8px;
+            }
+            .trend-rate {
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              gap: 8px;
+              padding-top: 8px;
+              border-top: 1px solid rgba(65, 48, 27, 0.08);
+            }
+            .trend-rate strong {
+              font-size: 12px;
+              color: var(--muted);
+              font-weight: 500;
+            }
+            .trend-rate span {
+              font-size: 18px;
               line-height: 1;
             }
             .board {
@@ -3401,9 +3615,14 @@ def unified_console() -> str:
               .overview-strip,
               .actions,
               .grid.two,
+              .trend-grid,
               .detail-grid,
               .task-grid {
                 grid-template-columns: 1fr;
+              }
+              .panel-row,
+              .alert-head {
+                flex-direction: column;
               }
               .overview-card.highlight {
                 grid-column: span 1;
@@ -3568,7 +3787,31 @@ def unified_console() -> str:
                   </div>
                 </section>
 
-                <section class="panel">
+                <section class="panel" id="alerts-panel">
+                  <div class="panel-row">
+                    <div>
+                      <h2>告警与静默</h2>
+                      <p class="panel-intro">这里把异常先按级别排好，再决定要不要继续追。静默只会隐藏提醒，不会改动后端状态或真实队列。</p>
+                    </div>
+                    <div class="panel-tools">
+                      <span class="mini-note" id="alerts-summary">等待监控快照</span>
+                      <button id="clear-alert-silence" class="secondary" type="button">恢复全部静默</button>
+                    </div>
+                  </div>
+                  <div class="alerts-grid" id="alerts" aria-busy="false">
+                    <div class="hint">等待监控快照。</div>
+                  </div>
+                </section>
+
+                <section class="panel" id="trends-panel">
+                  <h2>最近 24 小时趋势</h2>
+                  <p class="panel-intro">按最近 24 小时、每 3 小时一桶聚合当前筛选范围。先看提交量和失败量，再看审稿与推草稿成功率是否明显走低。</p>
+                  <div class="trend-grid" id="trends" aria-busy="false">
+                    <div class="hint">等待监控快照。</div>
+                  </div>
+                </section>
+
+                <section class="panel" id="operations-panel">
                   <h2>队列与 Worker 观测</h2>
                   <p class="panel-intro">实时显示四条队列的 backlog、处理中任务和 worker 心跳。worker 超过阈值未上报时，会标为 stale 或 offline。</p>
                   <div class="ops-grid" id="operations" aria-busy="false">
@@ -3576,7 +3819,7 @@ def unified_console() -> str:
                   </div>
                 </section>
 
-                <section class="panel">
+                <section class="panel" id="board-panel">
                   <h2>状态分组看板</h2>
                   <p class="panel-intro">看板按状态分组，卡片里会给出“下一步”提示。这里只负责定位任务，不直接执行审核或反馈动作。</p>
                   <div class="board" id="board" aria-busy="false">
@@ -3606,6 +3849,8 @@ def unified_console() -> str:
             const activeOnlyEl = document.getElementById("active-only");
             const boardEl = document.getElementById("board");
             const metricsEl = document.getElementById("metrics");
+            const alertsEl = document.getElementById("alerts");
+            const trendsEl = document.getElementById("trends");
             const operationsEl = document.getElementById("operations");
             const workspaceEl = document.getElementById("workspace");
             const statusEl = document.getElementById("status");
@@ -3613,6 +3858,8 @@ def unified_console() -> str:
             const heroFocusEl = document.getElementById("hero-focus");
             const outputEl = document.getElementById("output");
             const liveHintEl = document.getElementById("live-hint");
+            const alertsSummaryEl = document.getElementById("alerts-summary");
+            const clearAlertSilenceEl = document.getElementById("clear-alert-silence");
             const overviewFilteredCountEl = document.getElementById("overview-filtered-count");
             const overviewManualCountEl = document.getElementById("overview-manual-count");
             const overviewOpsStateEl = document.getElementById("overview-ops-state");
@@ -3668,6 +3915,9 @@ def unified_console() -> str:
             let monitorStream = null;
             let lastSnapshot = null;
             const SESSION_EXPIRED_MESSAGE = "后台会话已失效，请刷新页面重新进入后台。";
+            const ALERT_SILENCE_STORAGE_KEY = "phase7_console_silenced_alerts";
+            const ALERT_SILENCE_HOURS = 6;
+            let silencedAlerts = {};
 
             const escapeHtml = (value) => {
               return String(value ?? "")
@@ -3676,6 +3926,55 @@ def unified_console() -> str:
                 .replaceAll(">", "&gt;")
                 .replaceAll('"', "&quot;")
                 .replaceAll("'", "&#39;");
+            };
+            const readSilencedAlerts = () => {
+              try {
+                const raw = localStorage.getItem(ALERT_SILENCE_STORAGE_KEY);
+                if (!raw) return {};
+                const parsed = JSON.parse(raw);
+                return parsed && typeof parsed === "object" ? parsed : {};
+              } catch (_error) {
+                return {};
+              }
+            };
+            const persistSilencedAlerts = () => {
+              const entries = Object.entries(silencedAlerts);
+              if (!entries.length) {
+                localStorage.removeItem(ALERT_SILENCE_STORAGE_KEY);
+                return;
+              }
+              localStorage.setItem(ALERT_SILENCE_STORAGE_KEY, JSON.stringify(Object.fromEntries(entries)));
+            };
+            const cleanupSilencedAlerts = () => {
+              const now = Date.now();
+              let changed = false;
+              Object.entries(silencedAlerts).forEach(([key, expiresAt]) => {
+                const timestamp = new Date(expiresAt).getTime();
+                if (!Number.isFinite(timestamp) || timestamp <= now) {
+                  delete silencedAlerts[key];
+                  changed = true;
+                }
+              });
+              if (changed) {
+                persistSilencedAlerts();
+              }
+            };
+            const alertDedupeKey = (alert) => alert?.dedupe_key || alert?.key || "";
+            const isAlertSilenced = (alert) => {
+              cleanupSilencedAlerts();
+              const key = alertDedupeKey(alert);
+              if (!key) return false;
+              const expiresAt = silencedAlerts[key];
+              return Boolean(expiresAt && new Date(expiresAt).getTime() > Date.now());
+            };
+            const silenceAlert = (key, hours = ALERT_SILENCE_HOURS) => {
+              if (!key) return;
+              silencedAlerts[key] = new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+              persistSilencedAlerts();
+            };
+            const resetSilencedAlerts = () => {
+              silencedAlerts = {};
+              persistSilencedAlerts();
             };
             const hydrateArticlePreview = (root, generations) => {
               if (!root || !Array.isArray(generations)) return;
@@ -3713,6 +4012,7 @@ def unified_console() -> str:
               if (!value || value.length <= length) return value || "";
               return `${value.slice(0, length)}...`;
             };
+            const formatRate = (value) => value === null || value === undefined ? "暂无" : `${value}%`;
             const reviewAiTraceScore = (review) => (review && review.ai_trace_score !== null && review.ai_trace_score !== undefined)
               ? Number(review.ai_trace_score)
               : null;
@@ -3739,6 +4039,8 @@ def unified_console() -> str:
             const setDataBusy = (busy) => {
               const value = busy ? "true" : "false";
               metricsEl.setAttribute("aria-busy", value);
+              alertsEl.setAttribute("aria-busy", value);
+              trendsEl.setAttribute("aria-busy", value);
               operationsEl.setAttribute("aria-busy", value);
               boardEl.setAttribute("aria-busy", value);
               workspaceEl.setAttribute("aria-busy", value);

@@ -73,6 +73,7 @@ class AdminMonitorApiTests(unittest.TestCase):
         )
         session.add(running_task)
         session.flush()
+        running_task.created_at = datetime.now(timezone.utc) - timedelta(hours=4)
         running_task.updated_at = datetime.now(timezone.utc) - timedelta(hours=1)
         session.add(ContentBrief(task_id=running_task.id, brief_version=1, positioning="监控测试"))
         session.flush()
@@ -99,6 +100,7 @@ class AdminMonitorApiTests(unittest.TestCase):
         )
         session.add(draft_task)
         session.flush()
+        draft_task.created_at = datetime.now(timezone.utc) - timedelta(hours=1)
         draft_brief = ContentBrief(task_id=draft_task.id, brief_version=1, positioning="监控测试")
         session.add(draft_brief)
         session.flush()
@@ -124,9 +126,23 @@ class AdminMonitorApiTests(unittest.TestCase):
                 created_at=datetime.now(timezone.utc),
             )
         )
+
+        failed_task = Task(
+            task_code="tsk_monitor_failed",
+            source_url="https://mp.weixin.qq.com/s/failed",
+            normalized_url="https://mp.weixin.qq.com/s/failed",
+            source_type="wechat",
+            status="push_failed",
+            error_code="push_failed",
+            error_message="mock push failed",
+        )
+        session.add(failed_task)
+        session.flush()
+        failed_task.created_at = datetime.now(timezone.utc) - timedelta(hours=6)
         session.commit()
         self.running_task_id = running_task.id
         self.draft_task_id = draft_task.id
+        self.failed_task_id = failed_task.id
         session.close()
 
     def tearDown(self) -> None:
@@ -171,16 +187,29 @@ class AdminMonitorApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         body = response.json()
-        self.assertEqual(body["summary"]["filtered_total"], 2)
+        self.assertEqual(body["summary"]["filtered_total"], 3)
         self.assertEqual(body["summary"]["filtered_active"], 1)
         self.assertEqual(body["summary"]["filtered_draft_saved"], 1)
+        self.assertEqual(body["summary"]["filtered_failed"], 1)
         self.assertEqual(body["summary"]["filtered_stuck"], 1)
-        self.assertEqual(body["summary"]["today_submitted"], 2)
-        self.assertEqual(body["summary"]["today_review_success_rate"], 100.0)
-        self.assertEqual(len(body["tasks"]), 2)
+        self.assertEqual(body["summary"]["today_submitted"], 3)
+        self.assertEqual(body["summary"]["today_failed"], 1)
+        self.assertEqual(body["summary"]["today_review_success_rate"], 50.0)
+        self.assertEqual(len(body["tasks"]), 3)
         self.assertTrue(body["operations"]["available"])
         self.assertEqual(len(body["operations"]["workers"]), 4)
         self.assertEqual(body["operations"]["workers"][0]["name"], "phase2")
+        self.assertGreaterEqual(len(body["alerts"]), 2)
+        self.assertEqual(body["alerts"][0]["dedupe_key"], body["alerts"][0]["key"])
+        self.assertIn(body["alerts"][0]["level"], {"warn", "critical"})
+        alert_keys = {item["key"] for item in body["alerts"]}
+        self.assertIn("monitor.tasks.stuck", alert_keys)
+        self.assertIn("monitor.tasks.failed", alert_keys)
+        self.assertEqual(len(body["trends"]), 8)
+        self.assertEqual(sum(point["submitted"] for point in body["trends"]), 3)
+        self.assertEqual(sum(point["failed"] for point in body["trends"]), 1)
+        self.assertTrue(any(point["auto_push_success_rate"] == 100.0 for point in body["trends"]))
+        self.assertTrue(any(point["review_success_rate"] == 100.0 for point in body["trends"]))
         self.assertEqual(body["workspace"]["task_id"], self.draft_task_id)
         self.assertEqual(body["workspace"]["wechat_media_id"], "media-monitor-1")
         self.assertEqual(body["workspace"]["wechat_draft_url"], "https://mp.weixin.qq.com/")
@@ -201,7 +230,8 @@ class AdminMonitorApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("text/event-stream", response.headers.get("content-type", ""))
         self.assertIn("event: snapshot", response.text)
-        self.assertIn('"filtered_total": 2', response.text)
+        self.assertIn('"alerts"', response.text)
+        self.assertIn('"trends"', response.text)
 
 
 if __name__ == "__main__":

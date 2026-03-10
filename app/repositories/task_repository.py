@@ -71,6 +71,26 @@ class TaskRepository:
         )
         return int(self.session.scalar(statement) or 0)
 
+    def list_created_since(
+        self,
+        *,
+        created_after: datetime,
+        active_only: bool = False,
+        status_filter: Optional[str] = None,
+        source_type: Optional[str] = None,
+        query: Optional[str] = None,
+    ) -> list[Task]:
+        statement = self._apply_filters(
+            select(Task),
+            active_only=active_only,
+            status_filter=status_filter,
+            source_type=source_type,
+            query=query,
+            created_after=created_after,
+        )
+        statement = statement.order_by(Task.created_at.asc())
+        return list(self.session.scalars(statement))
+
     def create(self, task: Task) -> Task:
         self.session.add(task)
         self.session.flush()
