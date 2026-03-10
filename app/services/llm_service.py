@@ -50,18 +50,17 @@ class LLMService:
         json_mode: bool = False,
         timeout_seconds: Optional[int] = None,
     ) -> dict[str, Any]:
-        payload = {
-            "model": model or self.default_model or self.settings.llm_model_analyze,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            "temperature": temperature,
-        }
-        if json_mode:
-            payload["response_format"] = {"type": "json_object"}
+        completion_url = self._completion_url()
+        payload = self._build_payload(
+            completion_url=completion_url,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            model=model or self.default_model or self.settings.llm_model_analyze,
+            temperature=temperature,
+            json_mode=json_mode,
+        )
         response = httpx.post(
-            self._completion_url(),
+            completion_url,
             headers={
                 "Authorization": f"Bearer {self.api_key or self.settings.llm_api_key}",
                 "Content-Type": "application/json",
@@ -79,7 +78,7 @@ class LLMService:
             ) from exc
         body = response.json()
         try:
-            content = body["choices"][0]["message"]["content"]
+            content = self._extract_response_content(completion_url=completion_url, body=body)
         except (KeyError, IndexError, TypeError) as exc:
             raise LLMServiceError(f"Invalid LLM response payload: {body}") from exc
         text = self._normalize_content(content)
@@ -87,9 +86,70 @@ class LLMService:
 
     def _completion_url(self) -> str:
         base_url = (self.api_base or self.settings.llm_api_base or "https://open.bigmodel.cn/api/coding/paas/v4").rstrip("/")
-        if base_url.endswith("/chat/completions"):
+        if base_url.endswith("/chat/completions") or base_url.endswith("/responses"):
             return base_url
         return f"{base_url}/chat/completions"
+
+    def _build_payload(
+        self,
+        *,
+        completion_url: str,
+        system_prompt: str,
+        user_prompt: str,
+        model: str,
+        temperature: float,
+        json_mode: bool,
+    ) -> dict[str, Any]:
+        if completion_url.endswith("/responses"):
+            payload: dict[str, Any] = {
+                "model": model,
+                "input": [
+                    {
+                        "role": "system",
+                        "content": [{"type": "input_text", "text": system_prompt}],
+                    },
+                    {
+                        "role": "user",
+                        "content": [{"type": "input_text", "text": user_prompt}],
+                    },
+                ],
+                "temperature": temperature,
+            }
+            if json_mode:
+                payload["text"] = {"format": {"type": "json_object"}}
+            return payload
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "temperature": temperature,
+        }
+        if json_mode:
+            payload["response_format"] = {"type": "json_object"}
+        return payload
+
+    def _extract_response_content(self, *, completion_url: str, body: dict[str, Any]) -> Any:
+        if completion_url.endswith("/responses"):
+            parts: list[dict[str, Any]] = []
+            for item in body.get("output") or []:
+                if not isinstance(item, dict):
+                    continue
+                if item.get("type") != "message":
+                    continue
+                for content_item in item.get("content") or []:
+                    if not isinstance(content_item, dict):
+                        continue
+                    if content_item.get("type") != "output_text":
+                        continue
+                    text = content_item.get("text")
+                    if isinstance(text, str):
+                        parts.append({"text": text})
+            if parts:
+                return parts
+            raise LLMServiceError(f"Invalid responses payload: {body}")
+        return body["choices"][0]["message"]["content"]
 
     def _normalize_content(self, content: Any) -> str:
         if isinstance(content, str):

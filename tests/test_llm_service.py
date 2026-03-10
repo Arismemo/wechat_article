@@ -59,6 +59,36 @@ class LLMServiceTests(unittest.TestCase):
         self.assertEqual(exc.exception.status_code, 400)
         self.assertIn("model not found", str(exc.exception))
 
+    def test_complete_json_supports_responses_endpoint(self) -> None:
+        request = httpx.Request("POST", "https://example.test/v1/responses")
+        body = {
+            "output": [
+                {
+                    "type": "message",
+                    "content": [
+                        {
+                            "type": "output_text",
+                            "text": '{"ok": true, "message": "pong"}',
+                        }
+                    ],
+                }
+            ]
+        }
+        mocked = Mock()
+        mocked.raise_for_status.return_value = None
+        mocked.json.return_value = body
+
+        with patch("app.services.llm_service.httpx.post", return_value=mocked) as mocked_post:
+            service = LLMService(api_base="https://example.test/v1/responses", api_key="sk-test", default_model="model-a")
+            payload = service.complete_json(system_prompt="sys", user_prompt="usr", json_mode=True)
+
+        self.assertEqual(payload, {"ok": True, "message": "pong"})
+        call = mocked_post.call_args.kwargs["json"]
+        self.assertEqual(call["model"], "model-a")
+        self.assertEqual(call["text"], {"format": {"type": "json_object"}})
+        self.assertEqual(call["input"][0]["role"], "system")
+        self.assertEqual(call["input"][1]["role"], "user")
+
 
 if __name__ == "__main__":
     unittest.main()
