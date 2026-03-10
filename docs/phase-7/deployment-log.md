@@ -415,3 +415,67 @@ Phase 7 当前已具备：
 
 - `v1.1.1` 的 TP-01 ~ TP-04 已完成服务器发布与 smoke test
 - `/admin`、`/admin/phase5`、`/api/v1/tasks/{task_id}/workspace`、`/internal/v1/tasks/{task_id}/select-generation` 已在线闭环
+
+## 26. v1.1.2 发布收口
+
+更新时间：2026-03-10
+
+本次发布聚焦两件事：
+
+- Phase 7F 第一刀正式上线
+  - 告警分级
+  - `dedupe_key`
+  - 前端本地静默
+  - 最近 24 小时趋势
+- `/admin` 主工作台的会话失效恢复收口
+
+本次部署方式：
+
+1. 本地提交并推送 `af101ec`
+2. 由于预构建镜像发布路径在 `docker save/load` 阶段耗时过长，改走 bundle 导入服务器仓库
+3. 服务器仓库快进后执行：
+   - `docker compose up -d --build api phase2_worker phase3_worker phase4_worker feedback_worker`
+4. 由 `docker compose` 自动拉起依赖并重建 5 个服务
+
+本次服务器结果：
+
+- 发布会话中服务器仓库已快进到 `af101ec`
+- `api`
+  - 已完成重建并恢复对外服务
+- `phase2_worker / phase3_worker / phase4_worker / feedback_worker`
+  - 已完成重建并重新启动
+- `postgres / redis`
+  - 作为依赖容器保持 healthy
+
+本次 smoke test：
+
+- `GET https://auto.709970.xyz/healthz`
+  - 返回：`{"status":"ok"}`
+- `GET https://auto.709970.xyz/admin`
+  - 页面包含：
+    - `结构化下一步`
+    - `当前卡点`
+    - `focus-action-card`
+    - `cache: "no-store"`
+- `GET https://auto.709970.xyz/admin/phase5`
+  - 页面包含：
+    - `当前采用版本`
+    - `采用此版本`
+    - `参考文章`
+    - `AI 去痕诊断`
+    - `流水线时间线`
+- `GET https://auto.709970.xyz/admin/console/stream?once=true&limit=3`
+  - 返回 `event: snapshot`
+  - 返回体包含 `alerts`、`trends` 和 worker 状态
+- `GET https://auto.709970.xyz/api/v1/admin/monitor/snapshot`
+  - 返回：
+    - `alerts_count=1`
+    - `trends_count=8`
+  - 当前告警样例：
+    - `critical / 任务推进卡住`
+
+结论：
+
+- `v1.1.2` 已完成正式发布闭环
+- Phase 7F 第一刀与 `/admin` 会话恢复已在线可用
+- 可以在此基线上继续启动后台前端改版实施

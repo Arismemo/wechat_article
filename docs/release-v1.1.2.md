@@ -1,7 +1,7 @@
 # v1.1.2 发布说明
 
 更新时间：2026-03-10
-状态：Locally Verified
+状态：Released
 
 ## 1. 发布结论
 
@@ -91,13 +91,36 @@
 
 ## 4. 线上验收
 
-待本轮正式部署后补充：
+本轮已完成线上 smoke test：
 
-- `GET /healthz`
-- `GET /admin`
-- `GET /admin/phase5`
-- `GET /admin/console/stream?once=true&limit=3`
-- `GET /api/v1/admin/monitor/snapshot`
+- `GET https://auto.709970.xyz/healthz`
+  - 返回：`{"status":"ok"}`
+- `GET https://auto.709970.xyz/admin`
+  - 页面包含：
+    - `结构化下一步`
+    - `当前卡点`
+    - `focus-action-card`
+    - `cache: "no-store"`
+- `GET https://auto.709970.xyz/admin/phase5`
+  - 页面包含：
+    - `当前采用版本`
+    - `采用此版本`
+    - `参考文章`
+    - `AI 去痕诊断`
+    - `流水线时间线`
+- `GET https://auto.709970.xyz/admin/console/stream?once=true&limit=3`
+  - 返回：`event: snapshot`
+  - 返回结果中包含：
+    - `alerts`
+    - `trends`
+    - 4 个 worker 的运行状态
+- `GET https://auto.709970.xyz/api/v1/admin/monitor/snapshot`
+  - 当前返回：
+    - `alerts_count = 1`
+    - `trends_count = 8`
+  - 当前示例告警：
+    - `level = critical`
+    - `title = 任务推进卡住`
 
 ## 5. 已知边界
 
@@ -110,9 +133,15 @@
 
 ## 6. 发布结果
 
-待本轮发布完成后补充：
-
-- 正式 tag
-- release commit
-- 发布方式
-- 服务器工作树状态
+- 发布时间：2026-03-10
+- 正式 tag：`v1.1.2`
+- 核心功能提交：`af101ec`
+- 发布收口提交：本次 tag 指向发布文档收口 commit
+- 发布方式：
+  - 本地 `git push origin main`
+  - 本地生成 bundle 并导入服务器仓库
+  - 服务器执行 `docker compose up -d --build api phase2_worker phase3_worker phase4_worker feedback_worker`
+- 服务器结果：
+  - 发布会话中服务器仓库已快进到 `af101ec`
+  - `api`、`phase2_worker`、`phase3_worker`、`phase4_worker`、`feedback_worker` 已全部重建启动
+  - 发布后公网 smoke test 全部通过

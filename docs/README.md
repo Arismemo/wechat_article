@@ -14,6 +14,10 @@
 
 - `docs/post-v1.1.0-roadmap.md`
   - `v1.1.0` 之后的单人运营路线图，包含 P0 / P1 / P2 优先级、前端交互优化和明确不纳入项
+- `docs/post-v1.1.0-frontend-redesign-plan.md`
+  - 后台前端改版设计说明，定义统一视觉方向、交互模型、页面分工和实施顺序
+- `docs/handoff-2026-03-10.md`
+  - 当前线上状态、`v1.1.2` 发布结论、前端实施起点与接手检查清单
 - `docs/post-v1.1.0-task-plan.md`
   - 将下一阶段 4 个重点问题拆成可执行任务包、里程碑、验收与依赖
 - `docs/post-v1.1.0-recording-guide.md`
@@ -57,9 +61,9 @@
 - `docs/phase-6/deployment-log.md`
   - 阶段 6 服务器部署与 smoke test 记录
 - `docs/phase-7/console-monitoring.md`
-  - Phase 7 统一控制台、实时流、统计卡片和历史筛选说明
+  - Phase 7 统一控制台、实时流、统计卡片、趋势与告警说明
 - `docs/phase-7/deployment-log.md`
-  - Phase 7D / 7E 服务器部署、运行观测与发布收口记录
+  - Phase 7D / 7E / 7F 服务器部署、运行观测与 `v1.1.2` 发布收口记录
 - `docs/phase-7/runtime-settings.md`
   - Phase 7 运行参数设置、后台会话、`.env` 只读状态和测试告警说明
 - `docs/research-wechat-fetch-and-browser-options-2026-03-07.md`
@@ -70,6 +74,8 @@
   - 第二版发布范围、验证结果、已知边界与正式发布结果
 - `docs/release-v1.1.1.md`
   - TP-01 ~ TP-04 收口包发布说明、线上 smoke test 与 tag 结果
+- `docs/release-v1.1.2.md`
+  - `v1.1.2` 发布说明，记录 Phase 7F 第一刀、`/admin` 会话恢复与正式 smoke test
 - `docs/release-process.md`
   - 标准版本发布流程、tag 前检查项与部署约束
 - `docs/web-console-plan.md`
