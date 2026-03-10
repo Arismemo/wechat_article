@@ -4644,7 +4644,7 @@ def settings_console() -> str:
                       <button id="send-alert">发送</button>
                     </div>
                   </details>
-                  <details class="fold">
+                  <details class="fold" id="debug-output-panel">
                     <summary>调试输出</summary>
                     <pre id="output">等待请求。</pre>
                   </details>
@@ -4683,6 +4683,7 @@ def settings_console() -> str:
             const statusEl = document.getElementById("status");
             const flashMessageEl = document.getElementById("flash-message");
             const heroFocusEl = document.getElementById("hero-focus");
+            const outputPanelEl = document.getElementById("debug-output-panel");
             const outputEl = document.getElementById("output");
             const alertHintEl = document.getElementById("alert-hint");
             const operatorEl = document.getElementById("operator");
@@ -4725,8 +4726,17 @@ def settings_console() -> str:
               runtimeStatusEl.setAttribute("aria-busy", busy ? "true" : "false");
             };
 
-            const renderOutput = (value) => {
+            const revealOutputPanel = () => {
+              if (outputPanelEl && !outputPanelEl.open) {
+                outputPanelEl.open = true;
+              }
+            };
+
+            const renderOutput = (value, { reveal = false } = {}) => {
               outputEl.textContent = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+              if (reveal) {
+                revealOutputPanel();
+              }
             };
             const apiUrl = (path) => new URL(path, window.location.origin).toString();
 
@@ -4822,7 +4832,7 @@ def settings_console() -> str:
                 await work();
               } catch (error) {
                 setStatus("操作失败", "warn");
-                renderOutput(error.message || String(error));
+                renderOutput(error.message || String(error), { reveal: true });
               } finally {
                 setButtonBusy(button, false);
               }
@@ -5188,9 +5198,11 @@ def settings_console() -> str:
               return payload;
             };
 
-            const loadAll = async () => {
+            const loadAll = async ({ renderSnapshot = true, preserveStatus = false } = {}) => {
               saveDraft();
-              setStatus("加载中");
+              if (!preserveStatus) {
+                setStatus("加载中");
+              }
               setDataBusy(true);
               try {
                 const [llmConfig, settings, runtimeStatus] = await Promise.all([
@@ -5199,10 +5211,14 @@ def settings_console() -> str:
                   loadRuntimeStatus(),
                 ]);
                 renderOverview(settings, runtimeStatus);
-                renderOutput({ llm_config: llmConfig, settings, runtime_status: runtimeStatus });
-                setStatus(
-                  `已加载 · ${llmConfig.providers.length} 个供应商 / ${getVisibleSettings(settings).length} 项设置 / ${runtimeStatus.environment.length} 项环境状态`
-                );
+                if (renderSnapshot) {
+                  renderOutput({ llm_config: llmConfig, settings, runtime_status: runtimeStatus });
+                }
+                if (!preserveStatus) {
+                  setStatus(
+                    `已加载 · ${llmConfig.providers.length} 个供应商 / ${getVisibleSettings(settings).length} 项设置 / ${runtimeStatus.environment.length} 项环境状态`
+                  );
+                }
               } finally {
                 setDataBusy(false);
               }
@@ -5222,14 +5238,16 @@ def settings_console() -> str:
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
               });
-              renderOutput(result);
-              await loadAll();
+              await loadAll({ renderSnapshot: false, preserveStatus: true });
+              renderOutput(result, { reveal: true });
               setStatus(resetToDefault ? "已恢复默认" : "已保存");
             };
 
-            const saveLLMConfig = async () => {
+            const saveLLMConfig = async ({ renderResponse = true, preserveStatus = false } = {}) => {
               saveDraft();
-              setStatus("保存模型配置中");
+              if (!preserveStatus) {
+                setStatus("保存模型配置中");
+              }
               const payload = buildLLMConfigPayload();
               const result = await request("/api/v1/admin/llm-config", {
                 method: "PUT",
@@ -5237,8 +5255,12 @@ def settings_console() -> str:
                 body: JSON.stringify(payload),
               });
               renderLLMConfig(result);
-              renderOutput(result);
-              setStatus("模型配置已保存");
+              if (renderResponse) {
+                renderOutput(result, { reveal: true });
+              }
+              if (!preserveStatus) {
+                setStatus("模型配置已保存");
+              }
               return result;
             };
 
@@ -5257,7 +5279,7 @@ def settings_console() -> str:
               if (!model) {
                 throw new Error("当前供应商还没有可测试的模型，请先填写模型列表。");
               }
-              await saveLLMConfig();
+              await saveLLMConfig({ renderResponse: false, preserveStatus: true });
               setStatus("发送模型测试中");
               const result = await request("/api/v1/admin/llm-test", {
                 method: "POST",
@@ -5269,9 +5291,9 @@ def settings_console() -> str:
                   note: noteEl.value.trim() || null,
                 }),
               });
-              renderOutput(result);
+              await loadAll({ renderSnapshot: false, preserveStatus: true });
+              renderOutput(result, { reveal: true });
               setStatus(result.success ? "模型连通性测试通过" : "模型连通性测试失败", result.success ? "" : "warn");
-              await loadAll();
             };
 
             document.getElementById("refresh").addEventListener("click", (event) => {
@@ -5292,7 +5314,7 @@ def settings_console() -> str:
                     note: noteEl.value.trim() || null,
                   }),
                 });
-                renderOutput(result);
+                renderOutput(result, { reveal: true });
                 setStatus("测试告警已发送");
               });
             });

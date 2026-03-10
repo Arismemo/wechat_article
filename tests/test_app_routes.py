@@ -206,8 +206,11 @@ class AppRouteTests(unittest.TestCase):
         self.assertNotIn("高级鉴权兜底", response.text)
         self.assertNotIn("Bearer Token（仅兜底）", response.text)
         self.assertIn("const apiUrl = (path) => new URL(path, window.location.origin).toString();", response.text)
+        self.assertIn('id="debug-output-panel"', response.text)
         self.assertIn('.split("\\n")', response.text)
         self.assertIn('.join("\\n")', response.text)
+        self.assertIn("renderOutput(result, { reveal: true });", response.text)
+        self.assertIn("loadAll({ renderSnapshot: false, preserveStatus: true });", response.text)
 
     def test_admin_portal_page_renders(self) -> None:
         app_module = reload(import_module("app.main"))
