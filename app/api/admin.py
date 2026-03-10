@@ -273,10 +273,10 @@ def phase2_console() -> str:
               outputEl.textContent = typeof value === "string" ? value : JSON.stringify(value, null, 2);
             };
             const escapeHtml = (value) => String(value ?? "")
-              .replaceAll("&", "&amp;")
-              .replaceAll("<", "&lt;")
-              .replaceAll(">", "&gt;")
-              .replaceAll('"', "&quot;");
+              .replace(/&/g, "&amp;")
+              .replace(/</g, "&lt;")
+              .replace(/>/g, "&gt;")
+              .replace(/"/g, "&quot;");
             const formatDate = (value) => {
               if (!value) return "未知";
               const date = new Date(value);
@@ -1034,6 +1034,24 @@ def phase5_console() -> str:
               font-size: 15px;
               line-height: 1.55;
             }
+            .summary-item small {
+              display: block;
+              margin-top: 8px;
+              color: var(--muted);
+              font-size: 12px;
+              line-height: 1.6;
+            }
+            .summary-item.signal {
+              background: linear-gradient(135deg, rgba(29, 106, 95, 0.08), rgba(255, 253, 248, 0.98));
+              box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42);
+            }
+            .summary-item.signal strong {
+              color: var(--accent-dark);
+            }
+            .summary-item.signal span {
+              font-size: 16px;
+              font-weight: 600;
+            }
             .generation-list, .audit-list {
               display: grid;
               align-content: start;
@@ -1406,6 +1424,7 @@ def phase5_console() -> str:
           </main>
 
           <script>
+            __ADMIN_SHARED_SCRIPT_HELPERS__
             const urlEl = document.getElementById("url");
             const taskEl = document.getElementById("task");
             const reviewNoteEl = document.getElementById("review-note");
@@ -1482,15 +1501,15 @@ def phase5_console() -> str:
               "needs_manual_source",
             ]);
             const SESSION_EXPIRED_MESSAGE = "后台会话已失效，请刷新页面重新进入后台。";
-
-            const escapeHtml = (value) => {
-              return String(value ?? "")
-                .replaceAll("&", "&amp;")
-                .replaceAll("<", "&lt;")
-                .replaceAll(">", "&gt;")
-                .replaceAll('"', "&quot;")
-                .replaceAll("'", "&#39;");
-            };
+            const {
+              apiUrl,
+              buildSessionExpiredError,
+              escapeHtml,
+              parseJsonResponse,
+              setButtonBusy,
+              storageGet,
+              storageSet,
+            } = AdminUiShared;
             const hydrateArticlePreview = (root, generations) => {
               if (!root || !Array.isArray(generations)) return;
               root.querySelectorAll("[data-generation-html]").forEach((node) => {
@@ -1501,21 +1520,21 @@ def phase5_console() -> str:
             };
 
             const loadDraft = () => {
-              urlEl.value = localStorage.getItem("phase5_console_url") || "";
-              taskEl.value = localStorage.getItem("phase5_console_task") || "";
-              reviewNoteEl.value = localStorage.getItem("phase5_console_review_note") || "";
-              recentStatusEl.value = localStorage.getItem("phase5_console_recent_status") || "";
-              recentLimitEl.value = localStorage.getItem("phase5_console_recent_limit") || "18";
-              recentActiveEl.checked = (localStorage.getItem("phase5_console_recent_active_only") || "true") !== "false";
+              urlEl.value = storageGet("phase5_console_url", "");
+              taskEl.value = storageGet("phase5_console_task", "");
+              reviewNoteEl.value = storageGet("phase5_console_review_note", "");
+              recentStatusEl.value = storageGet("phase5_console_recent_status", "");
+              recentLimitEl.value = storageGet("phase5_console_recent_limit", "18");
+              recentActiveEl.checked = storageGet("phase5_console_recent_active_only", "true") !== "false";
             };
 
             const saveDraft = () => {
-              localStorage.setItem("phase5_console_url", urlEl.value.trim());
-              localStorage.setItem("phase5_console_task", taskEl.value.trim());
-              localStorage.setItem("phase5_console_review_note", reviewNoteEl.value.trim());
-              localStorage.setItem("phase5_console_recent_status", recentStatusEl.value);
-              localStorage.setItem("phase5_console_recent_limit", recentLimitEl.value);
-              localStorage.setItem("phase5_console_recent_active_only", recentActiveEl.checked ? "true" : "false");
+              storageSet("phase5_console_url", urlEl.value.trim());
+              storageSet("phase5_console_task", taskEl.value.trim());
+              storageSet("phase5_console_review_note", reviewNoteEl.value.trim());
+              storageSet("phase5_console_recent_status", recentStatusEl.value);
+              storageSet("phase5_console_recent_limit", recentLimitEl.value);
+              storageSet("phase5_console_recent_active_only", recentActiveEl.checked ? "true" : "false");
             };
 
             const setStatus = (text) => {
@@ -1545,15 +1564,6 @@ def phase5_console() -> str:
               outputEl.textContent = JSON.stringify(payload, null, 2);
             };
 
-            const setButtonBusy = (button, busy, pendingLabel = "处理中...") => {
-              if (!button) return;
-              if (!button.dataset.defaultLabel) {
-                button.dataset.defaultLabel = button.textContent.trim();
-              }
-              button.disabled = busy;
-              button.setAttribute("aria-busy", busy ? "true" : "false");
-              button.textContent = busy ? pendingLabel : button.dataset.defaultLabel;
-            };
             const withButtonBusy = async (button, pendingLabel, work) => {
               if (!button || button.disabled) return;
               setButtonBusy(button, true, pendingLabel);
@@ -1566,7 +1576,6 @@ def phase5_console() -> str:
                 setButtonBusy(button, false);
               }
             };
-            const apiUrl = (path) => new URL(path, window.location.origin).toString();
 
             const request = async (method, path, body) => {
               saveDraft();
@@ -1580,16 +1589,10 @@ def phase5_console() -> str:
                 credentials: "same-origin",
                 body: body === undefined ? undefined : JSON.stringify(body),
               });
-              const text = await response.text();
-              let data;
-              try {
-                data = text ? JSON.parse(text) : {};
-              } catch {
-                data = { raw: text };
-              }
+              const data = await parseJsonResponse(response);
               if (!response.ok) {
                 if (response.status === 401) {
-                  throw new Error(SESSION_EXPIRED_MESSAGE);
+                  throw buildSessionExpiredError(SESSION_EXPIRED_MESSAGE);
                 }
                 throw new Error(data.detail || data.raw || `HTTP ${response.status}`);
               }
@@ -1667,6 +1670,98 @@ def phase5_console() -> str:
               ? `已定点润色 ${Array.isArray(review?.humanize_block_ids) ? review.humanize_block_ids.length : 0} 段`
               : "未触发";
             const reviewVoiceSummary = (review) => truncate(review?.voice_summary || "", 120) || "暂无";
+            const reviewDecisionSummary = (review, status) => {
+              if (review?.final_decision === "pass") {
+                return {
+                  headline: "建议通过",
+                  note: "审稿已给出通过结论，下一步重点判断是否允许推草稿。",
+                };
+              }
+              if (review?.final_decision === "revise") {
+                return {
+                  headline: "建议重写",
+                  note: "优先看版本差异和 AI 去痕诊断，再决定是否退回重写。",
+                };
+              }
+              if (review?.final_decision === "reject") {
+                return {
+                  headline: "建议驳回",
+                  note: "当前风险偏高，先确认是否回退历史版本或直接人工驳回。",
+                };
+              }
+              if (READY_STATUSES.has(status)) {
+                return {
+                  headline: "已通过，待判断是否推稿",
+                  note: "这条已不在“是否通过”阶段，重点改看推稿许可和草稿状态。",
+                };
+              }
+              if (WAITING_STATUSES.has(status)) {
+                return {
+                  headline: "待你人工判断",
+                  note: "先看当前采用版本、主要风险和版本差异，再决定通过还是重写。",
+                };
+              }
+              if (FAILED_STATUSES.has(status)) {
+                return {
+                  headline: "先处理异常",
+                  note: "这条当前不是审稿结论问题，先看错误和时间线中的失败节点。",
+                };
+              }
+              return {
+                headline: "先看当前版本",
+                note: "系统还在推进，先读当前采用版本和最新审稿摘要。",
+              };
+            };
+            const pushDecisionSummary = (status, pushPolicy, activeGeneration) => {
+              if (pushPolicy?.mode === "blocked") {
+                return {
+                  headline: "当前禁止推稿",
+                  note: pushPolicy.note || "需要先解除推稿限制，才能继续推到微信草稿箱。",
+                };
+              }
+              if (activeGeneration?.draft_saved) {
+                return {
+                  headline: "已推入草稿箱",
+                  note: activeGeneration.wechat_media_id
+                    ? `当前 media_id: ${activeGeneration.wechat_media_id}`
+                    : "可以直接去微信后台检查这版草稿。",
+                };
+              }
+              if (status === "review_passed") {
+                return {
+                  headline: "可决定是否推稿",
+                  note: "先确认这版确实是要保留的采用版本，再决定是否推到微信草稿箱。",
+                };
+              }
+              return {
+                headline: "暂不适合推稿",
+                note: "只有已通过且未被禁止推稿的版本，才进入推草稿判断。",
+              };
+            };
+            const riskSummary = (workspace, activeReview, activeDiagnosis) => {
+              if (workspace.error) {
+                return {
+                  headline: "任务存在错误",
+                  note: truncate(workspace.error, 120),
+                };
+              }
+              if (activeDiagnosis?.reasons?.length) {
+                return {
+                  headline: `AI 去痕：${aiTraceStateLabel(activeDiagnosis)}`,
+                  note: truncate(activeDiagnosis.reasons[0], 120),
+                };
+              }
+              if (reviewAiTraceScore(activeReview) !== null) {
+                return {
+                  headline: `AI 痕迹 ${reviewAiTraceLabel(activeReview)} / ${reviewHumanizeLabel(activeReview)}`,
+                  note: reviewVoiceSummary(activeReview),
+                };
+              }
+              return {
+                headline: "暂无明显阻断风险",
+                note: "首屏没有识别到错误或高风险提示，继续看版本差异和当前采用版本。",
+              };
+            };
             const aiTraceStateLabel = (diagnosis) => {
               if (!diagnosis) return "暂无诊断";
               if (diagnosis.state === "completed") return diagnosis.applied ? "已执行并生效" : "已执行";
@@ -1824,6 +1919,23 @@ def phase5_console() -> str:
               }
               return diff;
             };
+            const diffSummary = (generations) => {
+              if (!Array.isArray(generations) || generations.length < 2) {
+                return {
+                  headline: "暂无 diff 摘要",
+                  note: "至少需要两版 generation，才能直接判断最新改动幅度。",
+                };
+              }
+              const previous = generations[1];
+              const latest = generations[0];
+              const diffRows = buildLineDiff(previous.markdown_content, latest.markdown_content);
+              const addCount = diffRows.filter((item) => item.type === "add").length;
+              const removeCount = diffRows.filter((item) => item.type === "remove").length;
+              return {
+                headline: `v${latest.version_no} 相比 v${previous.version_no}：+${addCount} / -${removeCount}`,
+                note: `标题：${latest.title || "暂无"}；上一版标题：${previous.title || "暂无"}`,
+              };
+            };
             const renderGenerationDiff = (generations) => {
               if (!Array.isArray(generations) || generations.length < 2) {
                 return `
@@ -1901,10 +2013,11 @@ def phase5_console() -> str:
             };
 
             const renderWorkspace = (workspace) => {
-              const latest = workspace.generations[0];
+              const generations = Array.isArray(workspace.generations) ? workspace.generations : [];
+              const latest = generations[0] || null;
               const selectedGeneration = workspace.selected_generation || null;
-              const activeGeneration = workspace.generations.find((item) => item.generation_id === selectedGeneration?.generation_id) || latest;
-              const latestReview = latest?.review;
+              const activeGeneration = generations.find((item) => item.generation_id === selectedGeneration?.generation_id) || latest;
+              const latestReview = latest?.review || null;
               const activeReview = activeGeneration?.review || latestReview;
               const activeDiagnosis = activeGeneration?.ai_trace_diagnosis || null;
               const pushPolicy = workspace.wechat_push_policy;
@@ -1913,7 +2026,34 @@ def phase5_console() -> str:
               const latestPatternCount = reviewAiTracePatternCount(latestReview);
               const adoptedVersionLabel = activeGeneration ? `v${activeGeneration.version_no}` : "暂无";
               const adoptedDecision = selectedGeneration?.decision || activeReview?.final_decision || activeGeneration?.status || "暂无";
+              const reviewSummary = reviewDecisionSummary(activeReview, workspace.status);
+              const pushSummary = pushDecisionSummary(workspace.status, pushPolicy, activeGeneration);
+              const riskSignal = riskSummary(workspace, activeReview, activeDiagnosis);
+              const generationDiffSummary = diffSummary(generations);
               workspaceEl.innerHTML = `
+                <div class="summary-grid">
+                  <div class="summary-item signal">
+                    <strong>当前审稿建议</strong>
+                    <span>${escapeHtml(reviewSummary.headline)}</span>
+                    <small>${escapeHtml(reviewSummary.note)}</small>
+                  </div>
+                  <div class="summary-item signal">
+                    <strong>当前推稿判断</strong>
+                    <span>${escapeHtml(pushSummary.headline)}</span>
+                    <small>${escapeHtml(pushSummary.note)}</small>
+                  </div>
+                  <div class="summary-item signal">
+                    <strong>主要风险</strong>
+                    <span>${escapeHtml(riskSignal.headline)}</span>
+                    <small>${escapeHtml(riskSignal.note)}</small>
+                  </div>
+                  <div class="summary-item signal">
+                    <strong>版本变化摘要</strong>
+                    <span>${escapeHtml(generationDiffSummary.headline)}</span>
+                    <small>${escapeHtml(generationDiffSummary.note)}</small>
+                  </div>
+                </div>
+
                 <div class="summary-grid">
                   <div class="summary-item">
                     <strong>任务状态</strong>
@@ -2038,10 +2178,12 @@ def phase5_console() -> str:
                   </div>
                 </div>
 
+                ${renderGenerationDiff(generations)}
+
                 <div class="detail-card">
                   <h3>生成稿版本与审稿结论</h3>
                   <div class="generation-list">
-                    ${workspace.generations.length ? workspace.generations.map((generation) => `
+                    ${generations.length ? generations.map((generation) => `
                       <div class="generation-card ${generation.is_selected ? "selected" : ""}">
                         <div class="generation-header">
                           <span class="pill">v${escapeHtml(generation.version_no)}</span>
@@ -2098,8 +2240,6 @@ def phase5_console() -> str:
                   </div>
                 </div>
 
-                ${renderGenerationDiff(workspace.generations)}
-
                 <div class="grid">
                   <div class="detail-card">
                     <h3>流水线时间线</h3>
@@ -2125,12 +2265,12 @@ def phase5_console() -> str:
               const compareLeft = document.getElementById("compare-left");
               const compareRight = document.getElementById("compare-right");
               if (compareLeft && compareRight) {
-                const rerenderDiff = () => updateDiffView(workspace.generations);
+                const rerenderDiff = () => updateDiffView(generations);
                 compareLeft.addEventListener("change", rerenderDiff);
                 compareRight.addEventListener("change", rerenderDiff);
-                updateDiffView(workspace.generations);
+                updateDiffView(generations);
               }
-              hydrateArticlePreview(workspaceEl, workspace.generations);
+              hydrateArticlePreview(workspaceEl, generations);
 
               if (latestReview && latestReview.final_decision) {
                 setStatus(`已加载 · 最新结论 ${latestReview.final_decision}`);
@@ -3302,10 +3442,10 @@ def phase6_console() -> str:
             const SESSION_EXPIRED_MESSAGE = "后台会话已失效，请刷新页面重新进入后台。";
 
             const escapeHtml = (value) => String(value ?? "")
-              .replaceAll("&", "&amp;")
-              .replaceAll("<", "&lt;")
-              .replaceAll(">", "&gt;")
-              .replaceAll('"', "&quot;");
+              .replace(/&/g, "&amp;")
+              .replace(/</g, "&lt;")
+              .replace(/>/g, "&gt;")
+              .replace(/"/g, "&quot;");
             const truncate = (value, length = 16) => {
               const text = String(value ?? "");
               if (!text || text.length <= length) return text || "当前任务";

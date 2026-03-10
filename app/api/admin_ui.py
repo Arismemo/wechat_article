@@ -495,9 +495,94 @@ def admin_page_hero(
     )
 
 
+def admin_shared_script_helpers() -> str:
+    return dedent(
+        """\
+        const AdminUiShared = (() => {
+          const escapeHtml = (value) => String(value ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+
+          const storageGet = (key, fallback = "") => {
+            try {
+              const value = localStorage.getItem(key);
+              return value === null ? fallback : value;
+            } catch (_error) {
+              return fallback;
+            }
+          };
+
+          const storageSet = (key, value) => {
+            try {
+              localStorage.setItem(key, String(value));
+            } catch (_error) {
+              // Ignore storage write failures so pages still work in private mode.
+            }
+          };
+
+          const storageRemove = (key) => {
+            try {
+              localStorage.removeItem(key);
+            } catch (_error) {
+              // Ignore storage removal failures so pages still work in private mode.
+            }
+          };
+
+          const apiUrl = (path) => new URL(path, window.location.origin).toString();
+
+          const setButtonBusy = (button, busy, pendingLabel = "处理中...") => {
+            if (!button) return;
+            if (!button.dataset.defaultLabel) {
+              button.dataset.defaultLabel = button.textContent.trim();
+            }
+            button.disabled = busy;
+            button.setAttribute("aria-busy", busy ? "true" : "false");
+            button.textContent = busy ? pendingLabel : button.dataset.defaultLabel;
+          };
+
+          const parseJsonResponse = async (response) => {
+            const text = await response.text();
+            if (!text) return {};
+            try {
+              return JSON.parse(text);
+            } catch (_error) {
+              return { raw: text, detail: text };
+            }
+          };
+
+          const buildSessionExpiredError = (message, note = "", beforeThrow = null) => {
+            if (typeof beforeThrow === "function") {
+              try {
+                beforeThrow();
+              } catch (_error) {
+                // Ignore persist failures and still surface the session-expired message.
+              }
+            }
+            return new Error(note ? `${message} ${note}` : message);
+          };
+
+          return {
+            apiUrl,
+            buildSessionExpiredError,
+            escapeHtml,
+            parseJsonResponse,
+            setButtonBusy,
+            storageGet,
+            storageRemove,
+            storageSet,
+          };
+        })();
+        """
+    )
+
+
 def render_admin_page(html: str, active: str) -> str:
     return (
         html.replace("__ADMIN_NAV_STYLES__", admin_section_nav_styles())
         .replace("__ADMIN_SHARED_STYLES__", admin_shared_styles())
+        .replace("__ADMIN_SHARED_SCRIPT_HELPERS__", admin_shared_script_helpers())
         .replace("__ADMIN_SECTION_NAV__", admin_section_nav(active))
     )

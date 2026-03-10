@@ -1395,6 +1395,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
           </main>
 
           <script>
+            __ADMIN_SHARED_SCRIPT_HELPERS__
             const INITIAL_TASK_ID = {json.dumps(task_id, ensure_ascii=False)};
             const INITIAL_PARAMS = new URLSearchParams(window.location.search);
             const INITIAL_FILTER = INITIAL_PARAMS.get("filter");
@@ -1537,13 +1538,14 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               filterPinned: "phase7_home_filter_pinned",
               ingestUrl: "phase7_home_ingest_url",
             }};
-
-            const escapeHtml = (value) => String(value ?? "")
-              .replaceAll("&", "&amp;")
-              .replaceAll("<", "&lt;")
-              .replaceAll(">", "&gt;")
-              .replaceAll('"', "&quot;")
-              .replaceAll("'", "&#39;");
+            const {{
+              buildSessionExpiredError,
+              escapeHtml,
+              parseJsonResponse,
+              storageGet,
+              storageRemove,
+              storageSet,
+            }} = AdminUiShared;
             const hydrateArticlePreview = (root, generations) => {{
               if (!root || !Array.isArray(generations)) return;
               root.querySelectorAll("[data-generation-html]").forEach((node) => {{
@@ -1569,58 +1571,51 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               return `${{Math.round(value)}}%`;
             }};
             const persistUiState = () => {{
-              try {{
-                if (state.selectedTaskId) {{
-                  localStorage.setItem(STORAGE_KEYS.selectedTaskId, state.selectedTaskId);
-                }} else {{
-                  localStorage.removeItem(STORAGE_KEYS.selectedTaskId);
-                }}
-                localStorage.setItem(STORAGE_KEYS.filterPinned, state.filterPinned ? "true" : "false");
-                if (state.filterPinned) {{
-                  localStorage.setItem(STORAGE_KEYS.filter, state.filter);
-                }} else {{
-                  localStorage.removeItem(STORAGE_KEYS.filter);
-                }}
-                if (state.search) {{
-                  localStorage.setItem(STORAGE_KEYS.search, state.search);
-                }} else {{
-                  localStorage.removeItem(STORAGE_KEYS.search);
-                }}
-                const draftUrl = elements.ingestUrl.value.trim();
-                if (draftUrl) {{
-                  localStorage.setItem(STORAGE_KEYS.ingestUrl, draftUrl);
-                }} else {{
-                  localStorage.removeItem(STORAGE_KEYS.ingestUrl);
-                }}
-              }} catch (_error) {{
-                // Ignore storage write failures so the workbench still runs in private mode.
+              if (state.selectedTaskId) {{
+                storageSet(STORAGE_KEYS.selectedTaskId, state.selectedTaskId);
+              }} else {{
+                storageRemove(STORAGE_KEYS.selectedTaskId);
+              }}
+              storageSet(STORAGE_KEYS.filterPinned, state.filterPinned ? "true" : "false");
+              if (state.filterPinned) {{
+                storageSet(STORAGE_KEYS.filter, state.filter);
+              }} else {{
+                storageRemove(STORAGE_KEYS.filter);
+              }}
+              if (state.search) {{
+                storageSet(STORAGE_KEYS.search, state.search);
+              }} else {{
+                storageRemove(STORAGE_KEYS.search);
+              }}
+              const draftUrl = elements.ingestUrl.value.trim();
+              if (draftUrl) {{
+                storageSet(STORAGE_KEYS.ingestUrl, draftUrl);
+              }} else {{
+                storageRemove(STORAGE_KEYS.ingestUrl);
               }}
             }};
             const restoreUiState = () => {{
-              try {{
-                const storedTaskId = localStorage.getItem(STORAGE_KEYS.selectedTaskId);
-                const storedFilter = localStorage.getItem(STORAGE_KEYS.filter);
-                const storedSearch = localStorage.getItem(STORAGE_KEYS.search);
-                const storedFilterPinned = localStorage.getItem(STORAGE_KEYS.filterPinned);
-                const storedIngestUrl = localStorage.getItem(STORAGE_KEYS.ingestUrl);
-                if (!INITIAL_TASK_ID && storedTaskId) {{
-                  state.selectedTaskId = storedTaskId;
-                }}
-                state.filterPinned = storedFilterPinned === "true";
-                if (state.filterPinned && storedFilter) {{
-                  state.filter = storedFilter;
-                }}
-                state.search = storedSearch || "";
-                elements.taskSearch.value = state.search;
-                elements.ingestUrl.value = storedIngestUrl || "";
-              }} catch (_error) {{
-                // Ignore storage read failures so boot still completes.
+              const storedTaskId = storageGet(STORAGE_KEYS.selectedTaskId, "");
+              const storedFilter = storageGet(STORAGE_KEYS.filter, "");
+              const storedSearch = storageGet(STORAGE_KEYS.search, "");
+              const storedFilterPinned = storageGet(STORAGE_KEYS.filterPinned, "");
+              const storedIngestUrl = storageGet(STORAGE_KEYS.ingestUrl, "");
+              if (!INITIAL_TASK_ID && storedTaskId) {{
+                state.selectedTaskId = storedTaskId;
               }}
+              state.filterPinned = storedFilterPinned === "true";
+              if (state.filterPinned && storedFilter) {{
+                state.filter = storedFilter;
+              }}
+              state.search = storedSearch || "";
+              elements.taskSearch.value = state.search;
+              elements.ingestUrl.value = storedIngestUrl || "";
             }};
-            const sessionExpiredError = () => {{
-              persistUiState();
-              return new Error(`${{SESSION_EXPIRED_MESSAGE}} ${{SESSION_RESTORE_NOTE}}`);
-            }};
+            const sessionExpiredError = () => buildSessionExpiredError(
+              SESSION_EXPIRED_MESSAGE,
+              SESSION_RESTORE_NOTE,
+              persistUiState,
+            );
             const reviewAiTraceScore = (review) => (review && review.ai_trace_score !== null && review.ai_trace_score !== undefined)
               ? Number(review.ai_trace_score)
               : null;
@@ -2559,15 +2554,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                   ? undefined
                   : (payload ? JSON.stringify(payload) : JSON.stringify({{}})),
               }});
-              const text = await response.text();
-              let data = {{}};
-              if (text) {{
-                try {{
-                  data = JSON.parse(text);
-                }} catch (_error) {{
-                  data = {{ detail: text }};
-                }}
-              }}
+              const data = await parseJsonResponse(response);
               if (!response.ok) {{
                 if (response.status === 401) {{
                   throw sessionExpiredError();
@@ -3906,11 +3893,11 @@ def unified_console() -> str:
 
             const escapeHtml = (value) => {
               return String(value ?? "")
-                .replaceAll("&", "&amp;")
-                .replaceAll("<", "&lt;")
-                .replaceAll(">", "&gt;")
-                .replaceAll('"', "&quot;")
-                .replaceAll("'", "&#39;");
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#39;");
             };
             const readSilencedAlerts = () => {
               try {
@@ -5236,10 +5223,10 @@ def settings_console() -> str:
 
             const escapeHtml = (value) =>
               String(value ?? "")
-                .replaceAll("&", "&amp;")
-                .replaceAll("<", "&lt;")
-                .replaceAll(">", "&gt;")
-                .replaceAll('"', "&quot;");
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;");
 
             const formatValue = (value, valueType) => {
               if (value === null || value === undefined) return "未设置";
