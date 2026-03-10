@@ -12,7 +12,13 @@ from sqlalchemy.orm import Session
 
 from app.core.security import verify_admin_basic_auth
 from app.db.session import get_db_session, get_session_factory
-from app.api.admin_ui import admin_section_nav, admin_section_nav_styles
+from app.api.admin_ui import (
+    admin_hero_summary_card,
+    admin_overview_card,
+    admin_overview_strip,
+    admin_page_hero,
+    render_admin_page,
+)
 from app.schemas.admin_monitor import AdminMonitorSnapshotResponse
 from app.schemas.ingest import IngestLinkRequest, IngestLinkResponse
 from app.schemas.internal import ManualReviewActionResponse, Phase4EnqueueResponse, TaskDeleteResponse, WechatPushResponse
@@ -252,6 +258,98 @@ def unified_console_stream(
 
 @router.get("/admin", response_class=HTMLResponse, tags=["admin"], dependencies=[Depends(verify_admin_basic_auth)])
 def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
+    hero_html = admin_page_hero(
+        eyebrow="PRIMARY CONTROL ROOM",
+        title="微信文章工厂",
+        description="贴链接后系统会自动往下跑。左侧只负责选任务，右侧统一处理动作、草稿和预览。",
+        status_aria_label="运行状态",
+        status_slot_html=(
+            '<div class="status-line">'
+            '<span class="status-chip" id="auto-refresh">自动刷新中</span>'
+            '<span class="mini">每 4 秒同步一次</span>'
+            "</div>"
+        ),
+        status_message="准备好了。",
+        summary_cards_html="".join(
+            [
+                admin_hero_summary_card("唯一主动作", "贴链接开始处理"),
+                admin_hero_summary_card("人工介入", "只在任务卡住或待审核时出现"),
+                admin_hero_summary_card(
+                    "当前建议",
+                    "先贴链接。需要人工判断时，再点下面这排。",
+                    wide=True,
+                    content_id="hero-focus",
+                ),
+            ]
+        ),
+        hero_note="界面按“任务列表 / 当前动作 / 微信草稿 / 成稿预览 / 危险操作”组织，尽量把每一步放在固定位置。",
+        hero_links_html=(
+            '<div class="hero-links" aria-label="辅助入口">'
+            '<a href="/admin/console">需要排队列或查 worker 时，打开高级监控页</a>'
+            "</div>"
+        ),
+        hero_tail_html=dedent(
+            """\
+            <section class="focus-action-card" aria-label="结构化下一步">
+              <div class="focus-action-top">
+                <div class="focus-action-copy">
+                  <span class="focus-action-kicker">NEXT ACTION</span>
+                  <h2>结构化下一步</h2>
+                  <p id="focus-summary">先贴第一条链接开始。新任务会自动排队，主控台会把当前任务切到右侧详情。</p>
+                </div>
+                <div class="focus-action-cta">
+                  <span class="mini" id="focus-cta-hint">目标：开始一个任务</span>
+                  <button id="focus-jump-button" class="tiny-button" type="button">开始新任务</button>
+                </div>
+              </div>
+              <div class="focus-action-grid">
+                <article class="focus-action-item">
+                  <strong>当前卡点</strong>
+                  <span id="focus-bottleneck">当前还没有任务，主控台处于待启动状态。</span>
+                </article>
+                <article class="focus-action-item">
+                  <strong>推荐动作</strong>
+                  <span id="focus-action">在左侧粘贴一个微信公众号链接并开始处理。</span>
+                </article>
+                <article class="focus-action-item">
+                  <strong>目标区域</strong>
+                  <span id="focus-target">左侧“开始一个任务”区</span>
+                </article>
+                <article class="focus-action-item">
+                  <strong>为什么</strong>
+                  <span id="focus-reason">主控台没有任务时，不需要先看任务列表或高级监控。</span>
+                </article>
+                <article class="focus-action-item wide">
+                  <strong>风险提示</strong>
+                  <span id="focus-risk">没有任务时不需要额外操作；真正有卡点时，这里会改成更明确的处置建议。</span>
+                </article>
+              </div>
+            </section>
+            """
+        ),
+    )
+    overview_html = admin_overview_strip(
+        "任务概览",
+        "".join(
+            [
+                admin_overview_card("当前任务", "0", "主控台里当前可见的任务总数。", value_id="overview-total"),
+                admin_overview_card("处理中", "0", "系统正在自动推进，不需要额外点击。", value_id="metric-active"),
+                admin_overview_card("等你处理", "0", "需要人工审核、重写或补原文的任务。", value_id="metric-manual"),
+                admin_overview_card("已进草稿", "0", "已经推送进公众号草稿箱的任务。", value_id="metric-draft"),
+                admin_overview_card("失败", "0", "需要优先查看报错并决定是否重跑。", value_id="metric-failed"),
+                admin_overview_card("今天提交", "0", "当天新进来的链接量。", value_id="metric-today-submitted"),
+                admin_overview_card("今天进草稿", "0", "当天真正推进到微信草稿箱的任务。", value_id="metric-today-draft"),
+                admin_overview_card(
+                    "当前优先",
+                    "先贴第一条链接开始。",
+                    "有人工审核或失败任务时，这里会提醒先处理哪一类。",
+                    highlight=True,
+                    value_id="overview-focus",
+                    description_id="overview-focus-note",
+                ),
+            ]
+        ),
+    )
     html = dedent(
         f"""\
         <!DOCTYPE html>
@@ -1211,125 +1309,16 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               .detail-section-head {{ flex-direction: column; }}
               .search-row {{ grid-template-columns: 1fr; }}
             }}
+            __ADMIN_SHARED_STYLES__
           </style>
         </head>
         <body>
           <a class="skip-link" href="#task-region">跳到任务主区</a>
-          <main id="main-content">
+          <main id="main-content" class="admin-main">
             <div class="shell">
               __ADMIN_SECTION_NAV__
-              <section class="hero">
-                <div class="hero-grid">
-                  <div class="hero-copy">
-                    <span class="badge">PRIMARY CONTROL ROOM</span>
-                    <h1>微信文章工厂</h1>
-                    <p>贴链接后系统会自动往下跑。左侧只负责选任务，右侧统一处理动作、草稿和预览。</p>
-                  </div>
-                  <aside class="hero-status-card" aria-label="运行状态">
-                    <div class="status-line">
-                      <span class="status-chip" id="auto-refresh">自动刷新中</span>
-                      <span class="mini">每 4 秒同步一次</span>
-                    </div>
-                    <p class="hero-status-copy" id="flash-message" role="status" aria-live="polite" aria-atomic="true">准备好了。</p>
-                    <div class="hero-summary" aria-label="首屏提示">
-                      <div class="hero-summary-card">
-                        <strong>唯一主动作</strong>
-                        <span>贴链接开始处理</span>
-                      </div>
-                      <div class="hero-summary-card">
-                        <strong>人工介入</strong>
-                        <span>只在任务卡住或待审核时出现</span>
-                      </div>
-                      <div class="hero-summary-card wide">
-                        <strong>当前建议</strong>
-                        <span id="hero-focus">先贴链接。需要人工判断时，再点下面这排。</span>
-                      </div>
-                    </div>
-                  </aside>
-                </div>
-                <p class="hero-note">界面按“任务列表 / 当前动作 / 微信草稿 / 成稿预览 / 危险操作”组织，尽量把每一步放在固定位置。</p>
-                <div class="hero-links" aria-label="辅助入口">
-                  <a href="/admin/console">需要排队列或查 worker 时，打开高级监控页</a>
-                </div>
-                <section class="focus-action-card" aria-label="结构化下一步">
-                  <div class="focus-action-top">
-                    <div class="focus-action-copy">
-                      <span class="focus-action-kicker">NEXT ACTION</span>
-                      <h2>结构化下一步</h2>
-                      <p id="focus-summary">先贴第一条链接开始。新任务会自动排队，主控台会把当前任务切到右侧详情。</p>
-                    </div>
-                    <div class="focus-action-cta">
-                      <span class="mini" id="focus-cta-hint">目标：开始一个任务</span>
-                      <button id="focus-jump-button" class="tiny-button" type="button">开始新任务</button>
-                    </div>
-                  </div>
-                  <div class="focus-action-grid">
-                    <article class="focus-action-item">
-                      <strong>当前卡点</strong>
-                      <span id="focus-bottleneck">当前还没有任务，主控台处于待启动状态。</span>
-                    </article>
-                    <article class="focus-action-item">
-                      <strong>推荐动作</strong>
-                      <span id="focus-action">在左侧粘贴一个微信公众号链接并开始处理。</span>
-                    </article>
-                    <article class="focus-action-item">
-                      <strong>目标区域</strong>
-                      <span id="focus-target">左侧“开始一个任务”区</span>
-                    </article>
-                    <article class="focus-action-item">
-                      <strong>为什么</strong>
-                      <span id="focus-reason">主控台没有任务时，不需要先看任务列表或高级监控。</span>
-                    </article>
-                    <article class="focus-action-item wide">
-                      <strong>风险提示</strong>
-                      <span id="focus-risk">没有任务时不需要额外操作；真正有卡点时，这里会改成更明确的处置建议。</span>
-                    </article>
-                  </div>
-                </section>
-              </section>
-
-              <section class="overview-strip" aria-label="任务概览">
-                <article class="overview-card">
-                  <strong>当前任务</strong>
-                  <span id="overview-total">0</span>
-                  <p>主控台里当前可见的任务总数。</p>
-                </article>
-                <article class="overview-card">
-                  <strong>处理中</strong>
-                  <span id="metric-active">0</span>
-                  <p>系统正在自动推进，不需要额外点击。</p>
-                </article>
-                <article class="overview-card">
-                  <strong>等你处理</strong>
-                  <span id="metric-manual">0</span>
-                  <p>需要人工审核、重写或补原文的任务。</p>
-                </article>
-                <article class="overview-card">
-                  <strong>已进草稿</strong>
-                  <span id="metric-draft">0</span>
-                  <p>已经推送进公众号草稿箱的任务。</p>
-                </article>
-                <article class="overview-card">
-                  <strong>失败</strong>
-                  <span id="metric-failed">0</span>
-                  <p>需要优先查看报错并决定是否重跑。</p>
-                </article>
-                <article class="overview-card">
-                  <strong>今天提交</strong>
-                  <span id="metric-today-submitted">0</span>
-                  <p>当天新进来的链接量。</p>
-                </article>
-                <article class="overview-card">
-                  <strong>今天进草稿</strong>
-                  <span id="metric-today-draft">0</span>
-                  <p>当天真正推进到微信草稿箱的任务。</p>
-                </article>
-                <article class="overview-card highlight">
-                  <strong>当前优先</strong>
-                  <span id="overview-focus">先贴第一条链接开始。</span>
-                  <p id="overview-focus-note">有人工审核或失败任务时，这里会提醒先处理哪一类。</p>
-                </article>
-              </section>
+              __ADMIN_HERO__
+              __ADMIN_OVERVIEW__
 
               <div class="layout">
                 <section class="stack" id="task-region">
@@ -2772,15 +2761,72 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
         </html>
         """
     )
-    return (
-        html.replace("__ADMIN_NAV_STYLES__", admin_section_nav_styles()).replace(
-            "__ADMIN_SECTION_NAV__", admin_section_nav("portal")
-        )
+    return render_admin_page(
+        html.replace("__ADMIN_HERO__", hero_html).replace("__ADMIN_OVERVIEW__", overview_html),
+        "portal",
     )
 
 
 @router.get("/admin/console", response_class=HTMLResponse, tags=["admin"], dependencies=[Depends(verify_admin_basic_auth)])
 def unified_console() -> str:
+    hero_html = admin_page_hero(
+        eyebrow="ADVANCED OPERATIONS MONITOR",
+        title="高级监控台",
+        description="这是一张高级排障页，不是日常主入口。它专门负责看任务流、队列和 worker 健康；日常开任务、审稿和回收反馈，仍然回到总览主控台、审核台和反馈台处理。",
+        status_aria_label="监控页状态",
+        status_slot_html='<span class="status" id="status">等待连接</span>',
+        status_message="默认复用后台会话。先拉一次监控快照，再决定是否开启自动实时更新。",
+        summary_cards_html="".join(
+            [
+                admin_hero_summary_card("这页负责什么", "看任务流、队列与 worker 健康，快速定位哪一批任务最需要你介入。"),
+                admin_hero_summary_card("日常入口在哪", "开任务回总览，审稿去 Phase 5，复盘反馈去 Phase 6。"),
+                admin_hero_summary_card(
+                    "当前建议",
+                    "先拉一次监控快照，确认今天有哪些任务真正卡住了。",
+                    wide=True,
+                    content_id="hero-focus",
+                ),
+            ]
+        ),
+        hero_body_html=dedent(
+            """\
+            <div class="hero-warning" aria-label="使用边界提示">
+              <span class="warning-kicker">只读排障页</span>
+              <strong>不在这里做日常操作。这里只用于队列、worker 和任务卡点排查。</strong>
+              <ul class="warning-list">
+                <li>开新任务、看草稿、做删除，回总览主控台。</li>
+                <li>人工通过 / 驳回 / 推送草稿，去 Phase 5 审核台。</li>
+                <li>导入反馈、复盘效果、跑同步，去 Phase 6 反馈台。</li>
+              </ul>
+            </div>
+            """
+        ),
+        hero_links_html=(
+            '<div class="hero-links">'
+            '<a href="/admin" target="_blank" rel="noreferrer">回到总览主控台</a>'
+            '<a href="/admin/phase5" target="_blank" rel="noreferrer">打开 Phase 5 审核台</a>'
+            '<a href="/admin/phase6" target="_blank" rel="noreferrer">打开 Phase 6 反馈台</a>'
+            "</div>"
+        ),
+    )
+    overview_html = admin_overview_strip(
+        "监控快照",
+        "".join(
+            [
+                admin_overview_card("当前筛选", "0", "当前筛选条件下能看到的任务总量。", value_id="overview-filtered-count"),
+                admin_overview_card("待人工处理", "0", "优先关注需要人工审核或重写的任务。", value_id="overview-manual-count"),
+                admin_overview_card("队列健康", "等待快照", "基于 worker 心跳、堆积和处理深度判断。", value_id="overview-ops-state"),
+                admin_overview_card(
+                    "当前优先",
+                    "先拉一次监控快照，确认今天有哪些任务真正卡住了。",
+                    "这页只负责判断“哪里卡住了”；真正的业务动作仍然分别去总览、Phase 5 和 Phase 6 完成。",
+                    highlight=True,
+                    value_id="overview-focus",
+                    description_id="overview-focus-note",
+                ),
+            ]
+        ),
+    )
     html = dedent(
         """\
         <!DOCTYPE html>
@@ -3628,76 +3674,15 @@ def unified_console() -> str:
                 grid-column: span 1;
               }
             }
+            __ADMIN_SHARED_STYLES__
           </style>
         </head>
         <body>
           <a class="skip-link" href="#monitor-region">跳到监控主区</a>
-          <main>
+          <main class="admin-main">
             __ADMIN_SECTION_NAV__
-            <section class="hero">
-              <div class="hero-grid">
-                <div class="hero-copy">
-                  <span class="eyebrow">ADVANCED OPERATIONS MONITOR</span>
-                  <h1>高级监控台</h1>
-                  <p>这是一张高级排障页，不是日常主入口。它专门负责看任务流、队列和 worker 健康；日常开任务、审稿和回收反馈，仍然回到总览主控台、审核台和反馈台处理。</p>
-                  <div class="hero-warning" aria-label="使用边界提示">
-                    <span class="warning-kicker">只读排障页</span>
-                    <strong>不在这里做日常操作。这里只用于队列、worker 和任务卡点排查。</strong>
-                    <ul class="warning-list">
-                      <li>开新任务、看草稿、做删除，回总览主控台。</li>
-                      <li>人工通过 / 驳回 / 推送草稿，去 Phase 5 审核台。</li>
-                      <li>导入反馈、复盘效果、跑同步，去 Phase 6 反馈台。</li>
-                    </ul>
-                  </div>
-                  <div class="hero-links">
-                    <a href="/admin" target="_blank" rel="noreferrer">回到总览主控台</a>
-                    <a href="/admin/phase5" target="_blank" rel="noreferrer">打开 Phase 5 审核台</a>
-                    <a href="/admin/phase6" target="_blank" rel="noreferrer">打开 Phase 6 反馈台</a>
-                  </div>
-                </div>
-                <aside class="hero-status-card" aria-label="监控页状态">
-                  <span class="status" id="status">等待连接</span>
-                  <p class="hero-status-copy" id="flash-message" role="status" aria-live="polite" aria-atomic="true">默认复用后台会话。先拉一次监控快照，再决定是否开启自动实时更新。</p>
-                  <div class="hero-summary" aria-label="首屏提示">
-                    <div class="hero-summary-card">
-                      <strong>这页负责什么</strong>
-                      <span>看任务流、队列与 worker 健康，快速定位哪一批任务最需要你介入。</span>
-                    </div>
-                    <div class="hero-summary-card">
-                      <strong>日常入口在哪</strong>
-                      <span>开任务回总览，审稿去 Phase 5，复盘反馈去 Phase 6。</span>
-                    </div>
-                    <div class="hero-summary-card wide">
-                      <strong>当前建议</strong>
-                      <span id="hero-focus">先拉一次监控快照，确认今天有哪些任务真正卡住了。</span>
-                    </div>
-                  </div>
-                </aside>
-              </div>
-            </section>
-
-            <section class="overview-strip" aria-label="监控快照">
-              <article class="overview-card">
-                <strong>当前筛选</strong>
-                <span id="overview-filtered-count">0</span>
-                <p>当前筛选条件下能看到的任务总量。</p>
-              </article>
-              <article class="overview-card">
-                <strong>待人工处理</strong>
-                <span id="overview-manual-count">0</span>
-                <p>优先关注需要人工审核或重写的任务。</p>
-              </article>
-              <article class="overview-card">
-                <strong>队列健康</strong>
-                <span id="overview-ops-state">等待快照</span>
-                <p>基于 worker 心跳、堆积和处理深度判断。</p>
-              </article>
-              <article class="overview-card highlight">
-                <strong>当前优先</strong>
-                <span id="overview-focus">先拉一次监控快照，确认今天有哪些任务真正卡住了。</span>
-                <p id="overview-focus-note">这页只负责判断“哪里卡住了”；真正的业务动作仍然分别去总览、Phase 5 和 Phase 6 完成。</p>
-              </article>
-            </section>
+            __ADMIN_HERO__
+            __ADMIN_OVERVIEW__
 
             <section class="layout" id="monitor-region">
               <div class="stack">
@@ -4557,15 +4542,52 @@ def unified_console() -> str:
         </html>
         """
     )
-    return (
-        html.replace("__ADMIN_NAV_STYLES__", admin_section_nav_styles()).replace(
-            "__ADMIN_SECTION_NAV__", admin_section_nav("monitor")
-        )
+    return render_admin_page(
+        html.replace("__ADMIN_HERO__", hero_html).replace("__ADMIN_OVERVIEW__", overview_html),
+        "monitor",
     )
 
 
 @router.get("/admin/settings", response_class=HTMLResponse, tags=["admin"], dependencies=[Depends(verify_admin_basic_auth)])
 def settings_console() -> str:
+    hero_html = admin_page_hero(
+        eyebrow="RUNTIME SETTINGS & STATUS",
+        title="运行参数设置",
+        description="这里可以热修改运行开关，也可以管理 LLM 供应商、模型选择与连通性测试；数据库、Redis、微信密钥等基础设施仍不在这里改。",
+        status_aria_label="设置页状态",
+        status_slot_html='<span class="status" id="status">等待加载</span>',
+        status_message="默认复用后台会话。先刷新设置和环境状态。",
+        summary_cards_html="".join(
+            [
+                admin_hero_summary_card("会影响什么", "只影响新任务，不回写基础设施。"),
+                admin_hero_summary_card("需要准备什么", "操作人标识和变更备注；默认复用后台会话。"),
+                admin_hero_summary_card(
+                    "当前建议",
+                    "先刷新，把可改设置和只读环境状态都拉下来。",
+                    wide=True,
+                    content_id="hero-focus",
+                ),
+            ]
+        ),
+    )
+    overview_html = admin_overview_strip(
+        "设置概览",
+        "".join(
+            [
+                admin_overview_card("可改设置", "0", "当前支持通过网页覆盖的运行参数数量。", value_id="overview-settings-count"),
+                admin_overview_card("已覆盖", "0", "数据库里已经覆盖、不会再走环境默认的设置项。", value_id="overview-overrides-count"),
+                admin_overview_card("必填环境缺失", "0", "这些配置不在页面里修改，需要回服务器补齐。", value_id="overview-missing-count"),
+                admin_overview_card(
+                    "当前优先",
+                    "先刷新，把可改设置和只读环境状态都拉下来。",
+                    "页面先判断哪些能改、哪些只能看，再决定是否保存覆盖值。",
+                    highlight=True,
+                    value_id="overview-focus",
+                    description_id="overview-focus-note",
+                ),
+            ]
+        ),
+    )
     html = dedent(
         """\
         <!DOCTYPE html>
@@ -5061,62 +5083,15 @@ def settings_console() -> str:
               .setting-actions, .actions { flex-direction: column; }
               button { width: 100%; }
             }
+            __ADMIN_SHARED_STYLES__
           </style>
         </head>
         <body>
           <a class="skip-link" href="#settings-region">跳到设置主区</a>
-          <main>
+          <main class="admin-main">
             __ADMIN_SECTION_NAV__
-            <section class="hero">
-              <div class="hero-grid">
-                <div class="hero-copy">
-                  <span class="eyebrow">RUNTIME SETTINGS & STATUS</span>
-                  <h1>运行参数设置</h1>
-                  <p>这里可以热修改运行开关，也可以管理 LLM 供应商、模型选择与连通性测试；数据库、Redis、微信密钥等基础设施仍不在这里改。</p>
-                </div>
-                <aside class="hero-status-card" aria-label="设置页状态">
-                  <span class="status" id="status">等待加载</span>
-                  <p class="hero-status-copy" id="flash-message" role="status" aria-live="polite" aria-atomic="true">默认复用后台会话。先刷新设置和环境状态。</p>
-                  <div class="hero-summary" aria-label="首屏提示">
-                    <div class="hero-summary-card">
-                      <strong>会影响什么</strong>
-                      <span>只影响新任务，不回写基础设施。</span>
-                    </div>
-                    <div class="hero-summary-card">
-                      <strong>需要准备什么</strong>
-                      <span>操作人标识和变更备注；默认复用后台会话。</span>
-                    </div>
-                    <div class="hero-summary-card wide">
-                      <strong>当前建议</strong>
-                      <span id="hero-focus">先刷新，把可改设置和只读环境状态都拉下来。</span>
-                    </div>
-                  </div>
-                </aside>
-              </div>
-            </section>
-
-            <section class="overview-strip" aria-label="设置概览">
-              <article class="overview-card">
-                <strong>可改设置</strong>
-                <span id="overview-settings-count">0</span>
-                <p>当前支持通过网页覆盖的运行参数数量。</p>
-              </article>
-              <article class="overview-card">
-                <strong>已覆盖</strong>
-                <span id="overview-overrides-count">0</span>
-                <p>数据库里已经覆盖、不会再走环境默认的设置项。</p>
-              </article>
-              <article class="overview-card">
-                <strong>必填环境缺失</strong>
-                <span id="overview-missing-count">0</span>
-                <p>这些配置不在页面里修改，需要回服务器补齐。</p>
-              </article>
-              <article class="overview-card highlight">
-                <strong>当前优先</strong>
-                <span id="overview-focus">先刷新，把可改设置和只读环境状态都拉下来。</span>
-                <p id="overview-focus-note">页面先判断哪些能改、哪些只能看，再决定是否保存覆盖值。</p>
-              </article>
-            </section>
+            __ADMIN_HERO__
+            __ADMIN_OVERVIEW__
 
             <section class="layout" id="settings-region">
               <div class="stack">
@@ -5936,8 +5911,7 @@ def settings_console() -> str:
         </html>
         """
     )
-    return (
-        html.replace("__ADMIN_NAV_STYLES__", admin_section_nav_styles()).replace(
-            "__ADMIN_SECTION_NAV__", admin_section_nav("settings")
-        )
+    return render_admin_page(
+        html.replace("__ADMIN_HERO__", hero_html).replace("__ADMIN_OVERVIEW__", overview_html),
+        "settings",
     )

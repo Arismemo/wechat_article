@@ -5,7 +5,13 @@ from textwrap import dedent
 from fastapi import APIRouter, Depends
 from fastapi.responses import HTMLResponse
 
-from app.api.admin_ui import admin_section_nav, admin_section_nav_styles
+from app.api.admin_ui import (
+    admin_hero_summary_card,
+    admin_overview_card,
+    admin_overview_strip,
+    admin_page_hero,
+    render_admin_page,
+)
 from app.core.security import verify_admin_basic_auth
 
 
@@ -504,6 +510,45 @@ def phase2_console() -> str:
 
 @router.get("/admin/phase5", response_class=HTMLResponse, tags=["admin"], dependencies=[Depends(verify_admin_basic_auth)])
 def phase5_console() -> str:
+    hero_html = admin_page_hero(
+        eyebrow="PHASE 5 ADMIN CONSOLE",
+        title="审核台",
+        description="先看任务，再决定：通过、重写，还是推草稿。",
+        status_aria_label="审核台状态",
+        status_slot_html='<span class="status" id="status">空闲</span>',
+        status_message="先刷新最近任务，再点一条卡片进入工作区。",
+        summary_cards_html="".join(
+            [
+                admin_hero_summary_card("主要流程", "先选任务，再看工作区，再决定动作。"),
+                admin_hero_summary_card("人工介入点", "通过、重写、允许推稿、禁止推稿。"),
+                admin_hero_summary_card(
+                    "当前建议",
+                    "先刷新最近任务，再点一条卡片进入工作区。",
+                    wide=True,
+                    content_id="hero-focus",
+                ),
+            ]
+        ),
+    )
+    overview_html = admin_overview_strip(
+        "审核概览",
+        "".join(
+            [
+                admin_overview_card("可见任务", "0", "当前筛选后显示在审核台里的任务数量。", value_id="overview-total"),
+                admin_overview_card("等你处理", "0", "需要人工审核、重写或决定是否推稿的任务。", value_id="overview-manual"),
+                admin_overview_card("待推草稿", "0", "已经通过审核，下一步是决定是否推送草稿。", value_id="overview-ready"),
+                admin_overview_card("失败 / 异常", "0", "优先看失败任务，先判断补数据还是直接重跑。", value_id="overview-failed"),
+                admin_overview_card(
+                    "当前优先",
+                    "先刷新最近任务，再点一条卡片进入工作区。",
+                    "右侧工作区会集中展示当前动作、草稿状态、版本差异和审计轨迹。",
+                    highlight=True,
+                    value_id="overview-focus",
+                    description_id="overview-focus-note",
+                ),
+            ]
+        ),
+    )
     html = dedent(
         """\
         <!DOCTYPE html>
@@ -1217,67 +1262,15 @@ def phase5_console() -> str:
               .generation-actions { flex-direction: column; }
               .generation-actions button { width: 100%; }
             }
+            __ADMIN_SHARED_STYLES__
           </style>
         </head>
         <body>
           <a class="skip-link" href="#review-region">跳到审核主区</a>
-          <main>
+          <main class="admin-main">
             __ADMIN_SECTION_NAV__
-            <section class="hero">
-              <div class="hero-grid">
-                <div class="hero-copy">
-                  <span class="eyebrow">PHASE 5 ADMIN CONSOLE</span>
-                  <h1>审核台</h1>
-                  <p>先看任务，再决定：通过、重写，还是推草稿。</p>
-                </div>
-                <aside class="hero-status-card" aria-label="审核台状态">
-                  <span class="status" id="status">空闲</span>
-                  <p class="hero-status-copy" id="flash-message" role="status" aria-live="polite" aria-atomic="true">先刷新最近任务，再点一条卡片进入工作区。</p>
-                  <div class="hero-summary" aria-label="首屏提示">
-                    <div class="hero-summary-card">
-                      <strong>主要流程</strong>
-                      <span>先选任务，再看工作区，再决定动作。</span>
-                    </div>
-                    <div class="hero-summary-card">
-                      <strong>人工介入点</strong>
-                      <span>通过、重写、允许推稿、禁止推稿。</span>
-                    </div>
-                    <div class="hero-summary-card wide">
-                      <strong>当前建议</strong>
-                      <span id="hero-focus">先刷新最近任务，再点一条卡片进入工作区。</span>
-                    </div>
-                  </div>
-                </aside>
-              </div>
-            </section>
-
-            <section class="overview-strip" aria-label="审核概览">
-              <article class="overview-card">
-                <strong>可见任务</strong>
-                <span id="overview-total">0</span>
-                <p>当前筛选后显示在审核台里的任务数量。</p>
-              </article>
-              <article class="overview-card">
-                <strong>等你处理</strong>
-                <span id="overview-manual">0</span>
-                <p>需要人工审核、重写或决定是否推稿的任务。</p>
-              </article>
-              <article class="overview-card">
-                <strong>待推草稿</strong>
-                <span id="overview-ready">0</span>
-                <p>已经通过审核，下一步是决定是否推送草稿。</p>
-              </article>
-              <article class="overview-card">
-                <strong>失败 / 异常</strong>
-                <span id="overview-failed">0</span>
-                <p>优先看失败任务，先判断补数据还是直接重跑。</p>
-              </article>
-              <article class="overview-card highlight">
-                <strong>当前优先</strong>
-                <span id="overview-focus">先刷新最近任务，再点一条卡片进入工作区。</span>
-                <p id="overview-focus-note">右侧工作区会集中展示当前动作、草稿状态、版本差异和审计轨迹。</p>
-              </article>
-            </section>
+            __ADMIN_HERO__
+            __ADMIN_OVERVIEW__
 
             <section class="layout" id="review-region">
               <div class="stack">
@@ -2592,15 +2585,52 @@ def phase5_console() -> str:
         </html>
         """
     )
-    return (
-        html.replace("__ADMIN_NAV_STYLES__", admin_section_nav_styles()).replace(
-            "__ADMIN_SECTION_NAV__", admin_section_nav("review")
-        )
+    return render_admin_page(
+        html.replace("__ADMIN_HERO__", hero_html).replace("__ADMIN_OVERVIEW__", overview_html),
+        "review",
     )
 
 
 @router.get("/admin/phase6", response_class=HTMLResponse, tags=["admin"], dependencies=[Depends(verify_admin_basic_auth)])
 def phase6_console() -> str:
+    hero_html = admin_page_hero(
+        eyebrow="PHASE 6 FEEDBACK LOOP",
+        title="反馈台",
+        description="这里负责回收任务反馈、观察 prompt 实验表现，并沉淀已经验证过的写法资产。先锁定任务，再决定是查历史、补录反馈，还是把结论沉淀下来。",
+        status_aria_label="反馈页状态",
+        status_slot_html='<span class="status" id="status">等待输入</span>',
+        status_message="默认复用后台会话。先补 task_id，再选择“查反馈”“同步”或“导入”。",
+        summary_cards_html="".join(
+            [
+                admin_hero_summary_card("这页负责什么", "把任务表现、实验趋势和复用资产串成一个反馈闭环。"),
+                admin_hero_summary_card("需要准备什么", "task_id，以及必要时的 generation_id 和操作人标识；默认复用后台会话。"),
+                admin_hero_summary_card(
+                    "当前建议",
+                    "先补 task_id，再看当前任务有没有已有反馈。",
+                    wide=True,
+                    content_id="hero-focus",
+                ),
+            ]
+        ),
+    )
+    overview_html = admin_overview_strip(
+        "反馈概览",
+        "".join(
+            [
+                admin_overview_card("当前任务反馈", "0", "按当前 task_id 回收到的反馈快照数量。", value_id="overview-feedback-count"),
+                admin_overview_card("实验榜样本", "0", "当前页已拉下来的 prompt 实验排行条目数。", value_id="overview-experiment-count"),
+                admin_overview_card("风格资产", "0", "当前页已拉下来的可复用写法资产数量。", value_id="overview-asset-count"),
+                admin_overview_card(
+                    "当前优先",
+                    "先补 task_id，再看当前任务有没有已有反馈。",
+                    "没有 task_id 时，只有实验榜和资产库能独立查询；导入与同步都需要任务上下文。",
+                    highlight=True,
+                    value_id="overview-focus",
+                    description_id="overview-focus-note",
+                ),
+            ]
+        ),
+    )
     html = dedent(
         """\
         <!DOCTYPE html>
@@ -3029,62 +3059,15 @@ def phase6_console() -> str:
               }
               .overview-card.highlight { grid-column: span 1; }
             }
+            __ADMIN_SHARED_STYLES__
           </style>
         </head>
         <body>
           <a class="skip-link" href="#feedback-region">跳到反馈主区</a>
-          <main>
+          <main class="admin-main">
             __ADMIN_SECTION_NAV__
-            <section class="hero">
-              <div class="hero-grid">
-                <div class="hero-copy">
-                  <span class="eyebrow">PHASE 6 FEEDBACK LOOP</span>
-                  <h1>反馈台</h1>
-                  <p>这里负责回收任务反馈、观察 prompt 实验表现，并沉淀已经验证过的写法资产。先锁定任务，再决定是查历史、补录反馈，还是把结论沉淀下来。</p>
-                </div>
-                <aside class="hero-status-card" aria-label="反馈页状态">
-                  <span class="status" id="status">等待输入</span>
-                  <p class="hero-status-copy" id="flash-message" role="status" aria-live="polite" aria-atomic="true">默认复用后台会话。先补 task_id，再选择“查反馈”“同步”或“导入”。</p>
-                  <div class="hero-summary" aria-label="首屏提示">
-                    <div class="hero-summary-card">
-                      <strong>这页负责什么</strong>
-                      <span>把任务表现、实验趋势和复用资产串成一个反馈闭环。</span>
-                    </div>
-                    <div class="hero-summary-card">
-                      <strong>需要准备什么</strong>
-                      <span>task_id，以及必要时的 generation_id 和操作人标识；默认复用后台会话。</span>
-                    </div>
-                    <div class="hero-summary-card wide">
-                      <strong>当前建议</strong>
-                      <span id="hero-focus">先补 task_id，再看当前任务有没有已有反馈。</span>
-                    </div>
-                  </div>
-                </aside>
-              </div>
-            </section>
-
-            <section class="overview-strip" aria-label="反馈概览">
-              <article class="overview-card">
-                <strong>当前任务反馈</strong>
-                <span id="overview-feedback-count">0</span>
-                <p>按当前 task_id 回收到的反馈快照数量。</p>
-              </article>
-              <article class="overview-card">
-                <strong>实验榜样本</strong>
-                <span id="overview-experiment-count">0</span>
-                <p>当前页已拉下来的 prompt 实验排行条目数。</p>
-              </article>
-              <article class="overview-card">
-                <strong>风格资产</strong>
-                <span id="overview-asset-count">0</span>
-                <p>当前页已拉下来的可复用写法资产数量。</p>
-              </article>
-              <article class="overview-card highlight">
-                <strong>当前优先</strong>
-                <span id="overview-focus">先补 task_id，再看当前任务有没有已有反馈。</span>
-                <p id="overview-focus-note">没有 task_id 时，只有实验榜和资产库能独立查询；导入与同步都需要任务上下文。</p>
-              </article>
-            </section>
+            __ADMIN_HERO__
+            __ADMIN_OVERVIEW__
 
             <section class="layout" id="feedback-region">
               <div class="stack">
@@ -3759,8 +3742,7 @@ def phase6_console() -> str:
         </html>
         """
     )
-    return (
-        html.replace("__ADMIN_NAV_STYLES__", admin_section_nav_styles()).replace(
-            "__ADMIN_SECTION_NAV__", admin_section_nav("feedback")
-        )
+    return render_admin_page(
+        html.replace("__ADMIN_HERO__", hero_html).replace("__ADMIN_OVERVIEW__", overview_html),
+        "feedback",
     )
