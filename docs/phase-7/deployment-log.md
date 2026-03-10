@@ -479,3 +479,86 @@ Phase 7 当前已具备：
 - `v1.1.2` 已完成正式发布闭环
 - Phase 7F 第一刀与 `/admin` 会话恢复已在线可用
 - 可以在此基线上继续启动后台前端改版实施
+
+## 27. 前端改版第二刀上线：共享交互 helper + Phase 5 首屏决策摘要
+
+更新时间：2026-03-10
+
+本次上线聚焦两件事：
+
+- 后台共享脚本 helper 正式接入
+  - `AdminUiShared`
+  - 统一 `escapeHtml`
+  - 统一 `apiUrl`
+  - 统一 `parseJsonResponse`
+  - 统一 `setButtonBusy`
+  - 统一 `localStorage` 读写与会话失效错误构造
+- `Phase 5` 工作台首屏信息层级优化
+  - 新增 4 张首屏决策摘要卡：
+    - `当前审稿建议`
+    - `当前推稿判断`
+    - `主要风险`
+    - `版本变化摘要`
+  - 将版本 diff 视图上移到版本列表之前
+  - 清理后台模板中的 `replaceAll`，避免 Safari / WebView 兼容性回归
+
+本次部署方式：
+
+1. 本地提交并推送 `cc22580`
+2. 服务器仓库执行快进拉取：
+   - `git pull --ff-only origin main`
+3. 服务器执行：
+   - `docker compose up -d --build api phase2_worker phase3_worker phase4_worker feedback_worker`
+4. 等待 `postgres / redis` healthy，随后确认 `api` 与 4 个 worker 全部重新启动
+
+本次服务器结果：
+
+- 服务器仓库已快进到 `cc22580`
+- `api`
+  - 已完成重建并恢复对外服务
+- `phase2_worker / phase3_worker / phase4_worker / feedback_worker`
+  - 已完成重建并重新启动
+- `postgres / redis`
+  - 作为依赖容器保持 healthy
+
+本次 smoke test：
+
+- `GET https://auto.709970.xyz/healthz`
+  - 返回：`{"status":"ok"}`
+- `GET https://auto.709970.xyz/admin`
+  - 页面包含：
+    - `AdminUiShared`
+    - `SESSION_RESTORE_NOTE`
+    - `applyOptimisticTaskState`
+    - `cache: "no-store"`
+    - `当前采用版本`
+    - `AI 去痕诊断`
+    - `参考文章`
+    - `流水线时间线`
+- `GET https://auto.709970.xyz/admin/phase5`
+  - 页面包含：
+    - `AdminUiShared`
+    - `当前审稿建议`
+    - `当前推稿判断`
+    - `主要风险`
+    - `版本变化摘要`
+    - `版本差异视图`
+    - `采用此版本`
+    - `参考文章`
+    - `AI 去痕诊断`
+    - `流水线时间线`
+- `GET https://auto.709970.xyz/api/v1/admin/monitor/snapshot`
+  - 返回：
+    - `summary.filtered_total=10`
+    - `summary.filtered_review_passed=4`
+    - `summary.filtered_draft_saved=6`
+    - `operations.available=true`
+    - 4 个 worker `healthy=true`
+    - `alerts_count=1`
+    - `trends_count=8`
+
+结论：
+
+- 共享后台脚本 helper 已在线启用
+- `Phase 5` 首屏决策摘要已在线可见
+- 当前线上基线已经从 `v1.1.2` 发布基线继续推进到 `cc22580`
