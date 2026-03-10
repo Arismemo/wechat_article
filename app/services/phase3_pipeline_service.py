@@ -19,6 +19,7 @@ from app.repositories.content_brief_repository import ContentBriefRepository
 from app.repositories.related_article_repository import RelatedArticleRepository
 from app.repositories.source_article_repository import SourceArticleRepository
 from app.repositories.task_repository import TaskRepository
+from app.services.llm_runtime_service import LLMRuntimeService
 from app.services.llm_service import LLMService
 from app.services.search_service import RankedSearchResult, SearchService
 from app.services.source_fetch_service import FetchedArticle, SourceFetchService
@@ -47,7 +48,8 @@ class Phase3PipelineService:
         self.content_briefs = ContentBriefRepository(session)
         self.fetcher = SourceFetchService()
         self.search = SearchService()
-        self.llm = LLMService()
+        self.llm_runtime = LLMRuntimeService(session)
+        self.llm = self.llm_runtime.build_llm_service()
 
     def run(self, task_id: str) -> Phase3PipelineResult:
         task = self._require_task(task_id)
@@ -274,7 +276,7 @@ class Phase3PipelineService:
             payload = self.llm.complete_json(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
-                model=self.settings.llm_model_analyze,
+                model=self.llm_runtime.analyze_model(),
                 temperature=0.2,
             )
             return self._normalize_analysis_payload(payload, source_article)
@@ -318,7 +320,7 @@ class Phase3PipelineService:
             payload = self.llm.complete_json(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
-                model=self.settings.llm_model_write,
+                model=self.llm_runtime.write_model(),
                 temperature=0.4,
             )
             return self._normalize_brief_payload(payload, source_article, analysis, related_articles)

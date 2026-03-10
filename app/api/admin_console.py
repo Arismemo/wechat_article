@@ -4452,6 +4452,51 @@ def settings_console() -> str:
               flex-wrap: wrap;
               gap: 10px;
             }
+            .llm-shell {
+              display: grid;
+              gap: 16px;
+            }
+            .llm-selection-card,
+            .llm-provider-card {
+              border: 1px solid var(--line);
+              border-radius: 18px;
+              padding: 16px;
+              background: #fffdf8;
+              display: grid;
+              gap: 12px;
+            }
+            .llm-selection-grid {
+              display: grid;
+              grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+              gap: 12px;
+            }
+            .llm-provider-grid {
+              display: grid;
+              grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+              gap: 14px;
+            }
+            .llm-provider-head,
+            .llm-provider-top {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              gap: 10px;
+              flex-wrap: wrap;
+            }
+            .llm-provider-top h4,
+            .llm-provider-head h3,
+            .llm-selection-card h3 {
+              margin: 0;
+            }
+            .llm-provider-note {
+              margin: 0;
+              font-size: 12px;
+              color: var(--muted);
+              line-height: 1.6;
+            }
+            .llm-provider-card textarea {
+              min-height: 120px;
+            }
             .card-note {
               margin: 0;
               font-size: 12px;
@@ -4508,7 +4553,7 @@ def settings_console() -> str:
                 <div class="hero-copy">
                   <span class="eyebrow">RUNTIME SETTINGS & STATUS</span>
                   <h1>运行参数设置</h1>
-                  <p>这里只改少量运行开关，不碰密钥和基础设施。</p>
+                  <p>这里可以热修改运行开关，也可以管理 LLM 供应商、模型选择与连通性测试；数据库、Redis、微信密钥等基础设施仍不在这里改。</p>
                 </div>
                 <aside class="hero-status-card" aria-label="设置页状态">
                   <span class="status" id="status">等待加载</span>
@@ -4582,7 +4627,7 @@ def settings_console() -> str:
                     <summary>展开说明</summary>
                     <ul class="list">
                       <li>这里只覆盖少量运行参数，不改数据库、Redis、域名或容器配置。</li>
-                      <li>密钥类值仍然只保留在服务器 `.env`，页面不显示也不支持改写。</li>
+                      <li>除 LLM 供应商 API Key 外，其他密钥类值仍然只保留在服务器 `.env`，页面不显示也不支持改写。</li>
                       <li>Phase 4 仍然受 `WECHAT_ENABLE_DRAFT_PUSH` 总开关约束。</li>
                       <li>自动反馈切到 `http` 前，仍需在 `.env` 里配置 `FEEDBACK_SYNC_HTTP_URL` 与可选 `FEEDBACK_SYNC_API_KEY`。</li>
                     </ul>
@@ -4607,6 +4652,14 @@ def settings_console() -> str:
               </div>
 
               <div class="stack">
+                <section class="panel">
+                  <h2>LLM 供应商与模型</h2>
+                  <p class="panel-intro">这里管理当前可用的 LLM 供应商、每个供应商下可选模型，以及当前分析 / 写稿 / 审稿使用哪一个。测试按钮会先保存当前配置，再发送一条简单指令验证连通性。</p>
+                  <div id="llm-config" class="categories" aria-busy="false">
+                    <div class="empty">点击“刷新”拉取当前 LLM 配置。</div>
+                  </div>
+                </section>
+
                 <section class="panel">
                   <h2>当前设置</h2>
                   <p class="panel-intro">改完只影响新任务；恢复默认会回退到环境变量。优先处理确实需要热修改的项，不要把这里当作 `.env` 编辑器。</p>
@@ -4634,6 +4687,7 @@ def settings_console() -> str:
             const alertHintEl = document.getElementById("alert-hint");
             const operatorEl = document.getElementById("operator");
             const noteEl = document.getElementById("note");
+            const llmConfigEl = document.getElementById("llm-config");
             const categoriesEl = document.getElementById("categories");
             const runtimeStatusEl = document.getElementById("runtime-status");
             const overviewSettingsCountEl = document.getElementById("overview-settings-count");
@@ -4645,6 +4699,7 @@ def settings_console() -> str:
               phase4: "Phase 4 生成与审稿",
               feedback: "Phase 6 自动反馈",
             };
+            const HIDDEN_SETTING_KEYS = new Set(["phase4.write_model", "phase4.review_model"]);
             const RUNTIME_CATEGORY_LABELS = {
               app: "应用基础配置",
               infra: "基础设施连接",
@@ -4653,6 +4708,7 @@ def settings_console() -> str:
               observability: "观测与告警",
             };
             let currentSettings = [];
+            let currentLLMConfig = null;
             let currentRuntimeStatus = null;
             const SESSION_EXPIRED_MESSAGE = "后台会话已失效，请刷新页面重新进入后台。";
 
@@ -4664,6 +4720,7 @@ def settings_console() -> str:
               }
             };
             const setDataBusy = (busy) => {
+              llmConfigEl.setAttribute("aria-busy", busy ? "true" : "false");
               categoriesEl.setAttribute("aria-busy", busy ? "true" : "false");
               runtimeStatusEl.setAttribute("aria-busy", busy ? "true" : "false");
             };
@@ -4687,8 +4744,10 @@ def settings_console() -> str:
               if (typeof value === "object") return JSON.stringify(value);
               return String(value);
             };
+            const getVisibleSettings = (settings = []) => settings.filter((item) => !HIDDEN_SETTING_KEYS.has(item.key));
             const renderOverview = (settings = [], runtimeStatus = null) => {
-              const overrideCount = settings.filter((item) => item.has_override).length;
+              const visibleSettings = getVisibleSettings(settings);
+              const overrideCount = visibleSettings.filter((item) => item.has_override).length;
               const environment = runtimeStatus?.environment || [];
               const missingRequired = environment.filter((item) => item.required && !item.configured).length;
               let focus = "先刷新，把可改设置和只读环境状态都拉下来。";
@@ -4699,11 +4758,11 @@ def settings_console() -> str:
               } else if (overrideCount > 0) {
                 focus = `当前已有 ${overrideCount} 项数据库覆盖`;
                 note = "保存前先确认是否真的需要覆盖环境默认，避免历史覆盖长期遗留。";
-              } else if (settings.length > 0) {
+              } else if (visibleSettings.length > 0) {
                 focus = "设置已加载，可以按卡片逐项修改";
                 note = "优先改确实需要热更新的运行参数，改完再看只读环境状态是否匹配。";
               }
-              overviewSettingsCountEl.textContent = String(settings.length);
+              overviewSettingsCountEl.textContent = String(visibleSettings.length);
               overviewOverridesCountEl.textContent = String(overrideCount);
               overviewMissingCountEl.textContent = String(missingRequired);
               overviewFocusEl.textContent = focus;
@@ -4802,13 +4861,226 @@ def settings_console() -> str:
               `;
             };
 
+            const createBlankLLMProvider = () => ({
+              provider_id: `provider-${Date.now()}`,
+              vendor: "openai-compatible",
+              label: "新供应商",
+              api_base: "https://api.example.com/v1",
+              models: ["model-name"],
+              has_api_key: false,
+              api_key_preview: null,
+              is_env_default: false,
+            });
+
+            const readProviderCards = () =>
+              Array.from(llmConfigEl.querySelectorAll(".llm-provider-card")).map((card) => {
+                const readField = (fieldName) =>
+                  (card.querySelector(`[data-field="${fieldName}"]`)?.value || "").trim();
+                const models = readField("models")
+                  .split("\n")
+                  .map((item) => item.trim())
+                  .filter(Boolean);
+                return {
+                  provider_id: readField("provider_id"),
+                  vendor: readField("vendor"),
+                  label: readField("label"),
+                  api_base: readField("api_base"),
+                  models,
+                  api_key: readField("api_key") || null,
+                  has_api_key: card.dataset.hasApiKey === "true" || Boolean(readField("api_key")),
+                  api_key_preview: card.dataset.apiKeyPreview || null,
+                  is_env_default: card.dataset.isEnvDefault === "true",
+                };
+              });
+
+            const currentSelectionElements = () => ({
+              activeProviderEl: document.getElementById("llm-active-provider"),
+              analyzeModelEl: document.getElementById("llm-analyze-model"),
+              writeModelEl: document.getElementById("llm-write-model"),
+              reviewModelEl: document.getElementById("llm-review-model"),
+            });
+
+            const buildProviderOptionHtml = (providers, selectedValue) =>
+              providers
+                .map((provider) => {
+                  const selected = provider.provider_id === selectedValue ? "selected" : "";
+                  return `<option value="${escapeHtml(provider.provider_id)}" ${selected}>${escapeHtml(provider.label)} (${escapeHtml(provider.vendor)})</option>`;
+                })
+                .join("");
+
+            const buildModelOptionHtml = (models, selectedValue) =>
+              (models || [])
+                .map((model) => {
+                  const selected = model === selectedValue ? "selected" : "";
+                  return `<option value="${escapeHtml(model)}" ${selected}>${escapeHtml(model)}</option>`;
+                })
+                .join("");
+
+            const syncLLMModelSelectors = () => {
+              const providers = readProviderCards();
+              const { activeProviderEl, analyzeModelEl, writeModelEl, reviewModelEl } = currentSelectionElements();
+              if (!activeProviderEl || !analyzeModelEl || !writeModelEl || !reviewModelEl) return;
+              if (!providers.length) {
+                activeProviderEl.innerHTML = "";
+                analyzeModelEl.innerHTML = "";
+                writeModelEl.innerHTML = "";
+                reviewModelEl.innerHTML = "";
+                return;
+              }
+              const previousProviderId = activeProviderEl.value || currentLLMConfig?.selection?.active_provider_id || providers[0].provider_id;
+              const activeProvider = providers.find((item) => item.provider_id === previousProviderId) || providers[0];
+              activeProviderEl.innerHTML = buildProviderOptionHtml(providers, activeProvider.provider_id);
+              const models = activeProvider.models || [];
+              const previousAnalyze = analyzeModelEl.value || currentLLMConfig?.selection?.analyze_model;
+              const previousWrite = writeModelEl.value || currentLLMConfig?.selection?.write_model;
+              const previousReview = reviewModelEl.value || currentLLMConfig?.selection?.review_model;
+              const analyzeModel = models.includes(previousAnalyze) ? previousAnalyze : (models[0] || "");
+              const writeModel = models.includes(previousWrite) ? previousWrite : (models[0] || "");
+              const reviewModel = models.includes(previousReview) ? previousReview : (models[0] || "");
+              analyzeModelEl.innerHTML = buildModelOptionHtml(models, analyzeModel);
+              writeModelEl.innerHTML = buildModelOptionHtml(models, writeModel);
+              reviewModelEl.innerHTML = buildModelOptionHtml(models, reviewModel);
+            };
+
+            const snapshotLLMConfigForRender = () => {
+              const providers = readProviderCards();
+              const { activeProviderEl, analyzeModelEl, writeModelEl, reviewModelEl } = currentSelectionElements();
+              return {
+                providers,
+                selection: {
+                  active_provider_id: activeProviderEl?.value || providers[0]?.provider_id || "",
+                  analyze_model: analyzeModelEl?.value || providers[0]?.models?.[0] || "",
+                  write_model: writeModelEl?.value || providers[0]?.models?.[0] || "",
+                  review_model: reviewModelEl?.value || providers[0]?.models?.[0] || "",
+                },
+              };
+            };
+
+            const buildLLMConfigPayload = () => {
+              const snapshot = snapshotLLMConfigForRender();
+              return {
+                providers: snapshot.providers.map((provider) => ({
+                  provider_id: provider.provider_id,
+                  vendor: provider.vendor,
+                  label: provider.label,
+                  api_base: provider.api_base,
+                  models: provider.models,
+                  api_key: provider.api_key,
+                })),
+                active_provider_id: snapshot.selection.active_provider_id,
+                analyze_model: snapshot.selection.analyze_model,
+                write_model: snapshot.selection.write_model,
+                review_model: snapshot.selection.review_model,
+                operator: operatorEl.value.trim() || "admin-console",
+                note: noteEl.value.trim() || null,
+              };
+            };
+
+            const renderLLMConfig = (config) => {
+              currentLLMConfig = JSON.parse(JSON.stringify(config || { providers: [], selection: {} }));
+              const providers = currentLLMConfig.providers || [];
+              if (!providers.length) {
+                llmConfigEl.innerHTML = '<div class="empty">当前没有可用的 LLM 供应商。</div>';
+                return;
+              }
+              const selection = currentLLMConfig.selection || {};
+              llmConfigEl.innerHTML = `
+                <div class="llm-shell">
+                  <article class="llm-selection-card">
+                    <h3>当前生效选择</h3>
+                    <div class="llm-selection-grid">
+                      <div class="field">
+                        <label for="llm-active-provider">当前供应商</label>
+                        <select id="llm-active-provider">${buildProviderOptionHtml(providers, selection.active_provider_id || providers[0].provider_id)}</select>
+                      </div>
+                      <div class="field">
+                        <label for="llm-analyze-model">分析模型</label>
+                        <select id="llm-analyze-model"></select>
+                      </div>
+                      <div class="field">
+                        <label for="llm-write-model">写稿模型</label>
+                        <select id="llm-write-model"></select>
+                      </div>
+                      <div class="field">
+                        <label for="llm-review-model">审稿模型</label>
+                        <select id="llm-review-model"></select>
+                      </div>
+                    </div>
+                    <p class="card-note">分析模型会影响 Phase 3 的原文分析；写稿模型会影响 brief 生成、正文生成和 AI 去痕；审稿模型只影响结构化审稿。</p>
+                  </article>
+
+                  <section class="llm-shell">
+                    <div class="llm-provider-head">
+                      <h3>供应商配置</h3>
+                      <button id="add-llm-provider" class="ghost">新增供应商</button>
+                    </div>
+                    <div class="llm-provider-grid">
+                      ${providers.map((provider) => `
+                        <article
+                          class="llm-provider-card"
+                          data-provider-id="${escapeHtml(provider.provider_id)}"
+                          data-has-api-key="${provider.has_api_key ? "true" : "false"}"
+                          data-api-key-preview="${escapeHtml(provider.api_key_preview || "")}"
+                          data-is-env-default="${provider.is_env_default ? "true" : "false"}"
+                        >
+                          <div class="llm-provider-top">
+                            <h4>${escapeHtml(provider.label)}</h4>
+                            <span class="env-badge ${provider.is_env_default ? "" : "warn"}">${provider.is_env_default ? "环境默认" : "数据库配置"}</span>
+                          </div>
+                          <div class="field">
+                            <label>provider_id</label>
+                            <input data-field="provider_id" type="text" value="${escapeHtml(provider.provider_id)}" ${provider.is_env_default ? "readonly" : ""} />
+                          </div>
+                          <div class="field">
+                            <label>供应商标识</label>
+                            <input data-field="vendor" type="text" value="${escapeHtml(provider.vendor)}" />
+                          </div>
+                          <div class="field">
+                            <label>显示名称</label>
+                            <input data-field="label" type="text" value="${escapeHtml(provider.label)}" />
+                          </div>
+                          <div class="field">
+                            <label>API Base</label>
+                            <input data-field="api_base" type="url" value="${escapeHtml(provider.api_base)}" />
+                          </div>
+                          <div class="field">
+                            <label>模型列表（每行一个）</label>
+                            <textarea data-field="models">${escapeHtml((provider.models || []).join("\n"))}</textarea>
+                          </div>
+                          <div class="field">
+                            <label>API Key</label>
+                            <input
+                              data-field="api_key"
+                              type="password"
+                              placeholder="${provider.has_api_key ? escapeHtml(`已保存：${provider.api_key_preview || "留空表示保持不变"}`) : "输入新的 API Key"}"
+                            />
+                          </div>
+                          <p class="llm-provider-note">${provider.has_api_key ? `当前已保存密钥 ${escapeHtml(provider.api_key_preview || "")}，留空表示保持不变。` : "保存前需要填写 API Key。测试会先自动保存当前配置。"} </p>
+                          <div class="setting-actions">
+                            <button data-action="test-llm">测试连通性</button>
+                            ${provider.is_env_default ? "" : '<button data-action="remove-llm" class="ghost">删除供应商</button>'}
+                          </div>
+                        </article>
+                      `).join("")}
+                    </div>
+                  </section>
+
+                  <div class="actions">
+                    <button id="save-llm-config">保存模型配置</button>
+                  </div>
+                </div>
+              `;
+              syncLLMModelSelectors();
+            };
+
             const renderCategories = (settings) => {
-              if (!settings.length) {
+              const visibleSettings = getVisibleSettings(settings);
+              if (!visibleSettings.length) {
                 categoriesEl.innerHTML = '<div class="empty">没有可配置的运行参数。</div>';
                 return;
               }
               const groups = new Map();
-              settings.forEach((setting) => {
+              visibleSettings.forEach((setting) => {
                 const category = setting.category || "other";
                 if (!groups.has(category)) groups.set(category, []);
                 groups.get(category).push(setting);
@@ -4904,6 +5176,12 @@ def settings_console() -> str:
               return settings;
             };
 
+            const loadLLMConfig = async () => {
+              const payload = await request("/api/v1/admin/llm-config");
+              renderLLMConfig(payload);
+              return payload;
+            };
+
             const loadRuntimeStatus = async () => {
               const payload = await request("/api/v1/admin/runtime-status");
               renderRuntimeStatus(payload);
@@ -4915,10 +5193,16 @@ def settings_console() -> str:
               setStatus("加载中");
               setDataBusy(true);
               try {
-                const [settings, runtimeStatus] = await Promise.all([loadSettings(), loadRuntimeStatus()]);
+                const [llmConfig, settings, runtimeStatus] = await Promise.all([
+                  loadLLMConfig(),
+                  loadSettings(),
+                  loadRuntimeStatus(),
+                ]);
                 renderOverview(settings, runtimeStatus);
-                renderOutput({ settings, runtime_status: runtimeStatus });
-                setStatus(`已加载 · ${settings.length} 项设置 / ${runtimeStatus.environment.length} 项环境状态`);
+                renderOutput({ llm_config: llmConfig, settings, runtime_status: runtimeStatus });
+                setStatus(
+                  `已加载 · ${llmConfig.providers.length} 个供应商 / ${getVisibleSettings(settings).length} 项设置 / ${runtimeStatus.environment.length} 项环境状态`
+                );
               } finally {
                 setDataBusy(false);
               }
@@ -4941,6 +5225,53 @@ def settings_console() -> str:
               renderOutput(result);
               await loadAll();
               setStatus(resetToDefault ? "已恢复默认" : "已保存");
+            };
+
+            const saveLLMConfig = async () => {
+              saveDraft();
+              setStatus("保存模型配置中");
+              const payload = buildLLMConfigPayload();
+              const result = await request("/api/v1/admin/llm-config", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+              });
+              renderLLMConfig(result);
+              renderOutput(result);
+              setStatus("模型配置已保存");
+              return result;
+            };
+
+            const pickLLMTestModel = (providerId) => {
+              const snapshot = snapshotLLMConfigForRender();
+              const provider = snapshot.providers.find((item) => item.provider_id === providerId);
+              if (!provider || !(provider.models || []).length) return "";
+              if (snapshot.selection.active_provider_id === providerId) {
+                return snapshot.selection.analyze_model || provider.models[0];
+              }
+              return provider.models[0];
+            };
+
+            const testLLMProvider = async (providerId) => {
+              const model = pickLLMTestModel(providerId);
+              if (!model) {
+                throw new Error("当前供应商还没有可测试的模型，请先填写模型列表。");
+              }
+              await saveLLMConfig();
+              setStatus("发送模型测试中");
+              const result = await request("/api/v1/admin/llm-test", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  provider_id: providerId,
+                  model,
+                  operator: operatorEl.value.trim() || "admin-console",
+                  note: noteEl.value.trim() || null,
+                }),
+              });
+              renderOutput(result);
+              setStatus(result.success ? "模型连通性测试通过" : "模型连通性测试失败", result.success ? "" : "warn");
+              await loadAll();
             };
 
             document.getElementById("refresh").addEventListener("click", (event) => {
@@ -4986,6 +5317,71 @@ def settings_console() -> str:
               withButtonBusy(button, button.dataset.action === "reset" ? "恢复中..." : "保存中...", async () => {
                 await updateSetting(setting, card, button.dataset.action === "reset");
               });
+            });
+
+            llmConfigEl.addEventListener("change", (event) => {
+              if (event.target && event.target.id === "llm-active-provider") {
+                syncLLMModelSelectors();
+              }
+            });
+
+            llmConfigEl.addEventListener("input", (event) => {
+              const target = event.target;
+              if (!(target instanceof HTMLElement)) return;
+              if (target.dataset && target.dataset.field) {
+                syncLLMModelSelectors();
+              }
+            });
+
+            llmConfigEl.addEventListener("click", (event) => {
+              const target = event.target;
+              if (!(target instanceof HTMLElement)) return;
+              if (target.id === "add-llm-provider") {
+                const snapshot = currentLLMConfig ? snapshotLLMConfigForRender() : { providers: [], selection: {} };
+                snapshot.providers.push(createBlankLLMProvider());
+                if (!snapshot.selection.active_provider_id) {
+                  snapshot.selection.active_provider_id = snapshot.providers[0].provider_id;
+                }
+                renderLLMConfig(snapshot);
+                setStatus("已新增供应商草稿");
+                return;
+              }
+              if (target.id === "save-llm-config") {
+                withButtonBusy(target, "保存中...", async () => {
+                  await saveLLMConfig();
+                  await loadRuntimeStatus();
+                });
+                return;
+              }
+              const button = target.closest("button[data-action]");
+              if (!button) return;
+              const card = button.closest(".llm-provider-card");
+              if (!card) return;
+              const providerId = (card.querySelector('[data-field="provider_id"]')?.value || "").trim();
+              if (button.dataset.action === "remove-llm") {
+                const snapshot = snapshotLLMConfigForRender();
+                snapshot.providers = snapshot.providers.filter((item) => item.provider_id !== providerId);
+                if (!snapshot.providers.length) {
+                  snapshot.providers = [createBlankLLMProvider()];
+                }
+                if (!snapshot.providers.some((item) => item.provider_id === snapshot.selection.active_provider_id)) {
+                  snapshot.selection.active_provider_id = snapshot.providers[0].provider_id;
+                  snapshot.selection.analyze_model = snapshot.providers[0].models[0] || "";
+                  snapshot.selection.write_model = snapshot.providers[0].models[0] || "";
+                  snapshot.selection.review_model = snapshot.providers[0].models[0] || "";
+                }
+                renderLLMConfig(snapshot);
+                setStatus("已移除供应商草稿");
+                return;
+              }
+              if (button.dataset.action === "test-llm") {
+                withButtonBusy(button, "测试中...", async () => {
+                  if (!providerId) {
+                    throw new Error("provider_id 不能为空。");
+                  }
+                  await testLLMProvider(providerId);
+                });
+              }
             });
 
             readDraft();

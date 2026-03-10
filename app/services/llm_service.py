@@ -12,9 +12,33 @@ class LLMServiceError(RuntimeError):
     pass
 
 
+class LLMProviderHTTPError(LLMServiceError):
+    def __init__(self, *, url: str, status_code: int, response_text: str) -> None:
+        self.url = url
+        self.status_code = status_code
+        self.response_text = response_text
+        excerpt = (response_text or "").strip()
+        if len(excerpt) > 1200:
+            excerpt = f"{excerpt[:1200]}..."
+        message = (
+            f"Client error '{status_code}' for url '{url}'"
+            + (f" | response: {excerpt}" if excerpt else "")
+        )
+        super().__init__(message)
+
+
 class LLMService:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        api_base: Optional[str] = None,
+        api_key: Optional[str] = None,
+        default_model: Optional[str] = None,
+    ) -> None:
         self.settings = get_settings()
+        self.api_base = api_base
+        self.api_key = api_key
+        self.default_model = default_model
 
     def complete_json(
         self,
@@ -27,7 +51,7 @@ class LLMService:
         timeout_seconds: Optional[int] = None,
     ) -> dict[str, Any]:
         payload = {
-            "model": model or self.settings.llm_model_analyze,
+            "model": model or self.default_model or self.settings.llm_model_analyze,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
@@ -39,13 +63,20 @@ class LLMService:
         response = httpx.post(
             self._completion_url(),
             headers={
-                "Authorization": f"Bearer {self.settings.llm_api_key}",
+                "Authorization": f"Bearer {self.api_key or self.settings.llm_api_key}",
                 "Content-Type": "application/json",
             },
             json=payload,
             timeout=timeout_seconds or self.settings.llm_timeout_seconds,
         )
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise LLMProviderHTTPError(
+                url=str(exc.request.url),
+                status_code=exc.response.status_code,
+                response_text=exc.response.text,
+            ) from exc
         body = response.json()
         try:
             content = body["choices"][0]["message"]["content"]
@@ -55,7 +86,7 @@ class LLMService:
         return self._extract_json(text)
 
     def _completion_url(self) -> str:
-        base_url = (self.settings.llm_api_base or "https://open.bigmodel.cn/api/coding/paas/v4").rstrip("/")
+        base_url = (self.api_base or self.settings.llm_api_base or "https://open.bigmodel.cn/api/coding/paas/v4").rstrip("/")
         if base_url.endswith("/chat/completions"):
             return base_url
         return f"{base_url}/chat/completions"

@@ -27,6 +27,7 @@ from app.repositories.review_report_repository import ReviewReportRepository
 from app.repositories.source_article_repository import SourceArticleRepository
 from app.repositories.style_asset_repository import StyleAssetRepository
 from app.repositories.task_repository import TaskRepository
+from app.services.llm_runtime_service import LLMRuntimeService
 from app.services.llm_service import LLMService, LLMServiceError
 from app.services.phase3_pipeline_service import Phase3PipelineService
 from app.services.system_setting_service import SystemSettingService
@@ -76,7 +77,8 @@ class Phase4PipelineService:
         self.style_assets = StyleAssetRepository(session)
         self.generations = GenerationRepository(session)
         self.reviews = ReviewReportRepository(session)
-        self.llm = LLMService()
+        self.llm_runtime = LLMRuntimeService(session)
+        self.llm = self.llm_runtime.build_llm_service()
         self.system_settings = SystemSettingService(session)
         self.wechat_publisher = WechatDraftPublishService(session)
         self.wechat_layout = WechatLayoutService()
@@ -687,7 +689,7 @@ class Phase4PipelineService:
                 f"审稿建议：{self._json_items(prior_review.suggestions)}\n"
                 "请保留核心新角度，但根据审稿建议完成一次实质性修订。\n"
             )
-        write_model = self.system_settings.phase4_write_model()
+        write_model = self.llm_runtime.write_model()
         try:
             return (
                 self.llm.complete_json(
@@ -759,7 +761,7 @@ class Phase4PipelineService:
             f"生成稿摘要：{generation.digest or '无'}\n"
             f"block_map：\n{self._format_block_context(blocks)}\n"
         )
-        review_model = self.system_settings.phase4_review_model()
+        review_model = self.llm_runtime.review_model()
         try:
             return self.llm.complete_json(
                 system_prompt=system_prompt,
@@ -818,7 +820,7 @@ class Phase4PipelineService:
             f"改写目标：{self._rewrite_target_context(metadata)}\n"
             f"block_map：\n{self._format_block_context(blocks, focus_block_ids=set(target_ids))}\n"
         )
-        write_model = self.system_settings.phase4_write_model()
+        write_model = self.llm_runtime.write_model()
         try:
             return (
                 self.llm.complete_json(

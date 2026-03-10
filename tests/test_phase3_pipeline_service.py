@@ -17,6 +17,7 @@ from app.models.article_analysis import ArticleAnalysis
 from app.models.content_brief import ContentBrief
 from app.models.related_article import RelatedArticle
 from app.models.source_article import SourceArticle
+from app.models.system_setting import SystemSetting
 from app.models.task import Task
 from app.services.phase3_pipeline_service import Phase3PipelineService
 from app.services.search_service import RankedSearchResult
@@ -374,4 +375,85 @@ class Phase3PipelineServiceTests(unittest.TestCase):
         brief = session.scalar(select(ContentBrief).where(ContentBrief.task_id == task.id))
         self.assertIsNotNone(brief)
 
+        session.close()
+
+    def test_phase3_pipeline_uses_runtime_llm_model_selection(self) -> None:
+        session = self.Session()
+        task = Task(
+            task_code="tsk_phase3_model_override",
+            source_url="https://mp.weixin.qq.com/s/example-model-override",
+            normalized_url="https://mp.weixin.qq.com/s/example-model-override",
+            source_type="wechat",
+            status=TaskStatus.SOURCE_READY.value,
+        )
+        session.add(task)
+        session.flush()
+        session.add(
+            SourceArticle(
+                task_id=task.id,
+                url=task.source_url,
+                title="模型覆盖验证",
+                author="作者",
+                summary="验证 Phase 3 是否走运行时配置。",
+                cleaned_text="正文节选",
+                fetch_status="success",
+                word_count=256,
+            )
+        )
+        session.add(
+            SystemSetting(
+                key="llm.providers",
+                value=[
+                    {
+                        "provider_id": "custom-llm",
+                        "vendor": "CUSTOM",
+                        "label": "自定义供应商",
+                        "api_base": "https://example.test/v1",
+                        "api_key": "sk-custom",
+                        "models": ["analyze-override", "write-override"],
+                    }
+                ],
+            )
+        )
+        session.add(SystemSetting(key="llm.active_provider", value="custom-llm"))
+        session.add(SystemSetting(key="llm.analyze_model", value="analyze-override"))
+        session.add(SystemSetting(key="phase4.write_model", value="write-override"))
+        session.commit()
+
+        service = Phase3PipelineService(session)
+        service.llm = MagicMock()
+        service.search = MagicMock()
+        service.fetcher = MagicMock()
+        service.llm.complete_json.side_effect = [
+            {
+                "theme": "覆盖验证",
+                "audience": "测试读者",
+                "angle": "验证模型来源",
+                "tone": "理性",
+                "key_points": ["a"],
+                "facts": ["b"],
+                "hooks": ["c"],
+                "risks": ["d"],
+                "gaps": ["e"],
+                "structure": [{"section": "一", "purpose": "二"}],
+            },
+            {
+                "positioning": "覆盖测试",
+                "new_angle": "覆盖测试",
+                "target_reader": "测试读者",
+                "must_cover": ["a"],
+                "must_avoid": ["b"],
+                "difference_matrix": [{"topic": "x", "source_coverage": "y", "opportunity": "z"}],
+                "outline": [{"heading": "一", "goal": "二"}],
+                "title_directions": ["标题"],
+            },
+        ]
+        service.search.search_many.return_value = []
+        service.search.rank_results.return_value = []
+
+        result = service.run(task.id)
+
+        self.assertEqual(result.status, TaskStatus.BRIEF_READY.value)
+        self.assertEqual(service.llm.complete_json.call_args_list[0].kwargs["model"], "analyze-override")
+        self.assertEqual(service.llm.complete_json.call_args_list[1].kwargs["model"], "write-override")
         session.close()

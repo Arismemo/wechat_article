@@ -88,7 +88,13 @@
 - `LLM_MODEL_REVIEW=glm-5`
 - `LLM_API_BASE=https://open.bigmodel.cn/api/coding/paas/v4`
 - `LLM_API_KEY`：已收到，文档中不明文记录
-- `LLM_MODEL_WRITE`、`LLM_MODEL_REVIEW` 当前可被 `/admin/settings` 网页运行参数覆盖
+- 当前读取顺序是：`system_settings` -> `.env`
+- 如果后台页没有配置自定义 LLM 供应商，系统继续使用这组环境变量作为默认 provider
+- `/admin/settings` 现在支持：
+  - 新增数据库托管的 LLM 供应商配置（`api_base` / `api_key` / `models`）
+  - 选择当前供应商
+  - 覆盖 `分析 / 写稿 / 审稿` 三个模型槽位
+- `phase4.write_model`、`phase4.review_model` 仍可被网页运行参数覆盖；`llm.analyze_model` 与 `llm.active_provider` 通过 LLM 专区管理
 
 ## 7. 搜索服务
 

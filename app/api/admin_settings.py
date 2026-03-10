@@ -5,10 +5,17 @@ from sqlalchemy.orm import Session
 
 from app.core.security import verify_bearer_token
 from app.db.session import get_db_session
+from app.schemas.admin_llm import (
+    AdminLLMConfigResponse,
+    AdminLLMConfigUpdateRequest,
+    AdminLLMTestRequest,
+    AdminLLMTestResponse,
+)
 from app.schemas.admin_runtime import AdminAlertTestRequest, AdminAlertTestResponse, AdminRuntimeStatusResponse
 from app.schemas.system_settings import SystemSettingResponse, SystemSettingUpdateRequest
 from app.services.admin_runtime_service import AdminRuntimeService
 from app.services.alert_service import AlertService
+from app.services.llm_runtime_service import LLMRuntimeService
 from app.services.system_setting_service import SystemSettingService
 
 
@@ -24,6 +31,11 @@ def list_admin_settings(session: Session = Depends(get_db_session)) -> list[Syst
 @router.get("/admin/runtime-status", response_model=AdminRuntimeStatusResponse, dependencies=[Depends(verify_bearer_token)])
 def get_admin_runtime_status(session: Session = Depends(get_db_session)) -> AdminRuntimeStatusResponse:
     return AdminRuntimeService(session).build_runtime_status()
+
+
+@router.get("/admin/llm-config", response_model=AdminLLMConfigResponse, dependencies=[Depends(verify_bearer_token)])
+def get_admin_llm_config(session: Session = Depends(get_db_session)) -> AdminLLMConfigResponse:
+    return _build_llm_config_response(LLMRuntimeService(session).get_config_view())
 
 
 @router.get("/admin/settings/{key}", response_model=SystemSettingResponse, dependencies=[Depends(verify_bearer_token)])
@@ -56,6 +68,55 @@ def update_admin_setting(
     return _build_response(setting)
 
 
+@router.put("/admin/llm-config", response_model=AdminLLMConfigResponse, dependencies=[Depends(verify_bearer_token)])
+def update_admin_llm_config(
+    payload: AdminLLMConfigUpdateRequest,
+    session: Session = Depends(get_db_session),
+) -> AdminLLMConfigResponse:
+    service = LLMRuntimeService(session)
+    try:
+        result = service.update_config(
+            providers=[item.model_dump() for item in payload.providers],
+            active_provider_id=payload.active_provider_id,
+            analyze_model=payload.analyze_model,
+            write_model=payload.write_model,
+            review_model=payload.review_model,
+            operator=payload.operator,
+            note=payload.note,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return _build_llm_config_response(result)
+
+
+@router.post("/admin/llm-test", response_model=AdminLLMTestResponse, dependencies=[Depends(verify_bearer_token)])
+def test_admin_llm_provider(
+    payload: AdminLLMTestRequest,
+    session: Session = Depends(get_db_session),
+) -> AdminLLMTestResponse:
+    service = LLMRuntimeService(session)
+    try:
+        result = service.test_provider(
+            provider_id=payload.provider_id,
+            model=payload.model,
+            operator=payload.operator,
+            note=payload.note,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return AdminLLMTestResponse(
+        success=result.success,
+        provider_id=result.provider_id,
+        provider_label=result.provider_label,
+        model=result.model,
+        base_url_preview=result.base_url_preview,
+        response_payload=result.response_payload,
+        error=result.error,
+        tested_at=result.tested_at,
+        latency_ms=result.latency_ms,
+    )
+
+
 @router.post("/admin/alerts/test", response_model=AdminAlertTestResponse, dependencies=[Depends(verify_bearer_token)])
 def send_admin_test_alert(
     payload: AdminAlertTestRequest,
@@ -84,4 +145,28 @@ def _build_response(setting) -> SystemSettingResponse:
         options=[{"value": item.value, "label": item.label} for item in setting.options],
         requires_restart=setting.requires_restart,
         updated_at=setting.updated_at,
+    )
+
+
+def _build_llm_config_response(config) -> AdminLLMConfigResponse:
+    return AdminLLMConfigResponse(
+        providers=[
+            {
+                "provider_id": item.provider_id,
+                "vendor": item.vendor,
+                "label": item.label,
+                "api_base": item.api_base,
+                "models": list(item.models),
+                "has_api_key": item.has_api_key,
+                "api_key_preview": item.api_key_preview,
+                "is_env_default": item.is_env_default,
+            }
+            for item in config.providers
+        ],
+        selection={
+            "active_provider_id": config.selection.active_provider_id,
+            "analyze_model": config.selection.analyze_model,
+            "write_model": config.selection.write_model,
+            "review_model": config.selection.review_model,
+        },
     )
