@@ -410,6 +410,85 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               text-decoration: none;
               border-bottom: 1px solid rgba(31, 93, 83, 0.22);
             }}
+            .focus-action-card {{
+              display: grid;
+              gap: 14px;
+              margin-top: 16px;
+              padding: 18px;
+              border-radius: 24px;
+              border: 1px solid rgba(31, 93, 83, 0.12);
+              background:
+                linear-gradient(135deg, rgba(31, 93, 83, 0.12), rgba(255, 249, 242, 0.94)),
+                rgba(255, 251, 246, 0.92);
+              box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.52);
+            }}
+            .focus-action-top {{
+              display: flex;
+              justify-content: space-between;
+              align-items: start;
+              gap: 16px;
+            }}
+            .focus-action-copy {{
+              display: grid;
+              gap: 8px;
+            }}
+            .focus-action-kicker {{
+              display: inline-flex;
+              width: fit-content;
+              padding: 6px 10px;
+              border-radius: 999px;
+              background: rgba(31, 93, 83, 0.14);
+              color: var(--accent-strong);
+              font-size: 12px;
+              letter-spacing: 0.08em;
+            }}
+            .focus-action-copy h2 {{
+              margin: 0;
+              font-size: 22px;
+              line-height: 1.2;
+            }}
+            .focus-action-copy p {{
+              margin: 0;
+              color: var(--muted);
+              font-size: 14px;
+              line-height: 1.7;
+            }}
+            .focus-action-cta {{
+              display: grid;
+              gap: 8px;
+              justify-items: end;
+              min-width: 200px;
+            }}
+            .focus-action-cta button {{
+              width: auto;
+              min-width: 144px;
+            }}
+            .focus-action-grid {{
+              display: grid;
+              grid-template-columns: repeat(5, minmax(0, 1fr));
+              gap: 10px;
+            }}
+            .focus-action-item {{
+              display: grid;
+              gap: 8px;
+              padding: 14px;
+              border-radius: 18px;
+              border: 1px solid rgba(65, 48, 27, 0.1);
+              background: rgba(255, 253, 249, 0.82);
+            }}
+            .focus-action-item.wide {{
+              grid-column: span 2;
+              background: linear-gradient(135deg, rgba(161, 69, 52, 0.08), rgba(255, 252, 247, 0.94));
+            }}
+            .focus-action-item strong {{
+              color: var(--muted);
+              font-size: 12px;
+              font-weight: 500;
+            }}
+            .focus-action-item span {{
+              font-size: 15px;
+              line-height: 1.7;
+            }}
             .panel {{
               background: var(--paper);
               border: 1px solid var(--line);
@@ -1085,6 +1164,9 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             __ADMIN_NAV_STYLES__
             @media (max-width: 1080px) {{
               .hero-grid {{ grid-template-columns: 1fr; }}
+              .focus-action-top {{ grid-template-columns: 1fr; }}
+              .focus-action-grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+              .focus-action-item.wide {{ grid-column: span 2; }}
               .overview-strip {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
               .layout {{ grid-template-columns: 1fr; }}
               .workspace-overview {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
@@ -1096,6 +1178,17 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               main {{ padding: 18px 14px 32px; }}
               .hero {{ padding: 18px; }}
               .hero-note {{ font-size: 12px; line-height: 1.6; }}
+              .focus-action-card {{ padding: 16px; }}
+              .focus-action-top {{
+                display: grid;
+                grid-template-columns: 1fr;
+              }}
+              .focus-action-cta {{
+                justify-items: start;
+                min-width: 0;
+              }}
+              .focus-action-grid {{ grid-template-columns: 1fr; }}
+              .focus-action-item.wide {{ grid-column: span 1; }}
               .panel {{ padding: 16px; border-radius: 20px; }}
               h1 {{ font-size: 32px; }}
               .hero-summary {{ grid-template-columns: 1fr; }}
@@ -1158,6 +1251,41 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                 <div class="hero-links" aria-label="辅助入口">
                   <a href="/admin/console">需要排队列或查 worker 时，打开高级监控页</a>
                 </div>
+                <section class="focus-action-card" aria-label="结构化下一步">
+                  <div class="focus-action-top">
+                    <div class="focus-action-copy">
+                      <span class="focus-action-kicker">NEXT ACTION</span>
+                      <h2>结构化下一步</h2>
+                      <p id="focus-summary">先贴第一条链接开始。新任务会自动排队，主控台会把当前任务切到右侧详情。</p>
+                    </div>
+                    <div class="focus-action-cta">
+                      <span class="mini" id="focus-cta-hint">目标：开始一个任务</span>
+                      <button id="focus-jump-button" class="tiny-button" type="button">开始新任务</button>
+                    </div>
+                  </div>
+                  <div class="focus-action-grid">
+                    <article class="focus-action-item">
+                      <strong>当前卡点</strong>
+                      <span id="focus-bottleneck">当前还没有任务，主控台处于待启动状态。</span>
+                    </article>
+                    <article class="focus-action-item">
+                      <strong>推荐动作</strong>
+                      <span id="focus-action">在左侧粘贴一个微信公众号链接并开始处理。</span>
+                    </article>
+                    <article class="focus-action-item">
+                      <strong>目标区域</strong>
+                      <span id="focus-target">左侧“开始一个任务”区</span>
+                    </article>
+                    <article class="focus-action-item">
+                      <strong>为什么</strong>
+                      <span id="focus-reason">主控台没有任务时，不需要先看任务列表或高级监控。</span>
+                    </article>
+                    <article class="focus-action-item wide">
+                      <strong>风险提示</strong>
+                      <span id="focus-risk">没有任务时不需要额外操作；真正有卡点时，这里会改成更明确的处置建议。</span>
+                    </article>
+                  </div>
+                </section>
               </section>
 
               <section class="overview-strip" aria-label="任务概览">
@@ -1279,6 +1407,9 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
 
           <script>
             const INITIAL_TASK_ID = {json.dumps(task_id, ensure_ascii=False)};
+            const INITIAL_PARAMS = new URLSearchParams(window.location.search);
+            const INITIAL_FILTER = INITIAL_PARAMS.get("filter");
+            const INITIAL_SEARCH = (INITIAL_PARAMS.get("q") || "").trim();
             const ACTIVE = new Set([
               "queued",
               "deduping",
@@ -1358,13 +1489,15 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               needs_manual_review: 100,
               needs_regenerate: 100,
             }};
+            const FILTER_KEYS = new Set(["all", "doing", "waiting", "ready", "done", "failed"]);
+            const HAS_INITIAL_FILTER = FILTER_KEYS.has(INITIAL_FILTER || "");
 
             const state = {{
               snapshot: null,
               selectedTaskId: INITIAL_TASK_ID,
-              filter: "all",
-              search: "",
-              filterPinned: false,
+              filter: HAS_INITIAL_FILTER ? INITIAL_FILTER : "all",
+              search: INITIAL_SEARCH,
+              filterPinned: HAS_INITIAL_FILTER,
               detailExpandedByTask: {{}},
               deleteConfirmTaskId: null,
               pendingAction: null,
@@ -1376,6 +1509,14 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               flashMessage: document.getElementById("flash-message"),
               autoRefresh: document.getElementById("auto-refresh"),
               heroFocus: document.getElementById("hero-focus"),
+              focusSummary: document.getElementById("focus-summary"),
+              focusCtaHint: document.getElementById("focus-cta-hint"),
+              focusJumpButton: document.getElementById("focus-jump-button"),
+              focusBottleneck: document.getElementById("focus-bottleneck"),
+              focusAction: document.getElementById("focus-action"),
+              focusTarget: document.getElementById("focus-target"),
+              focusReason: document.getElementById("focus-reason"),
+              focusRisk: document.getElementById("focus-risk"),
               ingestUrl: document.getElementById("ingest-url"),
               ingestButton: document.getElementById("ingest-button"),
               pasteButton: document.getElementById("paste-button"),
@@ -1397,6 +1538,15 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               overviewFocus: document.getElementById("overview-focus"),
               overviewFocusNote: document.getElementById("overview-focus-note"),
               filterButtons: Array.from(document.querySelectorAll("[data-filter]")),
+            }};
+            const SESSION_EXPIRED_MESSAGE = "后台会话已失效，请刷新页面重新进入后台。";
+            const SESSION_RESTORE_NOTE = "已保留当前 task、筛选和未提交链接，刷新后会自动恢复。";
+            const STORAGE_KEYS = {{
+              selectedTaskId: "phase7_home_task_id",
+              filter: "phase7_home_filter",
+              search: "phase7_home_search",
+              filterPinned: "phase7_home_filter_pinned",
+              ingestUrl: "phase7_home_ingest_url",
             }};
 
             const escapeHtml = (value) => String(value ?? "")
@@ -1428,6 +1578,59 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             const formatPercent = (value) => {{
               if (value === null || value === undefined) return "暂无";
               return `${{Math.round(value)}}%`;
+            }};
+            const persistUiState = () => {{
+              try {{
+                if (state.selectedTaskId) {{
+                  localStorage.setItem(STORAGE_KEYS.selectedTaskId, state.selectedTaskId);
+                }} else {{
+                  localStorage.removeItem(STORAGE_KEYS.selectedTaskId);
+                }}
+                localStorage.setItem(STORAGE_KEYS.filterPinned, state.filterPinned ? "true" : "false");
+                if (state.filterPinned) {{
+                  localStorage.setItem(STORAGE_KEYS.filter, state.filter);
+                }} else {{
+                  localStorage.removeItem(STORAGE_KEYS.filter);
+                }}
+                if (state.search) {{
+                  localStorage.setItem(STORAGE_KEYS.search, state.search);
+                }} else {{
+                  localStorage.removeItem(STORAGE_KEYS.search);
+                }}
+                const draftUrl = elements.ingestUrl.value.trim();
+                if (draftUrl) {{
+                  localStorage.setItem(STORAGE_KEYS.ingestUrl, draftUrl);
+                }} else {{
+                  localStorage.removeItem(STORAGE_KEYS.ingestUrl);
+                }}
+              }} catch (_error) {{
+                // Ignore storage write failures so the workbench still runs in private mode.
+              }}
+            }};
+            const restoreUiState = () => {{
+              try {{
+                const storedTaskId = localStorage.getItem(STORAGE_KEYS.selectedTaskId);
+                const storedFilter = localStorage.getItem(STORAGE_KEYS.filter);
+                const storedSearch = localStorage.getItem(STORAGE_KEYS.search);
+                const storedFilterPinned = localStorage.getItem(STORAGE_KEYS.filterPinned);
+                const storedIngestUrl = localStorage.getItem(STORAGE_KEYS.ingestUrl);
+                if (!INITIAL_TASK_ID && storedTaskId) {{
+                  state.selectedTaskId = storedTaskId;
+                }}
+                state.filterPinned = storedFilterPinned === "true";
+                if (state.filterPinned && storedFilter) {{
+                  state.filter = storedFilter;
+                }}
+                state.search = storedSearch || "";
+                elements.taskSearch.value = state.search;
+                elements.ingestUrl.value = storedIngestUrl || "";
+              }} catch (_error) {{
+                // Ignore storage read failures so boot still completes.
+              }}
+            }};
+            const sessionExpiredError = () => {{
+              persistUiState();
+              return new Error(`${{SESSION_EXPIRED_MESSAGE}} ${{SESSION_RESTORE_NOTE}}`);
             }};
             const reviewAiTraceScore = (review) => (review && review.ai_trace_score !== null && review.ai_trace_score !== undefined)
               ? Number(review.ai_trace_score)
@@ -1852,6 +2055,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               }} catch (_error) {{
                 // Browsers may block replaceState when the current URL includes Basic Auth credentials.
               }}
+              persistUiState();
             }};
 
             const renderSummary = () => {{
@@ -2267,6 +2471,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               elements.filterButtons.forEach((button) => {{
                 button.classList.toggle("active", button.dataset.filter === state.filter);
               }});
+              persistUiState();
             }};
 
             const applyOptimisticTaskState = (taskId, status) => {{
@@ -2310,6 +2515,9 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                   cache: "no-store",
                 }});
                 if (!response.ok) {{
+                  if (response.status === 401) {{
+                    throw sessionExpiredError();
+                  }}
                   throw new Error("加载任务列表失败。");
                 }}
                 state.snapshot = await response.json();
@@ -2351,6 +2559,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             }};
 
             const apiRequest = async (url, {{ method = "POST", payload = undefined }} = {{}}) => {{
+              persistUiState();
               const response = await fetch(url, {{
                 method,
                 headers: {{
@@ -2371,6 +2580,9 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                 }}
               }}
               if (!response.ok) {{
+                if (response.status === 401) {{
+                  throw sessionExpiredError();
+                }}
                 throw new Error(data.detail || "操作失败。");
               }}
               return data;
@@ -2445,6 +2657,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                 const data = await apiPost(appUrl("/admin/api/ingest"), {{ url }});
                 state.selectedTaskId = data.task_id;
                 elements.ingestUrl.value = "";
+                persistUiState();
                 await loadSnapshot();
                 scrollTaskDetailIntoView();
                 if (data.deduped) {{
@@ -2479,6 +2692,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               }});
             }});
 
+            elements.ingestUrl.addEventListener("input", () => persistUiState());
             elements.taskSearch.addEventListener("input", (event) => {{
               state.search = event.target.value.trim();
               refreshVisibleSelection().catch((error) => setFlashMessage(error.message || "加载任务失败。", "fail"));
@@ -2515,6 +2729,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                 if (text) {{
                   elements.ingestUrl.value = text.trim();
                   elements.ingestUrl.focus();
+                  persistUiState();
                   setFlashMessage("已粘贴。");
                 }}
               }} catch (_error) {{
@@ -2537,6 +2752,8 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             }});
 
             const boot = async () => {{
+              restoreUiState();
+              syncUrl();
               try {{
                 await loadSnapshot();
                 setFlashMessage("自动刷新中。");
@@ -2545,7 +2762,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               }}
               window.setInterval(() => {{
                 if (state.pendingAction || state.isIngesting || state.isRefreshing) return;
-                loadSnapshot({{ showBusy: false }}).catch(() => setFlashMessage("刷新失败，稍后会再试。", "fail"));
+                loadSnapshot({{ showBusy: false }}).catch((error) => setFlashMessage(error.message || "刷新失败，稍后会再试。", "fail"));
               }}, 4000);
             }};
 

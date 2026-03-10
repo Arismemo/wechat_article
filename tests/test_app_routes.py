@@ -267,6 +267,16 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("applyOptimisticTaskState", response.text)
         self.assertIn('const escapeHtml = (value) => String(value ?? "")', response.text)
         self.assertIn("当前筛选下没有任务。换个筛选看看。", response.text)
+        self.assertIn('const SESSION_EXPIRED_MESSAGE = "后台会话已失效，请刷新页面重新进入后台。";', response.text)
+        self.assertIn("SESSION_RESTORE_NOTE", response.text)
+        self.assertIn('selectedTaskId: "phase7_home_task_id"', response.text)
+        self.assertIn('filterPinned: "phase7_home_filter_pinned"', response.text)
+        self.assertIn('ingestUrl: "phase7_home_ingest_url"', response.text)
+        self.assertIn("const persistUiState = () => {", response.text)
+        self.assertIn("const restoreUiState = () => {", response.text)
+        self.assertIn("throw sessionExpiredError();", response.text)
+        self.assertIn("restoreUiState();", response.text)
+        self.assertIn('loadSnapshot({ showBusy: false }).catch((error) => setFlashMessage(error.message || "刷新失败，稍后会再试。", "fail"));', response.text)
 
     def test_admin_phase6_page_renders(self) -> None:
         app_module = reload(import_module("app.main"))

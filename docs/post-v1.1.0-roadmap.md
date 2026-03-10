@@ -7,6 +7,7 @@
 
 - [docs/post-v1.1.0-task-plan.md](/Users/liukun/j/code/wechat_artical/docs/post-v1.1.0-task-plan.md)
 - [docs/post-v1.1.0-recording-guide.md](/Users/liukun/j/code/wechat_artical/docs/post-v1.1.0-recording-guide.md)
+- [docs/post-v1.1.0-frontend-redesign-plan.md](/Users/liukun/j/code/wechat_artical/docs/post-v1.1.0-frontend-redesign-plan.md)
 
 ## 1. 规划前提
 
@@ -50,6 +51,7 @@
 - 把 `/admin` 收成单人主工作台。首屏默认优先呈现“待人工处理 / 待推草稿 / 今日失败 / 异常堆积”，不再按“多用户分工”设计“我的待处理”之类入口。
 - 把“下一步”提示从一句文案升级成结构化动作卡。至少要同时表达：当前卡点、建议动作、要去的页面、为什么这样做。
 - 统一后台会话失效恢复。页面检测到 `401` 后，不只提示刷新，还要保留当前 `task_id`、筛选条件和最近输入，让刷新后能回到原上下文。
+  - `2026-03-10`：`/admin` 已落地本地持久化与 401 恢复提示，当前会保留 `task_id`、主筛选、搜索词和未提交链接；Phase 5 / Phase 6 / settings / console 仍需继续统一。
 - 把参考文章系统做成可点击、可查看的工作区模块。每条入选同题素材至少展示标题、来源、筛选原因和原始链接，并支持一键打开原文或在页面内快速预览。
   - `2026-03-10`：已随 `v1.1.1` 发布到服务器，`workspace.related_articles`、`/admin/phase5` 与 `/admin` 摘要层已完成 smoke test。
 - 优化 Phase 5 审核台的信息层级。首屏先给“是否建议通过 / 是否允许推稿 / AI 痕迹等级 / humanize 情况 / 主要风险点”，完整 diff、完整审稿 JSON 和审计轨迹下沉到折叠区。
