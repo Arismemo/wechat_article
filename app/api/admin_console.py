@@ -497,20 +497,43 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             }}
 
             /* 展开详情 */
-            .task-detail {{
+            /* Modal 弹窗 */
+            .modal-overlay {{
               display: none;
-              margin-top: 14px;
-              padding-top: 14px;
-              border-top: 1px solid var(--border-light);
+              position: fixed; inset: 0; z-index: 1000;
+              background: rgba(0,0,0,.45);
+              justify-content: center; align-items: center;
             }}
-            .task-card.expanded .task-detail {{
-              display: block;
+            .modal-overlay.open {{
+              display: flex;
+            }}
+            .modal-content {{
+              background: #fff;
+              border-radius: 12px;
+              width: min(720px, 92vw);
+              max-height: 85vh;
+              overflow-y: auto;
+              box-shadow: 0 20px 60px rgba(0,0,0,.2);
+              padding: 28px 32px;
+              position: relative;
+            }}
+            .modal-close {{
+              position: absolute; top: 14px; right: 18px;
+              background: none; border: none; font-size: 22px;
+              cursor: pointer; color: var(--text-secondary);
+              line-height: 1; padding: 4px;
+            }}
+            .modal-close:hover {{ color: var(--text); }}
+            .modal-title {{
+              font-size: 18px; font-weight: 700;
+              margin-bottom: 18px; padding-right: 36px;
+              line-height: 1.4;
             }}
             .detail-section {{
-              margin-bottom: 14px;
+              margin-bottom: 18px;
             }}
             .detail-section h4 {{
-              font-size: 12px;
+              font-size: 13px;
               font-weight: 600;
               color: var(--text-secondary);
               text-transform: uppercase;
@@ -521,11 +544,11 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               background: var(--bg-input);
               border: 1px solid var(--border-light);
               border-radius: var(--radius-sm);
-              padding: 16px;
-              max-height: 300px;
+              padding: 20px;
+              max-height: 400px;
               overflow-y: auto;
               font-size: 14px;
-              line-height: 1.7;
+              line-height: 1.8;
             }}
             .detail-preview img {{
               max-width: 100%;
@@ -534,7 +557,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             .detail-meta {{
               display: grid;
               grid-template-columns: auto 1fr;
-              gap: 4px 12px;
+              gap: 6px 16px;
               font-size: 13px;
             }}
             .detail-meta dt {{
@@ -546,14 +569,16 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             }}
             .detail-actions {{
               display: flex;
-              gap: 8px;
-              margin-top: 14px;
+              gap: 10px;
+              margin-top: 20px;
+              padding-top: 16px;
+              border-top: 1px solid var(--border-light);
             }}
             .detail-actions button {{
-              padding: 8px 20px;
+              padding: 10px 24px;
               border: none;
               border-radius: var(--radius-sm);
-              font-size: 13px;
+              font-size: 14px;
               font-weight: 600;
               cursor: pointer;
               transition: all var(--transition);
@@ -672,6 +697,15 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             </div>
           </main>
 
+          <!-- Modal 弹窗 -->
+          <div class="modal-overlay" id="modal-overlay">
+            <div class="modal-content" id="modal-content">
+              <button class="modal-close" id="modal-close">&times;</button>
+              <div class="modal-title" id="modal-title">加载中...</div>
+              <div id="modal-body">加载中...</div>
+            </div>
+          </div>
+
           <script>
             const {{ escapeHtml }} = AdminUiShared;
             // 状态映射
@@ -726,7 +760,31 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             const cntDone = document.getElementById("cnt-done");
 
             let allTasks = [];
-            let expandedTaskId = null;
+
+            // DOM
+            const modalOverlay = document.getElementById("modal-overlay");
+            const modalTitle = document.getElementById("modal-title");
+            const modalBody = document.getElementById("modal-body");
+            const modalClose = document.getElementById("modal-close");
+
+            // Modal 控制
+            const openModal = (title) => {{
+              modalTitle.textContent = title || "任务详情";
+              modalBody.innerHTML = '<div style="color:var(--text-secondary)">加载中...</div>';
+              modalOverlay.classList.add("open");
+              document.body.style.overflow = "hidden";
+            }};
+            const closeModal = () => {{
+              modalOverlay.classList.remove("open");
+              document.body.style.overflow = "";
+            }};
+            modalClose.addEventListener("click", closeModal);
+            modalOverlay.addEventListener("click", (e) => {{
+              if (e.target === modalOverlay) closeModal();
+            }});
+            document.addEventListener("keydown", (e) => {{
+              if (e.key === "Escape") closeModal();
+            }});
 
             // API 请求
             const api = async (method, path, body) => {{
@@ -825,26 +883,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                 const label = statusLabel(t.status);
                 const progress = statusProgress(t.status);
                 const title = t.title || t.source_url || t.task_id.slice(0, 12);
-                const isExpanded = expandedTaskId === t.task_id;
-                const cardClass = `task-card ${{isExpanded ? "expanded" : ""}} ${{cat === "done" ? "done-card" : ""}}`;
-
-                // 卡片内按钮
-                let actions = "";
-                if (cat === "pending") {{
-                  if (t.status === "review_passed") {{
-                    actions = `<div class="task-actions">
-                      <button class="btn-primary" data-action="push" data-id="${{t.task_id}}">推送</button>
-                    </div>`;
-                  }} else {{
-                    actions = `<div class="task-actions">
-                      <button class="btn-primary" data-action="approve" data-id="${{t.task_id}}">确认</button>
-                    </div>`;
-                  }}
-                }} else if (cat === "failed") {{
-                  actions = `<div class="task-actions">
-                    <button class="btn-danger" data-action="retry" data-id="${{t.task_id}}">重试</button>
-                  </div>`;
-                }}
+                const cardClass = `task-card ${{cat === "done" ? "done-card" : ""}}`;
 
                 // 进度条（仅处理中）
                 let progressBar = "";
@@ -852,49 +891,43 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                   progressBar = `<div class="task-progress"><div class="task-progress-bar" style="width:${{progress}}%"></div></div>`;
                 }}
 
-                // 展开详情区
-                let detailHtml = "";
-                if (isExpanded) {{
-                  detailHtml = `<div class="task-detail" id="detail-${{t.task_id}}">加载中...</div>`;
-                }}
-
                 return `
-                  <div class="${{cardClass}}" data-task-id="${{t.task_id}}">
+                  <div class="${{cardClass}}" data-task-id="${{t.task_id}}" style="cursor:pointer;">
                     <div class="task-card-header">
                       <div class="task-status-dot ${{cat}}"></div>
                       <div class="task-title">${{escapeHtml(title)}}</div>
                       <span class="task-status-label ${{cat}}">${{label}}</span>
-                      ${{actions}}
                     </div>
                     ${{progressBar}}
-                    ${{detailHtml}}
                   </div>`;
               }}).join("");
-
-              // 如果有展开的任务，加载详情
-              if (expandedTaskId) {{
-                loadTaskDetail(expandedTaskId);
-              }}
             }};
 
-            // 加载任务详情
-            const loadTaskDetail = async (taskId) => {{
-              const detailEl = document.getElementById(`detail-${{taskId}}`);
-              if (!detailEl) return;
+            // 格式化评分（兼容 0-1 和 0-100 两种格式）
+            const fmtScore = (v) => {{
+              if (v == null) return null;
+              const n = v <= 1 ? v * 100 : v;
+              return n.toFixed(0) + "%";
+            }};
 
+            // 加载任务详情到 Modal
+            const loadTaskDetail = async (taskId) => {{
               try {{
                 const data = await api("GET", `/admin/api/home-snapshot?limit=1&selected_task_id=${{taskId}}`);
                 const ws = data.workspace;
                 if (!ws) {{
-                  detailEl.innerHTML = `<div style="color:var(--text-secondary);font-size:13px;">无详情</div>`;
+                  modalBody.innerHTML = '<div style="color:var(--text-secondary)">无详情数据</div>';
                   return;
                 }}
 
                 const cat = statusCategory(ws.status);
                 const gens = ws.generations || [];
-                const gen = gens[0]; // 最新版本
+                const gen = gens[0];
                 const review = gen?.review;
                 const srcArt = ws.source_article;
+
+                // 标题
+                modalTitle.textContent = ws.title || srcArt?.title || ws.source_url || "任务详情";
 
                 // 计算耗时
                 const elapsed = (() => {{
@@ -907,25 +940,23 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                   return `${{hrs}} 小时 ${{mins % 60}} 分`;
                 }})();
 
-                // 来源信息
+                // 元信息
                 const meta = [];
-                if (srcArt?.title) meta.push(["原文标题", escapeHtml(srcArt.title)]);
-                if (ws.source_url) meta.push(["来源", `<a href="${{escapeHtml(ws.source_url)}}" target="_blank" style="color:var(--primary);word-break:break-all;">${{escapeHtml(ws.source_url.substring(0, 60))}}</a>`]);
+                if (srcArt?.title && srcArt.title !== ws.title) meta.push(["原文标题", escapeHtml(srcArt.title)]);
+                if (ws.source_url) meta.push(["来源", `<a href="${{escapeHtml(ws.source_url)}}" target="_blank" style="color:var(--primary);word-break:break-all;">${{escapeHtml(ws.source_url.substring(0, 80))}}</a>`]);
+                meta.push(["状态", `<span class="badge ${{cat === "done" ? "ok" : cat === "failed" ? "error" : "warn"}}">${{statusLabel(ws.status)}}</span>`]);
                 if (gen) meta.push(["版本", `第 ${{gen.version_no}} 版`]);
                 if (elapsed) meta.push(["耗时", elapsed]);
                 if (ws.created_at) meta.push(["创建", escapeHtml(new Date(ws.created_at).toLocaleString("zh-CN"))]);
                 if (ws.error) meta.push(["错误", `<span style="color:var(--danger)">${{escapeHtml(ws.error)}}</span>`]);
 
-                let metaHtml = "";
-                if (meta.length) {{
-                  metaHtml = `
-                    <div class="detail-section">
-                      <h4>信息</h4>
-                      <dl class="detail-meta">
-                        ${{meta.map(([k, v]) => `<dt>${{k}}</dt><dd>${{v}}</dd>`).join("")}}
-                      </dl>
-                    </div>`;
-                }}
+                let metaHtml = `
+                  <div class="detail-section">
+                    <h4>基本信息</h4>
+                    <dl class="detail-meta">
+                      ${{meta.map(([k, v]) => `<dt>${{k}}</dt><dd>${{v}}</dd>`).join("")}}
+                    </dl>
+                  </div>`;
 
                 // AI 审核意见
                 let reviewHtml = "";
@@ -934,16 +965,16 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                   const verdictClass = verdict === "pass" ? "ok" : (verdict === "fail" ? "error" : "warn");
                   const verdictLabel = verdict === "pass" ? "通过" : (verdict === "fail" ? "未通过" : verdict);
                   const items = [];
-                  if (review.similarity_score != null) items.push(`相似度 ${{(review.similarity_score * 100).toFixed(0)}}%`);
-                  if (review.readability_score != null) items.push(`可读性 ${{(review.readability_score * 100).toFixed(0)}}%`);
-                  if (review.ai_trace_score != null) items.push(`AI 痕迹 ${{(review.ai_trace_score * 100).toFixed(0)}}%`);
-                  if (review.factual_risk_score != null) items.push(`事实风险 ${{(review.factual_risk_score * 100).toFixed(0)}}%`);
-                  const summaryText = review.voice_summary || (review.suggestions ? JSON.stringify(review.suggestions).slice(0, 120) : "");
+                  if (review.similarity_score != null) items.push(`相似度 ${{fmtScore(review.similarity_score)}}`);
+                  if (review.readability_score != null) items.push(`可读性 ${{fmtScore(review.readability_score)}}`);
+                  if (review.ai_trace_score != null) items.push(`AI 痕迹 ${{fmtScore(review.ai_trace_score)}}`);
+                  if (review.factual_risk_score != null) items.push(`事实风险 ${{fmtScore(review.factual_risk_score)}}`);
+                  const summaryText = review.voice_summary || (review.suggestions ? JSON.stringify(review.suggestions).slice(0, 200) : "");
                   reviewHtml = `
                     <div class="detail-section">
                       <h4>AI 审核 <span class="badge ${{verdictClass}}" style="margin-left:6px;vertical-align:middle;">${{verdictLabel}}</span></h4>
-                      ${{items.length ? `<div style="font-size:12px;color:var(--text-secondary);margin-bottom:6px;">${{items.join(" · ")}}</div>` : ""}}
-                      ${{summaryText ? `<div style="font-size:13px;color:var(--text-secondary);line-height:1.5;">${{escapeHtml(summaryText.slice(0, 200))}}</div>` : ""}}
+                      ${{items.length ? `<div style="font-size:13px;color:var(--text-secondary);margin-bottom:6px;">${{items.join(" · ")}}</div>` : ""}}
+                      ${{summaryText ? `<div style="font-size:13px;color:var(--text-secondary);line-height:1.6;">${{escapeHtml(summaryText.slice(0, 300))}}</div>` : ""}}
                     </div>`;
                 }}
 
@@ -993,58 +1024,61 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                   </div>`;
                 }}
 
-                detailEl.innerHTML = metaHtml + reviewHtml + previewHtml + draftHtml + actionsHtml;
+                modalBody.innerHTML = metaHtml + reviewHtml + previewHtml + draftHtml + actionsHtml;
 
               }} catch (e) {{
-                detailEl.innerHTML = `<div style="color:var(--danger);font-size:13px;">${{escapeHtml(e.message)}}</div>`;
+                modalBody.innerHTML = `<div style="color:var(--danger)">${{escapeHtml(e.message)}}</div>`;
               }}
             }};
 
-            // 事件代理
-            taskList.addEventListener("click", async (e) => {{
-              // 处理操作按钮
-              const actionBtn = e.target.closest("[data-action]");
-              if (actionBtn) {{
-                e.stopPropagation();
-                const action = actionBtn.dataset.action;
-                const id = actionBtn.dataset.id;
-                actionBtn.disabled = true;
-                const origText = actionBtn.textContent;
-                actionBtn.textContent = "处理中...";
-                try {{
-                  if (action === "approve") {{
-                    await api("POST", `/admin/api/tasks/${{id}}/approve`, {{ device_id: "admin-web" }});
-                  }} else if (action === "push") {{
-                    await api("POST", `/admin/api/tasks/${{id}}/push`, {{ device_id: "admin-web" }});
-                  }} else if (action === "retry") {{
-                    await api("POST", `/admin/api/tasks/${{id}}/retry`);
-                  }} else if (action === "delete") {{
-                    if (!confirm("确定要删除这个任务吗？")) {{
-                      actionBtn.disabled = false;
-                      actionBtn.textContent = origText;
-                      return;
-                    }}
-                    await api("DELETE", `/admin/api/tasks/${{id}}`);
+            // 处理操作按钮（卡片和弹窗中通用）
+            const handleAction = async (actionBtn) => {{
+              const action = actionBtn.dataset.action;
+              const id = actionBtn.dataset.id;
+              actionBtn.disabled = true;
+              const origText = actionBtn.textContent;
+              actionBtn.textContent = "处理中...";
+              try {{
+                if (action === "approve") {{
+                  await api("POST", `/admin/api/tasks/${{id}}/approve`, {{ device_id: "admin-web" }});
+                }} else if (action === "push") {{
+                  await api("POST", `/admin/api/tasks/${{id}}/push`, {{ device_id: "admin-web" }});
+                }} else if (action === "retry") {{
+                  await api("POST", `/admin/api/tasks/${{id}}/retry`);
+                }} else if (action === "delete") {{
+                  if (!confirm("确定要删除这个任务吗？")) {{
+                    actionBtn.disabled = false;
+                    actionBtn.textContent = origText;
+                    return;
                   }}
-                  await refreshTasks();
-                }} catch (err) {{
-                  showError(err.message || "操作失败");
-                  actionBtn.disabled = false;
-                  actionBtn.textContent = origText;
+                  await api("DELETE", `/admin/api/tasks/${{id}}`);
                 }}
-                return;
+                closeModal();
+                await refreshTasks();
+              }} catch (err) {{
+                showError(err.message || "操作失败");
+                actionBtn.disabled = false;
+                actionBtn.textContent = origText;
               }}
+            }};
 
-              // 处理卡片点击 → 展开/收起
+            // 事件代理 - 任务列表
+            taskList.addEventListener("click", (e) => {{
+              const actionBtn = e.target.closest("[data-action]");
+              if (actionBtn) {{ e.stopPropagation(); handleAction(actionBtn); return; }}
+
               const card = e.target.closest(".task-card");
               if (!card) return;
               const id = card.dataset.taskId;
-              if (expandedTaskId === id) {{
-                expandedTaskId = null;
-              }} else {{
-                expandedTaskId = id;
-              }}
-              renderTasks();
+              const t = allTasks.find(x => x.task_id === id);
+              openModal(t?.title || t?.source_url || "任务详情");
+              loadTaskDetail(id);
+            }});
+
+            // 事件代理 - Modal 内操作按钮
+            modalBody.addEventListener("click", (e) => {{
+              const actionBtn = e.target.closest("[data-action]");
+              if (actionBtn) handleAction(actionBtn);
             }});
 
             // 自动刷新
