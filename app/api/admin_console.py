@@ -3384,17 +3384,21 @@ def pipeline_console(response: Response) -> str:
               try {
                 const registry = EMBEDDED_REGISTRY;
                 pipelineData = registry;
-                // settings 仍从 API 获取（error-tolerant）
-                try {
-                  const r = await fetch(API_BASE + '/admin/settings', buildFetchOpts());
-                  if (r.ok) { const arr = await r.json(); for (const s of arr) settingsData[s.key] = s; }
-                } catch(_) {}
                 document.getElementById('pipeDesc').textContent = registry.description || '';
                 renderPipeline(registry);
+                // settings 异步加载，不阻塞 pipeline 渲染
+                loadSettings();
               } catch(e) {
                 document.getElementById('pipeGraph').innerHTML =
                   '<div class="pipe-loading">' + e.message + '</div>';
               }
+            }
+
+            async function loadSettings() {
+              try {
+                const r = await fetch(API_BASE + '/admin/settings', buildFetchOpts());
+                if (r.ok) { const arr = await r.json(); for (const s of arr) settingsData[s.key] = s; }
+              } catch(_) {}
             }
 
             function connectorSVG(color) {
