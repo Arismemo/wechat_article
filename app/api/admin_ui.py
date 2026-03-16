@@ -29,6 +29,12 @@ PAGE_META = {
         "icon": "activity",
         "context": "任务流、队列与 Worker 健康排障。",
     },
+    "pipeline": {
+        "label": "流程配置",
+        "group": "",
+        "icon": "pipeline",
+        "context": "可视化文章处理流程，配置各环节参数。",
+    },
     "settings": {
         "label": "设置",
         "group": "",
@@ -39,6 +45,7 @@ PAGE_META = {
 
 NAV_ITEMS = [
     ("portal", "/admin", "工作台"),
+    ("pipeline", "/admin/pipeline", "流程配置"),
     ("review", "/admin/phase5", "审核"),
     ("feedback", "/admin/phase6", "反馈"),
     ("monitor", "/admin/console", "监控"),
@@ -47,7 +54,7 @@ NAV_ITEMS = [
 
 # 侧边栏只显示工作台，其他页面通过 URL 直接访问
 NAV_GROUPS = [
-    ("", ["portal"]),
+    ("", ["portal", "pipeline"]),
 ]
 
 _ICONS = {
@@ -55,6 +62,7 @@ _ICONS = {
     "check-circle": '<svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/></svg>',
     "bar-chart": '<svg viewBox="0 0 24 24"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>',
     "activity": '<svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>',
+    "pipeline": '<svg viewBox="0 0 24 24"><path d="M4 6h6M14 6h6M4 12h6M14 12h6M4 18h6M14 18h6"/><circle cx="12" cy="6" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="18" r="2"/></svg>',
     "settings": '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
     "menu": '<svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>',
 }
