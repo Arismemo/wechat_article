@@ -2910,7 +2910,7 @@ def pipeline_console() -> str:
             __ADMIN_SHARED_STYLES__
 
             .pipe-container {
-              max-width: 900px;
+              max-width: 960px;
               margin: 0 auto;
               padding: 32px 20px;
             }
@@ -2926,12 +2926,29 @@ def pipeline_console() -> str:
               color: var(--text-primary);
               margin: 0;
             }
+            .pipe-header .pipe-desc {
+              font-size: 13px;
+              color: var(--text-secondary);
+              margin-top: 4px;
+            }
             .pipe-header a {
               font-size: 13px;
               color: var(--text-secondary);
               text-decoration: none;
             }
             .pipe-header a:hover { color: var(--primary); }
+
+            /* Phase 标签 */
+            .phase-label {
+              font-size: 12px;
+              font-weight: 600;
+              color: var(--text-tertiary);
+              text-transform: uppercase;
+              letter-spacing: .05em;
+              margin: 24px 0 12px;
+              padding-left: 4px;
+            }
+            .phase-label:first-of-type { margin-top: 0; }
 
             /* 流程图 */
             .pipeline-graph {
@@ -2970,592 +2987,449 @@ def pipeline_console() -> str:
               font-size: 14px;
               font-weight: 500;
               color: var(--text-primary);
-              white-space: nowrap;
-              flex-shrink: 0;
+              position: relative;
+              user-select: none;
             }
             .pipe-node:hover {
               border-color: var(--primary);
-              box-shadow: 0 2px 8px rgba(99,102,241,.15);
+              box-shadow: 0 0 0 3px rgba(59,130,246,.12);
+              transform: translateY(-1px);
             }
             .pipe-node.active {
               border-color: var(--primary);
-              background: rgba(99,102,241,.08);
-              box-shadow: 0 2px 12px rgba(99,102,241,.2);
-            }
-            .pipe-node.readonly {
-              opacity: 0.7;
-              cursor: default;
-            }
-            .pipe-node.readonly:hover {
-              border-color: var(--border-light);
-              box-shadow: none;
+              background: rgba(59,130,246,.06);
+              box-shadow: 0 0 0 3px rgba(59,130,246,.15);
             }
             .pipe-node .node-icon {
-              font-size: 16px;
-              flex-shrink: 0;
+              font-size: 18px;
+              line-height: 1;
             }
             .pipe-node .node-label {
-              font-size: 13px;
+              white-space: nowrap;
             }
             .pipe-node .node-badge {
-              font-size: 10px;
-              padding: 1px 6px;
-              border-radius: 8px;
+              position: absolute;
+              top: -6px;
+              right: -6px;
+              width: 18px;
+              height: 18px;
               background: var(--primary);
               color: #fff;
-              font-weight: 600;
+              border-radius: 50%;
+              font-size: 10px;
+              line-height: 18px;
+              text-align: center;
+              font-weight: 700;
             }
-            .pipe-node .expand-icon {
+            .pipe-node .node-sub-hint {
               font-size: 11px;
               color: var(--text-tertiary);
+              position: absolute;
+              bottom: -16px;
+              left: 50%;
+              transform: translateX(-50%);
+              white-space: nowrap;
             }
             .pipe-arrow {
-              display: flex;
-              align-items: center;
-              padding: 0 4px;
               color: var(--text-tertiary);
               font-size: 16px;
+              padding: 0 6px;
               flex-shrink: 0;
             }
-
-            /* 折线连接 */
-            .pipe-bend-down {
-              display: flex;
-              justify-content: flex-end;
-              padding: 0 40px;
-              margin: -4px 0;
-            }
-            .pipe-bend-down.left {
-              justify-content: flex-start;
-            }
-            .pipe-bend-down .bend-arrow {
-              color: var(--text-tertiary);
-              font-size: 16px;
-            }
+            .pipe-row.reverse .pipe-arrow { transform: scaleX(-1); }
 
             /* 配置面板 */
             .config-panel {
               background: var(--surface);
               border: 1px solid var(--border-light);
-              border-radius: var(--radius-md);
+              border-radius: var(--radius-lg);
               padding: 24px;
               margin-top: 8px;
-              animation: fadeIn 0.2s ease;
+              animation: fadeSlide 0.2s ease;
             }
-            @keyframes fadeIn {
+            @keyframes fadeSlide {
               from { opacity: 0; transform: translateY(-8px); }
-              to   { opacity: 1; transform: translateY(0); }
+              to { opacity: 1; transform: translateY(0); }
             }
             .config-panel h3 {
-              font-size: 16px;
+              font-size: 15px;
               font-weight: 600;
-              margin: 0 0 18px 0;
               color: var(--text-primary);
+              margin: 0 0 16px;
             }
-            .config-empty {
-              text-align: center;
-              padding: 24px;
-              color: var(--text-secondary);
-              font-size: 14px;
-            }
-            .config-field {
+            .config-row {
               display: flex;
-              align-items: flex-start;
-              gap: 16px;
-              padding: 14px 0;
-              border-bottom: 1px solid var(--border-light);
+              align-items: center;
+              gap: 12px;
+              padding: 10px 0;
+              border-bottom: 1px solid var(--border-lighter);
             }
-            .config-field:last-of-type { border-bottom: none; }
-            .config-field-info {
+            .config-row:last-child { border-bottom: none; }
+            .config-label {
               flex: 1;
-              min-width: 0;
-            }
-            .config-field-info .field-label {
-              font-size: 14px;
-              font-weight: 600;
-              color: var(--text-primary);
-              margin-bottom: 4px;
-            }
-            .config-field-info .field-desc {
-              font-size: 12px;
+              font-size: 13px;
               color: var(--text-secondary);
-              line-height: 1.5;
             }
-            .config-field-info .field-default {
+            .config-default {
               font-size: 11px;
               color: var(--text-tertiary);
-              margin-top: 2px;
+              min-width: 80px;
             }
-            .config-field-control {
-              display: flex;
-              align-items: center;
-              gap: 8px;
-              flex-shrink: 0;
-            }
-            .config-field-control input[type="number"],
-            .config-field-control input[type="text"] {
-              width: 120px;
+            .config-input {
+              width: 80px;
               padding: 6px 10px;
-              border: 1px solid var(--border);
+              border: 1px solid var(--border-light);
               border-radius: var(--radius-sm);
-              font-size: 14px;
-              background: var(--bg);
+              background: var(--bg-input);
               color: var(--text-primary);
-              outline: none;
-              transition: border-color 0.2s;
+              font-size: 13px;
+              text-align: right;
             }
-            .config-field-control input:focus {
+            .config-input:focus {
+              outline: none;
               border-color: var(--primary);
+              box-shadow: 0 0 0 2px rgba(59,130,246,.15);
             }
-            .config-field-control select {
-              padding: 6px 10px;
-              border: 1px solid var(--border);
-              border-radius: var(--radius-sm);
-              font-size: 14px;
-              background: var(--bg);
-              color: var(--text-primary);
-              outline: none;
-            }
-            .config-field-control .btn-save {
-              padding: 5px 14px;
+            .config-btn {
+              padding: 6px 14px;
+              font-size: 12px;
+              font-weight: 500;
               border: none;
               border-radius: var(--radius-sm);
+              cursor: pointer;
+              transition: all 0.15s;
+            }
+            .config-btn.save {
               background: var(--primary);
               color: #fff;
-              font-size: 12px;
-              font-weight: 600;
-              cursor: pointer;
-              transition: background 0.2s;
             }
-            .config-field-control .btn-save:hover { background: var(--primary-hover); }
-            .config-field-control .btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
-            .config-field-control .btn-reset {
-              padding: 5px 10px;
-              border: 1px solid var(--border);
-              border-radius: var(--radius-sm);
+            .config-btn.save:hover { background: var(--primary-hover); }
+            .config-btn.save:disabled {
+              opacity: .5;
+              cursor: not-allowed;
+            }
+            .config-btn.reset {
               background: transparent;
               color: var(--text-secondary);
-              font-size: 12px;
-              cursor: pointer;
-              transition: all 0.2s;
+              border: 1px solid var(--border-light);
             }
-            .config-field-control .btn-reset:hover {
-              border-color: var(--danger);
-              color: var(--danger);
-            }
-            .config-save-status {
-              font-size: 12px;
-              padding: 2px 8px;
-              border-radius: 4px;
-              animation: fadeIn 0.3s ease;
-            }
-            .config-save-status.ok { color: var(--success); }
-            .config-save-status.err { color: var(--danger); }
-
-            /* 子流程弹窗 */
-            .sub-modal-overlay {
-              position: fixed; inset: 0;
-              background: rgba(0,0,0,.45);
-              z-index: 1000;
-              display: none;
-              align-items: center;
-              justify-content: center;
-            }
-            .sub-modal-overlay.visible { display: flex; }
-            .sub-modal-content {
-              background: var(--bg);
-              border-radius: var(--radius-md);
-              padding: 28px;
-              max-width: 620px;
-              width: 90%;
-              max-height: 80vh;
-              overflow-y: auto;
-              box-shadow: 0 20px 60px rgba(0,0,0,.3);
-              animation: slideUp 0.25s ease;
-            }
-            @keyframes slideUp {
-              from { opacity: 0; transform: translateY(20px); }
-              to   { opacity: 1; transform: translateY(0); }
-            }
-            .sub-modal-header {
-              display: flex;
-              align-items: center;
-              justify-content: space-between;
-              margin-bottom: 20px;
-            }
-            .sub-modal-header h3 {
-              margin: 0; font-size: 16px; font-weight: 700;
+            .config-btn.reset:hover {
+              background: var(--surface-hover);
               color: var(--text-primary);
             }
-            .sub-modal-close {
-              background: none; border: none;
-              font-size: 20px; cursor: pointer;
-              color: var(--text-secondary);
+            .config-saved {
+              font-size: 12px;
+              color: var(--success);
+              animation: fadeIn 0.3s;
             }
-            .sub-modal-close:hover { color: var(--text-primary); }
-            .sub-flow {
-              display: flex;
-              flex-wrap: wrap;
+
+            /* 子流程弹窗 */
+            .modal-overlay {
+              display: none;
+              position: fixed;
+              inset: 0;
+              background: rgba(0,0,0,.55);
+              z-index: 1000;
+              justify-content: center;
               align-items: center;
-              gap: 0;
-              margin-bottom: 16px;
+              animation: fadeIn .15s;
             }
-            .sub-node {
-              display: flex;
-              align-items: center;
-              gap: 6px;
-              padding: 10px 14px;
-              border-radius: var(--radius-sm);
+            .modal-overlay.open { display: flex; }
+            @keyframes fadeIn { from {opacity:0} to {opacity:1} }
+            .modal-box {
               background: var(--surface);
-              border: 1px solid var(--border-light);
+              border-radius: var(--radius-lg);
+              padding: 28px;
+              max-width: 600px;
+              width: 90%;
+              box-shadow: var(--shadow-lg);
+              animation: slideUp .2s ease;
+            }
+            @keyframes slideUp { from {transform:translateY(16px);opacity:0} to {transform:translateY(0);opacity:1} }
+            .modal-box h3 {
+              font-size: 16px;
+              font-weight: 600;
+              color: var(--text-primary);
+              margin: 0 0 16px;
+            }
+            .modal-close {
+              float: right;
+              background: none;
+              border: none;
+              font-size: 20px;
+              color: var(--text-secondary);
+              cursor: pointer;
+              padding: 0 4px;
+            }
+            .modal-close:hover { color: var(--text-primary); }
+            .sub-step {
+              display: flex;
+              align-items: center;
+              gap: 10px;
+              padding: 10px 14px;
+              margin-bottom: 6px;
+              border-radius: var(--radius-md);
+              background: var(--bg-input);
               font-size: 13px;
               color: var(--text-primary);
             }
+            .sub-step .sub-icon {
+              font-size: 16px;
+            }
             .sub-arrow {
-              padding: 0 4px;
+              text-align: center;
+              color: var(--text-tertiary);
+              font-size: 14px;
+              margin: 2px 0;
+            }
+
+            .pipe-loading {
+              text-align: center;
+              padding: 60px 20px;
               color: var(--text-tertiary);
               font-size: 14px;
             }
 
-            /* 切换开关 */
-            .toggle-switch {
-              position: relative;
-              width: 44px;
-              height: 24px;
-            }
-            .toggle-switch input {
-              opacity: 0;
-              width: 0;
-              height: 0;
-            }
-            .toggle-slider {
-              position: absolute;
-              inset: 0;
-              background: var(--border);
-              border-radius: 12px;
-              cursor: pointer;
-              transition: background 0.3s;
-            }
-            .toggle-slider::before {
-              content: "";
-              position: absolute;
-              width: 18px;
-              height: 18px;
-              left: 3px;
-              top: 3px;
-              background: #fff;
-              border-radius: 50%;
-              transition: transform 0.3s;
-            }
-            .toggle-switch input:checked + .toggle-slider {
-              background: var(--primary);
-            }
-            .toggle-switch input:checked + .toggle-slider::before {
-              transform: translateX(20px);
+            @media (max-width: 640px) {
+              .pipe-container { padding: 16px 12px; }
+              .pipe-node { padding: 10px 12px; font-size: 13px; }
+              .config-panel { padding: 16px; }
             }
           </style>
         </head>
         <body class="admin-app">
-          <script>__ADMIN_SHARED_SCRIPT_HELPERS__</script>
           <div class="pipe-container">
             <div class="pipe-header">
-              <h1>🔧 流程配置</h1>
+              <div>
+                <h1>🔧 流程配置</h1>
+                <div class="pipe-desc" id="pipeDesc">加载中…</div>
+              </div>
               <a href="/admin">← 返回工作台</a>
             </div>
-
-            <div id="pipeline-graph"></div>
-            <div id="config-panel"></div>
+            <div id="pipeGraph" class="pipe-loading">加载流程定义…</div>
+            <div id="configPanel"></div>
           </div>
 
-          <!-- 子流程弹窗 -->
-          <div class="sub-modal-overlay" id="sub-modal">
-            <div class="sub-modal-content">
-              <div class="sub-modal-header">
-                <h3 id="sub-modal-title">子流程</h3>
-                <button class="sub-modal-close" id="sub-modal-close">&times;</button>
-              </div>
-              <div id="sub-modal-body"></div>
+          <div class="modal-overlay" id="modal">
+            <div class="modal-box">
+              <button class="modal-close" id="modalClose">✕</button>
+              <h3 id="modalTitle"></h3>
+              <div id="modalBody"></div>
             </div>
           </div>
 
           <script>
-            const { escapeHtml } = AdminUiShared;
+          (function(){
+            const API_BASE = '/api/v1';
+            const BEARER = localStorage.getItem('admin_bearer') || '';
+            const authHeaders = { 'Authorization': 'Bearer ' + BEARER, 'Content-Type': 'application/json' };
 
-            // ---- 数据驱动的流程节点 ----
-            const PIPELINE_NODES = [
-              {id:"fetch",    label:"抓取原文",    icon:"📥", phase:2, configurable:false},
-              {id:"analyze",  label:"深度分析",    icon:"🔍", phase:3, configurable:false},
-              {id:"search",   label:"搜索素材",    icon:"🌐", phase:3, configurable:false},
-              {id:"brief",    label:"生成 Brief",  icon:"📋", phase:3, configurable:false},
-              {id:"generate", label:"AI 写稿",     icon:"✍️", phase:4, configurable:true,
-               settings:["phase4.write_model"]},
-              {id:"review",   label:"AI 审核",     icon:"🔎", phase:4, configurable:true,
-               settings:["phase4.review_pass_score","phase4.similarity_max",
-                          "phase4.policy_risk_max","phase4.factual_risk_max",
-                          "phase4.ai_trace_rewrite_threshold","phase4.max_auto_revisions"]},
-              {id:"humanize", label:"人类化改写",  icon:"🧬", phase:4, configurable:false,
-               children:[
-                 {id:"humanize.detect",  label:"AI 痕迹检测", icon:"🔬"},
-                 {id:"humanize.rewrite", label:"段落改写",     icon:"✂️"},
-                 {id:"humanize.review",  label:"二次审核",     icon:"📝"}
-               ]},
-              {id:"push",     label:"推送草稿",    icon:"📤", phase:4, configurable:true,
-               settings:["phase4.auto_push_wechat_draft"]},
-            ];
+            let pipelineData = null;
+            let settingsData = {};
+            let activeStepId = null;
 
-            const NODES_PER_ROW = 4;
-            let activeNodeId = null;
-            let settingsCache = {};
+            async function fetchJSON(url) {
+              const r = await fetch(API_BASE + url, { headers: authHeaders });
+              if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
+              return r.json();
+            }
 
-            // ---- 渲染流程图（弓字形） ----
-            function renderGraph() {
-              const container = document.getElementById("pipeline-graph");
+            async function init() {
+              try {
+                const [registry, settings] = await Promise.all([
+                  fetchJSON('/admin/pipeline/registry'),
+                  fetchJSON('/admin/settings').catch(() => []),
+                ]);
+                pipelineData = registry;
+                for (const s of settings) settingsData[s.key] = s;
+                document.getElementById('pipeDesc').textContent = registry.description || '';
+                renderGraph(registry);
+              } catch(e) {
+                document.getElementById('pipeGraph').innerHTML =
+                  '<div class="pipe-loading">加载失败：' + e.message + '</div>';
+              }
+            }
+
+            function renderGraph(registry) {
+              const steps = registry.all_steps;
+              const COLS = 4;
               const rows = [];
-              for (let i = 0; i < PIPELINE_NODES.length; i += NODES_PER_ROW) {
-                rows.push(PIPELINE_NODES.slice(i, i + NODES_PER_ROW));
+              for (let i = 0; i < steps.length; i += COLS) {
+                rows.push(steps.slice(i, i + COLS));
               }
 
-              let html = "";
+              let html = '';
               rows.forEach((row, ri) => {
-                const isReverse = ri % 2 === 1;
-                const displayRow = isReverse ? [...row].reverse() : row;
-
-                // 折线连接
-                if (ri > 0) {
-                  const bendSide = isReverse ? "" : "left";
-                  html += `<div class="pipe-bend-down ${bendSide}"><span class="bend-arrow">↓</span></div>`;
-                }
-
-                html += `<div class="pipe-row ${isReverse ? "reverse" : ""}">`;
-                displayRow.forEach((node, ni) => {
-                  if (ni > 0) {
-                    const arrow = isReverse ? "←" : "→";
-                    html += `<div class="pipe-arrow">${arrow}</div>`;
+                const rev = ri % 2 === 1;
+                const display = rev ? [...row].reverse() : row;
+                html += '<div class="pipe-row' + (rev ? ' reverse' : '') + '">';
+                display.forEach((step, si) => {
+                  if (si > 0) html += '<span class="pipe-arrow">→</span>';
+                  const hasBadge = step.configurable && step.settings && step.settings.length > 0;
+                  const hasChildren = step.children && step.children.length > 0;
+                  html += '<div class="pipe-node" data-step-id="' + step.id + '">';
+                  html += '<span class="node-icon">' + step.icon + '</span>';
+                  html += '<span class="node-label">' + step.label + '</span>';
+                  if (hasBadge) {
+                    html += '<span class="node-badge">' + step.settings.length + '</span>';
                   }
-                  const cls = [
-                    "pipe-node",
-                    node.configurable ? "" : "readonly",
-                    activeNodeId === node.id ? "active" : ""
-                  ].filter(Boolean).join(" ");
-                  const badge = node.children ? `<span class="expand-icon">▶</span>` : "";
-                  const settingsBadge = node.configurable && node.settings
-                    ? `<span class="node-badge">${node.settings.length}</span>` : "";
-                  html += `<div class="${cls}" data-node="${node.id}" onclick="onNodeClick('${node.id}')">
-                    <span class="node-icon">${node.icon}</span>
-                    <span class="node-label">${escapeHtml(node.label)}</span>
-                    ${settingsBadge}${badge}
-                  </div>`;
+                  if (hasChildren) {
+                    html += '<span class="node-sub-hint">▸ ' + step.children.length + ' 子步骤</span>';
+                  }
+                  html += '</div>';
                 });
-                html += `</div>`;
+                html += '</div>';
+                // 弯道
+                if (ri < rows.length - 1) {
+                  const arrow = rev ? '↙' : '↘';
+                  html += '<div class="pipe-row"><span class="pipe-bend">' + arrow + '</span></div>';
+                }
               });
 
-              container.innerHTML = html;
+              const el = document.getElementById('pipeGraph');
+              el.className = 'pipeline-graph';
+              el.innerHTML = html;
+
+              el.querySelectorAll('.pipe-node').forEach(node => {
+                node.addEventListener('click', () => handleNodeClick(node.dataset.stepId));
+              });
             }
 
-            // ---- 节点点击 ----
-            function onNodeClick(nodeId) {
-              const node = PIPELINE_NODES.find(n => n.id === nodeId);
-              if (!node) return;
+            function handleNodeClick(stepId) {
+              const step = pipelineData.all_steps.find(s => s.id === stepId);
+              if (!step) return;
 
-              // 复合节点 → 弹窗
-              if (node.children) {
-                openSubModal(node);
-                return;
-              }
-              // 非可配置节点
-              if (!node.configurable) return;
-
-              // 切换 active
-              activeNodeId = activeNodeId === nodeId ? null : nodeId;
-              renderGraph();
-              if (activeNodeId) {
-                renderConfigPanel(node);
-              } else {
-                document.getElementById("config-panel").innerHTML = "";
-              }
-            }
-
-            // ---- 配置面板 ----
-            async function renderConfigPanel(node) {
-              const panel = document.getElementById("config-panel");
-              if (!node.settings || !node.settings.length) {
-                panel.innerHTML = `<div class="config-panel"><div class="config-empty">此环节暂无可配置参数</div></div>`;
+              // 子流程弹窗
+              if (step.children && step.children.length > 0) {
+                showSubModal(step);
                 return;
               }
 
-              panel.innerHTML = `<div class="config-panel"><div class="config-empty">加载中...</div></div>`;
-
-              // 加载设置数据
-              try {
-                const data = await request("/api/v1/admin/settings");
-                settingsCache = {};
-                (data.settings || []).forEach(s => { settingsCache[s.key] = s; });
-              } catch (e) {
-                panel.innerHTML = `<div class="config-panel"><div class="config-empty" style="color:var(--danger)">加载失败: ${escapeHtml(String(e))}</div></div>`;
+              // 配置面板
+              if (step.configurable && step.settings && step.settings.length > 0) {
+                toggleConfig(step);
                 return;
               }
-
-              let fieldsHtml = "";
-              node.settings.forEach(key => {
-                const s = settingsCache[key];
-                if (!s) return;
-                fieldsHtml += renderField(s);
-              });
-
-              panel.innerHTML = `
-                <div class="config-panel">
-                  <h3>${escapeHtml(node.icon + " " + node.label)} 参数</h3>
-                  ${fieldsHtml || '<div class="config-empty">无参数</div>'}
-                </div>`;
-
-              // 绑定事件
-              panel.querySelectorAll("[data-action=save]").forEach(btn => {
-                btn.addEventListener("click", () => onSave(btn.dataset.key));
-              });
-              panel.querySelectorAll("[data-action=reset]").forEach(btn => {
-                btn.addEventListener("click", () => onReset(btn.dataset.key));
-              });
             }
 
-            function renderField(s) {
-              const defaultVal = s.default_value;
-              const currentVal = s.effective_value;
-              const hasOverride = s.has_override;
-              let controlHtml = "";
+            function toggleConfig(step) {
+              const panel = document.getElementById('configPanel');
 
-              if (s.value_type === "boolean") {
-                const checked = currentVal ? "checked" : "";
-                controlHtml = `
-                  <label class="toggle-switch">
-                    <input type="checkbox" id="input-${s.key}" ${checked}
-                      onchange="onSave('${s.key}')">
-                    <span class="toggle-slider"></span>
-                  </label>`;
-              } else if (s.value_type === "enum" && s.options && s.options.length) {
-                const opts = s.options.map(o =>
-                  `<option value="${escapeHtml(o.value)}" ${o.value === currentVal ? "selected" : ""}>${escapeHtml(o.label)}</option>`
-                ).join("");
-                controlHtml = `
-                  <select id="input-${s.key}" onchange="onSave('${s.key}')">${opts}</select>`;
-              } else if (s.value_type === "float" || s.value_type === "integer") {
-                const step = s.value_type === "float" ? "0.01" : "1";
-                controlHtml = `
-                  <input type="number" step="${step}" id="input-${s.key}" value="${currentVal}">
-                  <button class="btn-save" data-action="save" data-key="${s.key}">保存</button>`;
-              } else {
-                controlHtml = `
-                  <input type="text" id="input-${s.key}" value="${escapeHtml(String(currentVal))}">
-                  <button class="btn-save" data-action="save" data-key="${s.key}">保存</button>`;
+              // 清除之前高亮
+              document.querySelectorAll('.pipe-node.active').forEach(n => n.classList.remove('active'));
+
+              if (activeStepId === step.id) {
+                panel.innerHTML = '';
+                activeStepId = null;
+                return;
               }
+              activeStepId = step.id;
 
-              if (hasOverride) {
-                controlHtml += `<button class="btn-reset" data-action="reset" data-key="${s.key}" title="恢复默认值 ${escapeHtml(String(defaultVal))}">↺</button>`;
-              }
+              // 高亮当前
+              const nodeEl = document.querySelector('[data-step-id="' + step.id + '"]');
+              if (nodeEl) nodeEl.classList.add('active');
 
-              return `
-                <div class="config-field" id="field-${s.key}">
-                  <div class="config-field-info">
-                    <div class="field-label">${escapeHtml(s.label)}</div>
-                    <div class="field-desc">${escapeHtml(s.description)}</div>
-                    <div class="field-default">默认值: ${escapeHtml(String(defaultVal))}${hasOverride ? " (已覆盖)" : ""}</div>
-                  </div>
-                  <div class="config-field-control">
-                    ${controlHtml}
-                    <span class="config-save-status" id="status-${s.key}"></span>
-                  </div>
-                </div>`;
+              let html = '<div class="config-panel">';
+              html += '<h3>' + step.icon + ' ' + step.label + ' 参数</h3>';
+
+              step.settings.forEach(key => {
+                const setting = settingsData[key];
+                if (!setting) {
+                  html += '<div class="config-row"><span class="config-label">' + key + '</span><span class="config-default">未注册</span></div>';
+                  return;
+                }
+                const val = setting.effective_value || setting.default_value || '';
+                const defVal = setting.default_value || '';
+                html += '<div class="config-row" data-key="' + key + '">';
+                html += '<span class="config-label">' + setting.label + '</span>';
+                html += '<span class="config-default">默认: ' + defVal + '</span>';
+                html += '<input class="config-input" type="text" value="' + val + '" data-original="' + val + '" />';
+                html += '<button class="config-btn save" onclick="window.__saveSetting(\\'' + key + '\\', this)">保存</button>';
+                if (setting.has_override) {
+                  html += '<button class="config-btn reset" onclick="window.__resetSetting(\\'' + key + '\\', this)">恢复默认</button>';
+                }
+                html += '<span class="config-saved" style="display:none">✓</span>';
+                html += '</div>';
+              });
+
+              html += '</div>';
+              panel.innerHTML = html;
             }
 
-            // ---- 保存 ----
-            async function onSave(key) {
-              const s = settingsCache[key];
-              if (!s) return;
-              const statusEl = document.getElementById("status-" + key);
-              let value;
-
-              if (s.value_type === "boolean") {
-                value = document.getElementById("input-" + key).checked;
-              } else {
-                value = document.getElementById("input-" + key).value;
-              }
-
+            window.__saveSetting = async function(key, btn) {
+              const row = btn.closest('.config-row');
+              const input = row.querySelector('.config-input');
+              const val = input.value.trim();
+              btn.disabled = true;
               try {
-                await request(`/api/v1/admin/settings/${encodeURIComponent(key)}`, {
-                  method: "PUT",
-                  headers: {"Content-Type": "application/json"},
-                  body: JSON.stringify({value}),
+                const r = await fetch(API_BASE + '/admin/settings/' + key, {
+                  method: 'PUT',
+                  headers: authHeaders,
+                  body: JSON.stringify({ value: val }),
                 });
-                showStatus(statusEl, "ok", "✓ 已保存");
-                // 刷新面板
-                const node = PIPELINE_NODES.find(n => n.settings && n.settings.includes(key));
-                if (node) setTimeout(() => renderConfigPanel(node), 600);
-              } catch (e) {
-                showStatus(statusEl, "err", "✗ " + (e.message || String(e)));
+                if (!r.ok) {
+                  const err = await r.json().catch(() => ({}));
+                  alert('保存失败：' + (err.detail || r.statusText));
+                  return;
+                }
+                const updated = await r.json();
+                settingsData[key] = updated;
+                input.dataset.original = val;
+                const ok = row.querySelector('.config-saved');
+                if (ok) { ok.style.display = 'inline'; setTimeout(() => ok.style.display = 'none', 2000); }
+              } finally {
+                btn.disabled = false;
               }
-            }
+            };
 
-            // ---- 重置 ----
-            async function onReset(key) {
-              const statusEl = document.getElementById("status-" + key);
+            window.__resetSetting = async function(key, btn) {
+              const row = btn.closest('.config-row');
+              btn.disabled = true;
               try {
-                await request(`/api/v1/admin/settings/${encodeURIComponent(key)}`, {
-                  method: "DELETE",
+                const r = await fetch(API_BASE + '/admin/settings/' + key, {
+                  method: 'PUT',
+                  headers: authHeaders,
+                  body: JSON.stringify({ reset_to_default: true }),
                 });
-                showStatus(statusEl, "ok", "✓ 已恢复默认");
-                const node = PIPELINE_NODES.find(n => n.settings && n.settings.includes(key));
-                if (node) setTimeout(() => renderConfigPanel(node), 600);
-              } catch (e) {
-                showStatus(statusEl, "err", "✗ " + (e.message || String(e)));
+                if (!r.ok) {
+                  const err = await r.json().catch(() => ({}));
+                  alert('重置失败：' + (err.detail || r.statusText));
+                  return;
+                }
+                const updated = await r.json();
+                settingsData[key] = updated;
+                const input = row.querySelector('.config-input');
+                if (input) input.value = updated.effective_value || updated.default_value || '';
+                btn.remove();
+                const ok = row.querySelector('.config-saved');
+                if (ok) { ok.style.display = 'inline'; ok.textContent = '✓ 已恢复'; setTimeout(() => ok.style.display = 'none', 2000); }
+              } finally {
+                btn.disabled = false;
               }
-            }
+            };
 
-            function showStatus(el, cls, text) {
-              if (!el) return;
-              el.className = "config-save-status " + cls;
-              el.textContent = text;
-              setTimeout(() => { el.textContent = ""; el.className = "config-save-status"; }, 3000);
-            }
-
-            // ---- 子流程弹窗 ----
-            function openSubModal(node) {
-              const modal = document.getElementById("sub-modal");
-              const title = document.getElementById("sub-modal-title");
-              const body  = document.getElementById("sub-modal-body");
-              title.textContent = node.icon + " " + node.label + " — 子流程";
-
-              let html = '<div class="sub-flow">';
-              (node.children || []).forEach((child, i) => {
-                if (i > 0) html += `<span class="sub-arrow">→</span>`;
-                html += `<div class="sub-node">
-                  <span>${child.icon || "•"}</span>
-                  <span>${escapeHtml(child.label)}</span>
-                </div>`;
+            function showSubModal(step) {
+              document.getElementById('modalTitle').textContent = step.icon + ' ' + step.label + ' 子流程';
+              let html = '';
+              step.children.forEach((child, i) => {
+                if (i > 0) html += '<div class="sub-arrow">↓</div>';
+                html += '<div class="sub-step"><span class="sub-icon">' + child.icon + '</span>' + child.label + '</div>';
               });
-              html += "</div>";
-              html += `<p style="font-size:13px;color:var(--text-secondary);margin:0;">
-                该环节包含 ${(node.children||[]).length} 个内部步骤，均在 pipeline 执行时自动串联运行。
-              </p>`;
-
-              body.innerHTML = html;
-              modal.classList.add("visible");
+              document.getElementById('modalBody').innerHTML = html;
+              document.getElementById('modal').classList.add('open');
             }
-            document.getElementById("sub-modal-close").addEventListener("click", () => {
-              document.getElementById("sub-modal").classList.remove("visible");
+
+            document.getElementById('modalClose').addEventListener('click', () => {
+              document.getElementById('modal').classList.remove('open');
             });
-            document.getElementById("sub-modal").addEventListener("click", (e) => {
-              if (e.target === e.currentTarget) e.currentTarget.classList.remove("visible");
+            document.getElementById('modal').addEventListener('click', (e) => {
+              if (e.target === document.getElementById('modal')) {
+                document.getElementById('modal').classList.remove('open');
+              }
             });
 
-            // ---- fetch 封装 ----
-            async function request(url, opts = {}) {
-              const resp = await fetch(url, {...opts, credentials: "same-origin"});
-              const data = await resp.json();
-              if (!resp.ok) throw new Error(data.detail || data.error || resp.statusText);
-              return data;
-            }
-
-            // 初始化
-            renderGraph();
+            init();
+          })();
           </script>
         </body>
         </html>
