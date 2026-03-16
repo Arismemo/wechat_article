@@ -824,8 +824,8 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                 const cat = statusCategory(t.status);
                 const label = statusLabel(t.status);
                 const progress = statusProgress(t.status);
-                const title = t.title || t.source_url || t.id.slice(0, 12);
-                const isExpanded = expandedTaskId === t.id;
+                const title = t.title || t.source_url || t.task_id.slice(0, 12);
+                const isExpanded = expandedTaskId === t.task_id;
                 const cardClass = `task-card ${{isExpanded ? "expanded" : ""}} ${{cat === "done" ? "done-card" : ""}}`;
 
                 // 卡片内按钮
@@ -833,16 +833,16 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                 if (cat === "pending") {{
                   if (t.status === "review_passed") {{
                     actions = `<div class="task-actions">
-                      <button class="btn-primary" data-action="push" data-id="${{t.id}}">推送</button>
+                      <button class="btn-primary" data-action="push" data-id="${{t.task_id}}">推送</button>
                     </div>`;
                   }} else {{
                     actions = `<div class="task-actions">
-                      <button class="btn-primary" data-action="approve" data-id="${{t.id}}">确认</button>
+                      <button class="btn-primary" data-action="approve" data-id="${{t.task_id}}">确认</button>
                     </div>`;
                   }}
                 }} else if (cat === "failed") {{
                   actions = `<div class="task-actions">
-                    <button class="btn-danger" data-action="retry" data-id="${{t.id}}">重试</button>
+                    <button class="btn-danger" data-action="retry" data-id="${{t.task_id}}">重试</button>
                   </div>`;
                 }}
 
@@ -855,11 +855,11 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                 // 展开详情区
                 let detailHtml = "";
                 if (isExpanded) {{
-                  detailHtml = `<div class="task-detail" id="detail-${{t.id}}">加载中...</div>`;
+                  detailHtml = `<div class="task-detail" id="detail-${{t.task_id}}">加载中...</div>`;
                 }}
 
                 return `
-                  <div class="${{cardClass}}" data-task-id="${{t.id}}">
+                  <div class="${{cardClass}}" data-task-id="${{t.task_id}}">
                     <div class="task-card-header">
                       <div class="task-status-dot ${{cat}}"></div>
                       <div class="task-title">${{escapeHtml(title)}}</div>
