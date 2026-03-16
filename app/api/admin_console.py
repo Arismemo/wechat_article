@@ -695,6 +695,78 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               vertical-align: middle;
               margin-right: 6px;
             }}
+
+            /* Pipeline 步骤进度条 */
+            .pipeline-steps {{
+              display: flex;
+              align-items: center;
+              gap: 0;
+              padding: 12px 0 8px;
+              overflow-x: auto;
+            }}
+            .pipeline-step {{
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              gap: 4px;
+              min-width: 48px;
+              position: relative;
+            }}
+            .pipeline-step .ps-icon {{
+              width: 28px; height: 28px;
+              border-radius: 50%;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-size: 13px;
+              border: 2px solid var(--border);
+              background: var(--bg-card);
+              color: var(--text-secondary);
+              transition: all 0.3s;
+            }}
+            .pipeline-step.done .ps-icon {{
+              border-color: #10b981;
+              background: #ecfdf5;
+              color: #10b981;
+            }}
+            .pipeline-step.active .ps-icon {{
+              border-color: var(--primary);
+              background: #eef2ff;
+              color: var(--primary);
+              box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+              animation: pulse-step 1.5s ease-in-out infinite;
+            }}
+            @keyframes pulse-step {{
+              0%, 100% {{ box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15); }}
+              50% {{ box-shadow: 0 0 0 6px rgba(99, 102, 241, 0.08); }}
+            }}
+            .pipeline-step .ps-label {{
+              font-size: 10px;
+              color: var(--text-secondary);
+              white-space: nowrap;
+              max-width: 56px;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              text-align: center;
+            }}
+            .pipeline-step.active .ps-label {{
+              color: var(--primary);
+              font-weight: 600;
+            }}
+            .pipeline-step.done .ps-label {{
+              color: #10b981;
+            }}
+            .pipeline-connector {{
+              flex: 1;
+              height: 2px;
+              min-width: 12px;
+              background: var(--border);
+              margin: 0 2px;
+              margin-bottom: 18px;
+            }}
+            .pipeline-connector.done {{
+              background: #10b981;
+            }}
           </style>
         </head>
         <body class="admin-app">
@@ -758,7 +830,12 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
           <script>
             const {{ escapeHtml }} = AdminUiShared;
             // 状态映射
-            const PROCESSING = new Set(["queued", "building_brief", "generating", "reviewing"]);
+            const PROCESSING = new Set([
+              "queued", "deduping", "fetching_source", "source_ready",
+              "analyzing_source", "searching_related", "fetching_related",
+              "building_brief", "brief_ready", "generating", "reviewing",
+              "pushing_wechat_draft",
+            ]);
             const PENDING = new Set(["needs_manual_review", "needs_regenerate", "review_passed", "needs_manual_source"]);
             const DONE = new Set(["draft_saved"]);
 
@@ -770,9 +847,20 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               return "processing";
             }};
 
+            // 状态 → 中文标签
+            const STATUS_STEP_LABEL = {{
+              queued: "排队中", deduping: "去重检查",
+              fetching_source: "抓取原文", source_ready: "原文就绪",
+              analyzing_source: "深度分析", searching_related: "搜索素材",
+              fetching_related: "抓取素材", building_brief: "生成 Brief",
+              brief_ready: "Brief 就绪", generating: "AI 写稿",
+              reviewing: "AI 审核", review_passed: "审核通过",
+              pushing_wechat_draft: "推送草稿", draft_saved: "已完成",
+            }};
+
             const statusLabel = (s) => {{
               const cat = statusCategory(s);
-              if (cat === "processing") return "处理中";
+              if (cat === "processing") return STATUS_STEP_LABEL[s] || "处理中";
               if (cat === "pending") {{
                 if (s === "review_passed") return "待推送";
                 if (s === "needs_regenerate") return "待重写";
@@ -783,19 +871,64 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               return s;
             }};
 
-            // 进度估算
+            // 进度估算（与后端 progress.py 保持一致）
             const statusProgress = (s) => {{
               const map = {{
-                "queued": 10,
-                "building_brief": 30,
-                "generating": 55,
-                "reviewing": 80,
-                "needs_manual_review": 90,
-                "needs_regenerate": 70,
-                "review_passed": 95,
-                "draft_saved": 100,
+                "queued": 5, "deduping": 10,
+                "fetching_source": 20, "source_ready": 30,
+                "analyzing_source": 40, "searching_related": 50,
+                "fetching_related": 60, "building_brief": 70,
+                "brief_ready": 75, "generating": 80,
+                "reviewing": 90, "review_passed": 95,
+                "pushing_wechat_draft": 97, "draft_saved": 100,
+                "needs_manual_review": 90, "needs_regenerate": 70,
               }};
               return map[s] || 50;
+            }};
+
+            // Pipeline 步骤定义（用于进度条可视化）
+            const PIPELINE_STEPS = [
+              {{ id: "fetch", label: "抓取", icon: "📥", statuses: ["fetching_source", "source_ready"] }},
+              {{ id: "analyze", label: "分析", icon: "🔍", statuses: ["analyzing_source"] }},
+              {{ id: "search", label: "搜索", icon: "🌐", statuses: ["searching_related", "fetching_related"] }},
+              {{ id: "brief", label: "Brief", icon: "📋", statuses: ["building_brief", "brief_ready"] }},
+              {{ id: "write", label: "写稿", icon: "✍️", statuses: ["generating"] }},
+              {{ id: "review", label: "审核", icon: "🔎", statuses: ["reviewing"] }},
+              {{ id: "push", label: "推送", icon: "📤", statuses: ["pushing_wechat_draft", "draft_saved"] }},
+            ];
+
+            // 构建步骤进度条 HTML
+            const buildPipelineProgress = (status) => {{
+              const cat = statusCategory(status);
+              if (cat !== "processing" && cat !== "pending" && cat !== "done") return "";
+
+              let activeIdx = -1;
+              for (let i = 0; i < PIPELINE_STEPS.length; i++) {{
+                if (PIPELINE_STEPS[i].statuses.includes(status)) {{ activeIdx = i; break; }}
+              }}
+              // queued / deduping 还没进入第一步
+              if (activeIdx < 0 && (status === "queued" || status === "deduping")) activeIdx = -0.5;
+              // 已完成 / 待推送等终态
+              if (cat === "done" || status === "review_passed") activeIdx = PIPELINE_STEPS.length;
+              if (status === "needs_manual_review" || status === "needs_regenerate") activeIdx = 5; // 停在审核
+
+              let html = '<div class="pipeline-steps">';
+              PIPELINE_STEPS.forEach((step, i) => {{
+                if (i > 0) {{
+                  const connDone = i <= activeIdx;
+                  html += `<div class="pipeline-connector${{connDone ? ' done' : ''}}"></div>`;
+                }}
+                let cls = '';
+                if (i < activeIdx) cls = 'done';
+                else if (i === activeIdx) cls = 'active';
+                const iconContent = cls === 'done' ? '✓' : step.icon;
+                html += `<div class="pipeline-step ${{cls}}">`;
+                html += `<div class="ps-icon">${{iconContent}}</div>`;
+                html += `<div class="ps-label">${{step.label}}</div>`;
+                html += '</div>';
+              }});
+              html += '</div>';
+              return html;
             }};
 
             // DOM 元素
@@ -1004,12 +1137,16 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                 if (ws.created_at) meta.push(["创建", escapeHtml(new Date(ws.created_at).toLocaleString("zh-CN"))]);
                 if (ws.error) meta.push(["错误", `<span style="color:var(--danger)">${{escapeHtml(ws.error)}}</span>`]);
 
+                // Pipeline 步骤进度条
+                const pipelineHtml = buildPipelineProgress(ws.status);
+
                 let metaHtml = `
                   <div class="detail-section">
                     <h4>基本信息</h4>
                     <dl class="detail-meta">
                       ${{meta.map(([k, v]) => `<dt>${{k}}</dt><dd>${{v}}</dd>`).join("")}}
                     </dl>
+                    ${{pipelineHtml}}
                   </div>`;
 
                 // AI 审核意见
