@@ -531,21 +531,13 @@ def phase5_console() -> str:
         ),
     )
     overview_html = admin_overview_strip(
-        "审核概览",
+        "",
         "".join(
             [
-                admin_overview_card("可见任务", "0", "当前筛选后显示在审核台里的任务数量。", value_id="overview-total"),
-                admin_overview_card("等你处理", "0", "需要人工审核、重写或决定是否推稿的任务。", value_id="overview-manual"),
-                admin_overview_card("待推草稿", "0", "已经通过审核，下一步是决定是否推送草稿。", value_id="overview-ready"),
-                admin_overview_card("失败 / 异常", "0", "优先看失败任务，先判断补数据还是直接重跑。", value_id="overview-failed"),
-                admin_overview_card(
-                    "当前优先",
-                    "先刷新最近任务，再点一条卡片进入工作区。",
-                    "右侧工作区会集中展示当前动作、草稿状态、版本差异和审计轨迹。",
-                    highlight=True,
-                    value_id="overview-focus",
-                    description_id="overview-focus-note",
-                ),
+                admin_overview_card("任务", "0", value_id="overview-total"),
+                admin_overview_card("待审核", "0", value_id="overview-manual"),
+                admin_overview_card("待推送", "0", value_id="overview-ready"),
+                admin_overview_card("异常", "0", value_id="overview-failed"),
             ]
         ),
     )
@@ -559,169 +551,15 @@ def phase5_console() -> str:
           <title>Phase 5 工作台</title>
           <style>
             :root {
-              --bg: #f4efe6;
-              --panel: rgba(255, 250, 242, 0.92);
-              --line: #d4c2aa;
-              --text: #241d14;
-              --muted: #6a5e50;
-              --accent: #1d6a5f;
-              --accent-dark: #12483f;
-              --danger: #9d3a2e;
-              --warn: #ba7d1c;
-              --ok: #2d7b4f;
-              --shadow: 0 18px 48px rgba(63, 47, 25, 0.1);
-            }
-            * { box-sizing: border-box; }
-            body {
-              margin: 0;
-              line-height: 1.5;
-              font-family: "PingFang SC", "Noto Serif SC", serif;
-              color: var(--text);
-              background:
-                radial-gradient(circle at top left, rgba(255, 233, 191, 0.55), transparent 24%),
-                radial-gradient(circle at bottom right, rgba(182, 224, 209, 0.45), transparent 28%),
-                linear-gradient(140deg, #f0e8db 0%, #f7f3eb 42%, #ece4d7 100%);
-              min-height: 100vh;
-            }
-            .skip-link {
-              position: absolute;
-              top: 16px;
-              left: 16px;
-              transform: translateY(-180%);
-              padding: 10px 14px;
-              border-radius: 999px;
-              background: var(--accent-dark);
-              color: #f7faf8;
-              text-decoration: none;
-              z-index: 20;
-              transition: transform 120ms ease;
-            }
-            .skip-link:focus-visible {
-              transform: translateY(0);
-            }
-            main {
-              max-width: 1280px;
-              margin: 0 auto;
-              padding: 32px 20px 52px;
-            }
-            .hero {
-              display: grid;
-              gap: 14px;
-              padding: 24px;
-              border: 1px solid var(--line);
-              border-radius: 28px;
-              background: linear-gradient(135deg, rgba(255, 248, 239, 0.92), rgba(248, 244, 237, 0.86));
-              box-shadow: var(--shadow);
-              backdrop-filter: blur(10px);
-              margin-bottom: 20px;
-            }
-            .hero-grid {
-              display: grid;
-              grid-template-columns: minmax(0, 1.28fr) minmax(320px, 0.92fr);
-              gap: 18px;
-              align-items: stretch;
-            }
-            .hero-copy {
-              display: grid;
-              gap: 10px;
-              align-content: start;
-            }
-            .eyebrow {
-              display: inline-flex;
-              width: fit-content;
-              padding: 6px 10px;
-              border-radius: 999px;
-              background: rgba(29, 106, 95, 0.12);
-              color: var(--accent-dark);
-              font-size: 12px;
-              letter-spacing: 0.08em;
-            }
-            .hero h1 {
-              margin: 0;
-              font-size: 42px;
-              line-height: 1.04;
-              letter-spacing: 0.01em;
-            }
-            .hero p {
-              margin: 0;
-              color: var(--muted);
-              max-width: 820px;
-              line-height: 1.75;
-            }
-            .hero-status-card {
-              display: grid;
-              gap: 14px;
-              padding: 18px;
-              border-radius: 24px;
-              border: 1px solid rgba(29, 106, 95, 0.12);
-              background: linear-gradient(160deg, rgba(255, 252, 247, 0.95), rgba(249, 245, 237, 0.9));
-            }
-            .hero-status-copy {
-              margin: 0;
-              font-size: 15px;
-              line-height: 1.7;
-            }
-            .hero-summary {
-              display: grid;
-              grid-template-columns: repeat(2, minmax(0, 1fr));
-              gap: 10px;
-            }
-            .hero-summary-card {
-              display: grid;
-              gap: 6px;
-              padding: 12px 14px;
-              border-radius: 18px;
-              border: 1px solid rgba(65, 48, 27, 0.1);
-              background: rgba(255, 253, 249, 0.78);
-            }
-            .hero-summary-card strong {
-              color: var(--muted);
-              font-size: 12px;
-              font-weight: 500;
-            }
-            .hero-summary-card span {
-              font-size: 16px;
-              line-height: 1.55;
-            }
-            .hero-summary-card.wide {
-              grid-column: 1 / -1;
-              background: linear-gradient(135deg, rgba(29, 106, 95, 0.1), rgba(255, 249, 242, 0.95));
-            }
-            .overview-strip {
-              display: grid;
-              grid-template-columns: repeat(4, minmax(0, 1fr));
-              gap: 12px;
-              margin-bottom: 20px;
-            }
-            .overview-card {
-              display: grid;
-              gap: 8px;
-              min-width: 0;
-              padding: 16px;
-              border-radius: 20px;
-              border: 1px solid var(--line);
-              background: rgba(255, 251, 246, 0.9);
-              box-shadow: 0 14px 32px rgba(58, 40, 18, 0.08);
-            }
-            .overview-card.highlight {
-              grid-column: span 2;
-              background: linear-gradient(135deg, rgba(29, 106, 95, 0.1), rgba(255, 249, 242, 0.96));
-            }
-            .overview-card strong {
-              color: var(--muted);
-              font-size: 12px;
-              font-weight: 500;
-            }
-            .overview-card span {
-              display: block;
-              font-size: 28px;
-              line-height: 1.1;
-            }
-            .overview-card p {
-              margin: 0;
-              color: var(--muted);
-              font-size: 13px;
-              line-height: 1.7;
+              --bg: var(--bg-body);
+              --panel: var(--bg-card);
+              --line: var(--border);
+              --muted: var(--text-secondary);
+              --accent: var(--primary);
+              --accent-dark: var(--primary-hover);
+              --warn: var(--warning);
+              --ok: var(--success);
+              --shadow: var(--shadow-card);
             }
             .layout {
               display: grid;
@@ -1293,29 +1131,28 @@ def phase5_console() -> str:
             <section class="layout" id="review-region">
               <div class="stack">
                 <section class="panel">
-                  <h2>先选任务</h2>
-                  <p class="panel-intro">默认直接复用当前后台会话。左边只负责选任务和触发动作，右边统一看工作区内容；如果长时间停留后提示未授权，刷新页面重新进入后台即可。</p>
+                  <h2>任务</h2>
                   <div class="grid single">
                     <div class="field">
                       <label for="device">device_id</label>
                       <input id="device" type="text" value="phase5-console" aria-describedby="device-hint" />
                     </div>
-                    <p class="field-hint" id="device-hint">会写入审计日志，建议填当前值班人或具体操作来源。</p>
+                    <p class="field-hint" id="device-hint">写入审计日志。</p>
                     <div class="field">
                       <label for="url">微信文章链接</label>
                       <input id="url" type="url" placeholder="https://mp.weixin.qq.com/s/..." aria-describedby="url-hint" />
                     </div>
-                    <p class="field-hint" id="url-hint">当你要从新链接直接开任务时再填它；已有任务优先直接填 `task_id`。</p>
+                    <p class="field-hint" id="url-hint">已有任务可直接填 task_id。</p>
                     <div class="field">
                       <label for="task">task_id</label>
                       <input id="task" type="text" placeholder="f703c3ef-..." aria-describedby="task-hint" />
                     </div>
-                    <p class="field-hint" id="task-hint">刷新最近任务后，点卡片按钮会自动把 `task_id` 填到这里。</p>
+                    <p class="field-hint" id="task-hint">点击最近任务卡片自动填充。</p>
                     <div class="field">
                       <label for="review-note">人工审核备注</label>
                       <textarea id="review-note" placeholder="会写入 audit log，例如：结构已达标，可人工放行；或：观点重复，退回重写。" aria-describedby="review-note-hint"></textarea>
                     </div>
-                    <p class="field-hint" id="review-note-hint">备注会跟随人工通过、驳回和推稿许可一起写入审计轨迹，尽量写出决定依据。</p>
+                    <p class="field-hint" id="review-note-hint">备注写入审计轨迹。</p>
                   </div>
                   <div class="action-blocks">
                     <div class="action-block">
@@ -1346,30 +1183,13 @@ def phase5_console() -> str:
                       </div>
                     </div>
                   </div>
-                  <p class="hint">先加载详情，再决定：重跑、通过、驳回，或者推稿。危险动作会在工作区里给出上下文再判断。</p>
+
                 </section>
 
-                <section class="panel">
-                  <h2>怎么用</h2>
-                  <p class="panel-intro">审核台不是从左到右把所有按钮都点一遍，而是按任务状态决定下一步。</p>
-                  <div class="meta">
-                    <div>1. 先刷新最近任务，再点一条卡片。</div>
-                    <div>2. 右边先看状态、最新一稿和风险。</div>
-                    <div>3. 可用就通过，不行就驳回或重跑。</div>
-                  </div>
-                  <details class="fold">
-                    <summary>再看完整规则</summary>
-                    <div class="meta">
-                      <div>研究层明显缺信息时，先入队 Phase3；Brief 已够但稿子不行时，直接重跑 Phase4。</div>
-                      <div>已推草稿的版本不允许再驳回；人工审核备注会写入 audit log。</div>
-                      <div>只有 latest generation 已 accepted 且推草稿许可允许时，才推微信草稿箱。</div>
-                    </div>
-                  </details>
-                </section>
+
 
                 <section class="panel">
-                  <h2>任务看板</h2>
-                  <p class="panel-intro">默认先把还没收口的任务放到前面。先筛“待人工审核 / 待重生成 / 待推草稿”，再看右侧工作区。</p>
+                  <h2>看板</h2>
                   <div class="filter-grid">
                     <div>
                       <label for="recent-status-filter">状态筛选</label>
@@ -1408,10 +1228,9 @@ def phase5_console() -> str:
 
               <div class="stack">
                 <section class="panel">
-                  <h2>任务工作台</h2>
-                  <p class="panel-intro">这里集中看当前动作、推稿许可、源文摘要、Brief、最新成稿、版本差异和审计轨迹。</p>
+                  <h2>详情</h2>
                   <div class="workspace" id="workspace" aria-busy="false">
-                    <div class="hint">先加载 task_id 或刷新最近任务。</div>
+                    <div class="hint">← 选择一个任务</div>
                   </div>
                 </section>
 
@@ -1605,32 +1424,32 @@ def phase5_console() -> str:
               return text.length > limit ? `${text.slice(0, limit)}...` : text;
             };
             const nextStepText = (task) => {
-              if (!task) return "先刷新最近任务，再点一条卡片。";
-              if (task.error) return `先处理这个报错：${task.error}`;
-              if (READY_STATUSES.has(task.status)) return "这条已经审过了，下一步是决定是否推草稿。";
-              if (WAITING_STATUSES.has(task.status)) return "这条需要你判断是否通过还是退回重写。";
-              if (FAILED_STATUSES.has(task.status)) return "这条先看错误，再决定补数据还是重跑。";
-              if (task.status === "draft_saved") return "这条已经进草稿箱，可以去公众号后台检查并发布。";
-              return "系统还在推进，先看右侧工作区和最新状态。";
+              if (!task) return "选择一个任务";
+              if (task.error) return `错误：${task.error}`;
+              if (READY_STATUSES.has(task.status)) return "→ 推送草稿";
+              if (WAITING_STATUSES.has(task.status)) return "→ 通过 或 驳回";
+              if (FAILED_STATUSES.has(task.status)) return "→ 重试";
+              if (task.status === "draft_saved") return "✓ 已推送";
+              return "自动处理中…";
             };
             const renderOverview = (tasks = []) => {
               const manualCount = tasks.filter((task) => WAITING_STATUSES.has(task.status)).length;
               const readyCount = tasks.filter((task) => READY_STATUSES.has(task.status)).length;
               const failedCount = tasks.filter((task) => FAILED_STATUSES.has(task.status)).length;
-              let focus = "先刷新最近任务，再点一条卡片进入工作区。";
-              let note = "右侧工作区会集中展示当前动作、草稿状态、版本差异和审计轨迹。";
+              let focus = "无待处理任务";
+              let note = "";
               if (manualCount > 0) {
-                focus = `先处理 ${manualCount} 条待人工判断任务`;
-                note = "优先看待人工审核和待重生成任务，避免稿件停在最后一步。";
+                focus = `${manualCount} 个待处理`;
+                note = "";
               } else if (readyCount > 0) {
-                focus = `有 ${readyCount} 条任务已经待推草稿`;
-                note = "先确认最新一稿和推稿许可，再决定是否推送到微信草稿箱。";
+                focus = `${readyCount} 个待推送`;
+                note = "";
               } else if (failedCount > 0) {
-                focus = `有 ${failedCount} 条异常任务需要排查`;
-                note = "优先看失败任务的错误信息，再决定补源文、重跑 P3 还是重跑 P4。";
+                focus = `${failedCount} 个异常`;
+                note = "";
               } else if (tasks.length > 0) {
-                focus = "当前列表没有卡住任务，可以按更新时间继续检查。";
-                note = "先抽查最新几条任务，确认审稿结论、草稿状态和推稿许可一致。";
+                focus = "无异常";
+                note = "";
               }
               overviewTotalEl.textContent = String(tasks.length);
               overviewManualEl.textContent = String(manualCount);
@@ -2754,20 +2573,12 @@ def phase6_console() -> str:
         ),
     )
     overview_html = admin_overview_strip(
-        "反馈概览",
+        "",
         "".join(
             [
-                admin_overview_card("当前任务反馈", "0", "按当前 task_id 回收到的反馈快照数量。", value_id="overview-feedback-count"),
-                admin_overview_card("实验榜样本", "0", "当前页已拉下来的 prompt 实验排行条目数。", value_id="overview-experiment-count"),
-                admin_overview_card("风格资产", "0", "当前页已拉下来的可复用写法资产数量。", value_id="overview-asset-count"),
-                admin_overview_card(
-                    "当前优先",
-                    "先补 task_id，再看当前任务有没有已有反馈。",
-                    "没有 task_id 时，只有实验榜和资产库能独立查询；导入与同步都需要任务上下文。",
-                    highlight=True,
-                    value_id="overview-focus",
-                    description_id="overview-focus-note",
-                ),
+                admin_overview_card("反馈", "0", value_id="overview-feedback-count"),
+                admin_overview_card("实验", "0", value_id="overview-experiment-count"),
+                admin_overview_card("资产", "0", value_id="overview-asset-count"),
             ]
         ),
     )
@@ -2781,168 +2592,16 @@ def phase6_console() -> str:
           <title>Phase 6 反馈台</title>
           <style>
             :root {
-              --bg: #edf2ec;
-              --panel: rgba(250, 255, 248, 0.92);
-              --line: #bdd0be;
-              --text: #1e271d;
-              --muted: #5d6b5e;
-              --accent: #2b6f58;
-              --accent-dark: #1b4b3b;
-              --danger: #9b4130;
-              --warn: #a87418;
-              --ink: #163028;
-              --shadow: 0 18px 46px rgba(24, 42, 29, 0.1);
-            }
-            * { box-sizing: border-box; }
-            body {
-              margin: 0;
-              line-height: 1.5;
-              color: var(--text);
-              font-family: "PingFang SC", "Noto Serif SC", serif;
-              background:
-                radial-gradient(circle at top left, rgba(243, 250, 214, 0.55), transparent 24%),
-                radial-gradient(circle at right bottom, rgba(197, 234, 219, 0.45), transparent 28%),
-                linear-gradient(140deg, #e9eee7 0%, #f3f6f0 42%, #e7eee5 100%);
-              min-height: 100vh;
-            }
-            .skip-link {
-              position: absolute;
-              top: 16px;
-              left: 16px;
-              transform: translateY(-180%);
-              padding: 10px 14px;
-              border-radius: 999px;
-              background: var(--accent-dark);
-              color: #f7faf8;
-              text-decoration: none;
-              z-index: 20;
-              transition: transform 120ms ease;
-            }
-            .skip-link:focus-visible {
-              transform: translateY(0);
-            }
-            main {
-              max-width: 1280px;
-              margin: 0 auto;
-              padding: 32px 20px 52px;
-            }
-            .hero {
-              display: grid;
-              gap: 14px;
-              padding: 24px;
-              border: 1px solid var(--line);
-              border-radius: 28px;
-              background: linear-gradient(135deg, rgba(252, 255, 250, 0.94), rgba(244, 249, 242, 0.9));
-              box-shadow: var(--shadow);
-              backdrop-filter: blur(10px);
-              margin-bottom: 20px;
-            }
-            .hero-grid {
-              display: grid;
-              grid-template-columns: minmax(0, 1.24fr) minmax(320px, 0.94fr);
-              gap: 18px;
-              align-items: stretch;
-            }
-            .hero-copy {
-              display: grid;
-              gap: 10px;
-              align-content: start;
-            }
-            .eyebrow {
-              display: inline-flex;
-              width: fit-content;
-              padding: 6px 10px;
-              border-radius: 999px;
-              background: rgba(43, 111, 88, 0.12);
-              color: var(--accent-dark);
-              font-size: 12px;
-              letter-spacing: 0.08em;
-            }
-            .hero h1 {
-              margin: 0;
-              font-size: 42px;
-              line-height: 1.04;
-            }
-            .hero p {
-              margin: 0;
-              max-width: 820px;
-              color: var(--muted);
-              line-height: 1.75;
-            }
-            .hero-status-card {
-              display: grid;
-              gap: 14px;
-              padding: 18px;
-              border-radius: 24px;
-              border: 1px solid rgba(43, 111, 88, 0.14);
-              background: linear-gradient(160deg, rgba(255, 255, 252, 0.95), rgba(244, 249, 242, 0.92));
-            }
-            .hero-status-copy {
-              margin: 0;
-              font-size: 15px;
-              line-height: 1.7;
-            }
-            .hero-summary {
-              display: grid;
-              grid-template-columns: repeat(2, minmax(0, 1fr));
-              gap: 10px;
-            }
-            .hero-summary-card {
-              display: grid;
-              gap: 6px;
-              padding: 12px 14px;
-              border-radius: 18px;
-              border: 1px solid rgba(22, 48, 40, 0.08);
-              background: rgba(255, 255, 252, 0.82);
-            }
-            .hero-summary-card strong {
-              color: var(--muted);
-              font-size: 12px;
-              font-weight: 500;
-            }
-            .hero-summary-card span {
-              font-size: 16px;
-              line-height: 1.55;
-            }
-            .hero-summary-card.wide {
-              grid-column: 1 / -1;
-              background: linear-gradient(135deg, rgba(43, 111, 88, 0.1), rgba(252, 255, 250, 0.96));
-            }
-            .overview-strip {
-              display: grid;
-              grid-template-columns: repeat(4, minmax(0, 1fr));
-              gap: 12px;
-              margin-bottom: 20px;
-            }
-            .overview-card {
-              display: grid;
-              gap: 8px;
-              min-width: 0;
-              padding: 16px;
-              border-radius: 20px;
-              border: 1px solid var(--line);
-              background: rgba(250, 255, 248, 0.88);
-              box-shadow: 0 14px 32px rgba(24, 42, 29, 0.08);
-            }
-            .overview-card.highlight {
-              grid-column: span 2;
-              background: linear-gradient(135deg, rgba(43, 111, 88, 0.1), rgba(252, 255, 250, 0.96));
-            }
-            .overview-card strong {
-              color: var(--muted);
-              font-size: 12px;
-              font-weight: 500;
-            }
-            .overview-card span {
-              display: block;
-              font-size: 28px;
-              line-height: 1.1;
-            }
-            .overview-card p {
-              margin: 0;
-              color: var(--muted);
-              font-size: 13px;
-              line-height: 1.7;
+              --bg: var(--bg-body);
+              --panel: var(--bg-card);
+              --line: var(--border);
+              --muted: var(--text-secondary);
+              --accent: var(--primary);
+              --accent-dark: var(--primary-hover);
+              --warn: var(--warning);
+              --ok: var(--success);
+              --ink: var(--primary-hover);
+              --shadow: var(--shadow-card);
             }
             .layout {
               display: grid;
@@ -3212,14 +2871,13 @@ def phase6_console() -> str:
             <section class="layout" id="feedback-region">
               <div class="stack">
                 <section class="panel">
-                  <h2>先准备</h2>
-                  <p class="panel-intro">这一列负责任务上下文。页面默认复用当前后台会话；查实验、查资产可以独立执行，但导入反馈、同步反馈、沉淀资产最好先带上当前任务。如果停留太久后提示未授权，刷新页面重新进入后台即可。</p>
+                  <h2>任务</h2>
                   <div class="grid single">
                     <div class="field">
                       <label for="task-id">Task ID</label>
                       <input id="task-id" type="text" placeholder="f703c3ef-..." aria-describedby="task-id-hint" />
                     </div>
-                    <p class="field-hint" id="task-id-hint">建议先锁定 task_id，再看反馈快照和后续动作。没有 task_id 时，手工导入和同步会失败。</p>
+                    <p class="field-hint" id="task-id-hint">无 task_id 时，导入和同步不可用。</p>
                     <div class="grid">
                       <div class="field">
                         <label for="generation-id">Generation ID（可选）</label>
@@ -3231,11 +2889,11 @@ def phase6_console() -> str:
                       </div>
                     </div>
                     <p class="field-hint" id="generation-id-hint">不填时默认取最新 accepted generation；如果任务还没 accepted，会回退到最近一次 generation。</p>
-                    <p class="field-hint" id="operator-hint">会写入导入记录和资产审计日志，建议填当前值班人或操作来源。</p>
+                    <p class="field-hint" id="operator-hint">写入审计日志。</p>
                   </div>
                   <div class="action-blocks">
                     <article class="action-block">
-                      <h3>先看现状</h3>
+                      <h3>查询</h3>
                       <div class="action-grid">
                         <button id="query-feedback" class="secondary">查反馈</button>
                         <button id="refresh-experiments" class="secondary">查实验</button>
@@ -3247,8 +2905,7 @@ def phase6_console() -> str:
                 </section>
 
                 <section class="panel">
-                  <h2>自动同步</h2>
-                  <p class="panel-intro">这一步只处理已经成功入草稿的任务。建议先查反馈确认哪些窗口还空着，再决定立即同步、单任务入队，还是扫最近草稿批量入队。</p>
+                  <h2>同步</h2>
                   <div class="grid">
                     <div class="field">
                       <label for="sync-day-offsets">同步窗口（逗号分隔）</label>
@@ -3269,8 +2926,7 @@ def phase6_console() -> str:
                 </section>
 
                 <section class="panel">
-                  <h2>导入反馈</h2>
-                  <p class="panel-intro">当微信后台数据需要人工抄录时，用这里补 T+1、T+3、T+7 的快照。备注里最好写清楚数据来源和时间，方便后续复盘。</p>
+                  <h2>导入</h2>
                   <div class="grid">
                     <div class="field">
                       <label for="day-offset">观察窗口</label>
@@ -3319,8 +2975,7 @@ def phase6_console() -> str:
                 </section>
 
                 <section class="panel">
-                  <h2>辅助工具</h2>
-                  <p class="panel-intro">低频动作放到这里，避免打断主路径。只有在字段齐全、确认要批量处理或沉淀模板时再展开。</p>
+                  <h2>工具</h2>
                   <details class="fold">
                     <summary>批量导入 CSV</summary>
                     <div style="margin-top: 12px;">
@@ -3370,32 +3025,28 @@ def phase6_console() -> str:
 
               <div class="stack">
                 <section class="panel">
-                  <h2>输出与提示</h2>
-                  <p class="panel-intro">这里保留最近一次请求返回，方便复制排错、核对导入结果，或确认自动同步到底做了什么。</p>
+                  <h2>输出</h2>
                   <pre id="output">等待输入...</pre>
                 </section>
 
                 <section class="panel">
-                  <h2>任务反馈快照</h2>
-                  <p class="panel-intro">按当前 task_id 展示已经回收到的反馈快照。空态时会提醒你下一步该查同步还是补录。</p>
+                  <h2>反馈快照</h2>
                   <div class="list" id="task-feedback-list" aria-busy="false">
-                    <div class="hint">先输入 task_id，再点击“查反馈”。</div>
+                    <div class="hint">先输入 task_id</div>
                   </div>
                 </section>
 
                 <section class="panel">
-                  <h2>Prompt 实验榜</h2>
-                  <p class="panel-intro">比较不同 prompt 版本在各观察窗口里的稳定性，先看哪套更稳，再决定是否要固化成资产或继续观察。</p>
+                  <h2>实验榜</h2>
                   <div class="list" id="experiment-list" aria-busy="false">
-                    <div class="hint">点击“查实验”拉一版最新样本。</div>
+                    <div class="hint">点击“查实验”加载</div>
                   </div>
                 </section>
 
                 <section class="panel">
-                  <h2>风格资产库</h2>
-                  <p class="panel-intro">这里只保留已经验证过、值得复用的结构和句式，不收临时想法。先看历史资产，再决定是否新增。</p>
+                  <h2>资产库</h2>
                   <div class="list" id="style-asset-list" aria-busy="false">
-                    <div class="hint">点击“查资产”拉一版当前沉淀。</div>
+                    <div class="hint">点击“查资产”加载</div>
                   </div>
                 </section>
               </div>

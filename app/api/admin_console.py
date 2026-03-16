@@ -258,98 +258,6 @@ def unified_console_stream(
 
 @router.get("/admin", response_class=HTMLResponse, tags=["admin"], dependencies=[Depends(verify_admin_basic_auth)])
 def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
-    hero_html = admin_page_hero(
-        eyebrow="PRIMARY CONTROL ROOM",
-        title="微信文章工厂",
-        description="贴链接后系统会自动往下跑。左侧只负责选任务，右侧统一处理动作、草稿和预览。",
-        status_aria_label="运行状态",
-        status_slot_html=(
-            '<div class="status-line">'
-            '<span class="status-chip" id="auto-refresh">自动刷新中</span>'
-            '<span class="mini">每 4 秒同步一次</span>'
-            "</div>"
-        ),
-        status_message="准备好了。",
-        summary_cards_html="".join(
-            [
-                admin_hero_summary_card("唯一主动作", "贴链接开始处理"),
-                admin_hero_summary_card("人工介入", "只在任务卡住或待审核时出现"),
-                admin_hero_summary_card(
-                    "当前建议",
-                    "先贴链接。需要人工判断时，再点下面这排。",
-                    wide=True,
-                    content_id="hero-focus",
-                ),
-            ]
-        ),
-        hero_note="界面按“任务列表 / 当前动作 / 微信草稿 / 成稿预览 / 危险操作”组织，尽量把每一步放在固定位置。",
-        hero_links_html=(
-            '<div class="hero-links" aria-label="辅助入口">'
-            '<a href="/admin/console">需要排队列或查 worker 时，打开高级监控页</a>'
-            "</div>"
-        ),
-        hero_tail_html=dedent(
-            """\
-            <section class="focus-action-card" aria-label="结构化下一步">
-              <div class="focus-action-top">
-                <div class="focus-action-copy">
-                  <span class="focus-action-kicker">NEXT ACTION</span>
-                  <h2>结构化下一步</h2>
-                  <p id="focus-summary">先贴第一条链接开始。新任务会自动排队，主控台会把当前任务切到右侧详情。</p>
-                </div>
-                <div class="focus-action-cta">
-                  <span class="mini" id="focus-cta-hint">目标：开始一个任务</span>
-                  <button id="focus-jump-button" class="tiny-button" type="button">开始新任务</button>
-                </div>
-              </div>
-              <div class="focus-action-grid">
-                <article class="focus-action-item">
-                  <strong>当前卡点</strong>
-                  <span id="focus-bottleneck">当前还没有任务，主控台处于待启动状态。</span>
-                </article>
-                <article class="focus-action-item">
-                  <strong>推荐动作</strong>
-                  <span id="focus-action">在左侧粘贴一个微信公众号链接并开始处理。</span>
-                </article>
-                <article class="focus-action-item">
-                  <strong>目标区域</strong>
-                  <span id="focus-target">左侧“开始一个任务”区</span>
-                </article>
-                <article class="focus-action-item">
-                  <strong>为什么</strong>
-                  <span id="focus-reason">主控台没有任务时，不需要先看任务列表或高级监控。</span>
-                </article>
-                <article class="focus-action-item wide">
-                  <strong>风险提示</strong>
-                  <span id="focus-risk">没有任务时不需要额外操作；真正有卡点时，这里会改成更明确的处置建议。</span>
-                </article>
-              </div>
-            </section>
-            """
-        ),
-    )
-    overview_html = admin_overview_strip(
-        "任务概览",
-        "".join(
-            [
-                admin_overview_card("当前任务", "0", "主控台里当前可见的任务总数。", value_id="overview-total"),
-                admin_overview_card("处理中", "0", "系统正在自动推进，不需要额外点击。", value_id="metric-active"),
-                admin_overview_card("等你处理", "0", "需要人工审核、重写或补原文的任务。", value_id="metric-manual"),
-                admin_overview_card("已进草稿", "0", "已经推送进公众号草稿箱的任务。", value_id="metric-draft"),
-                admin_overview_card("失败", "0", "需要优先查看报错并决定是否重跑。", value_id="metric-failed"),
-                admin_overview_card("今天提交", "0", "当天新进来的链接量。", value_id="metric-today-submitted"),
-                admin_overview_card("今天进草稿", "0", "当天真正推进到微信草稿箱的任务。", value_id="metric-today-draft"),
-                admin_overview_card(
-                    "当前优先",
-                    "先贴第一条链接开始。",
-                    "有人工审核或失败任务时，这里会提醒先处理哪一类。",
-                    highlight=True,
-                    value_id="overview-focus",
-                    description_id="overview-focus-note",
-                ),
-            ]
-        ),
-    )
     html = dedent(
         f"""\
         <!DOCTYPE html>
@@ -359,2399 +267,761 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
           <meta name="viewport" content="width=device-width, initial-scale=1" />
           <title>微信文章工厂</title>
           <style>
-            :root {{
-              --paper: rgba(255, 251, 246, 0.94);
-              --paper-soft: rgba(255, 249, 242, 0.88);
-              --line: rgba(65, 48, 27, 0.12);
-              --text: #241b12;
-              --muted: #6a5f53;
-              --accent: #1f5d53;
-              --accent-strong: #143d37;
-              --accent-soft: rgba(31, 93, 83, 0.12);
-              --gold: #b07a18;
-              --danger: #a14534;
-              --ok: #2f7c53;
-              --shadow: 0 22px 60px rgba(58, 40, 18, 0.12);
+            __ADMIN_SHARED_STYLES__
+
+            /* 极简工作流样式 */
+            .flow-container {{
+              max-width: 720px;
+              margin: 0 auto;
+              padding: 32px 20px;
             }}
-            * {{ box-sizing: border-box; }}
-            body {{
-              margin: 0;
-              min-height: 100vh;
+
+            /* 输入区 */
+            .input-section {{
+              margin-bottom: 32px;
+            }}
+            .input-bar {{
+              display: flex;
+              gap: 10px;
+              align-items: center;
+              background: var(--bg-card);
+              border: 2px solid var(--border);
+              border-radius: var(--radius-lg);
+              padding: 8px 8px 8px 20px;
+              box-shadow: var(--shadow-card);
+              transition: border-color var(--transition), box-shadow var(--transition);
+            }}
+            .input-bar:focus-within {{
+              border-color: var(--primary);
+              box-shadow: 0 0 0 3px rgba(59,130,246,.12);
+            }}
+            .input-bar input {{
+              flex: 1;
+              border: none;
+              outline: none;
+              font-size: 15px;
+              background: transparent;
               color: var(--text);
               line-height: 1.5;
-              font-family: "PingFang SC", "Noto Serif SC", serif;
-              background:
-                radial-gradient(circle at top left, rgba(244, 210, 147, 0.58), transparent 24%),
-                radial-gradient(circle at top right, rgba(168, 209, 196, 0.42), transparent 26%),
-                linear-gradient(145deg, #efe5d7 0%, #f7f3ec 42%, #eadfcd 100%);
             }}
-            .skip-link {{
-              position: absolute;
-              top: 16px;
-              left: 16px;
-              transform: translateY(-180%);
-              padding: 10px 14px;
-              border-radius: 999px;
-              background: var(--accent-strong);
-              color: #f7faf8;
-              text-decoration: none;
-              z-index: 20;
-              transition: transform 120ms ease;
+            .input-bar input::placeholder {{
+              color: var(--text-secondary);
+              opacity: 0.6;
             }}
-            .skip-link:focus-visible {{
-              transform: translateY(0);
+            .input-bar button {{
+              flex-shrink: 0;
+              padding: 10px 24px;
+              border: none;
+              border-radius: var(--radius-md);
+              background: var(--primary);
+              color: #fff;
+              font-size: 14px;
+              font-weight: 600;
+              cursor: pointer;
+              transition: background var(--transition);
             }}
-            main {{
-              max-width: 1420px;
-              margin: 0 auto;
-              padding: 28px 20px 42px;
+            .input-bar button:hover {{ background: var(--primary-hover); }}
+            .input-bar button:disabled {{
+              opacity: 0.5;
+              cursor: not-allowed;
             }}
-            .shell {{
-              display: grid;
-              gap: 18px;
-            }}
-            .hero {{
-              display: grid;
-              gap: 14px;
-              padding: 24px;
-              border: 1px solid var(--line);
-              border-radius: 28px;
-              background: linear-gradient(135deg, rgba(255, 248, 239, 0.92), rgba(248, 244, 237, 0.86));
-              box-shadow: var(--shadow);
-              backdrop-filter: blur(10px);
-            }}
-            .hero-grid {{
-              display: grid;
-              grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.95fr);
-              gap: 18px;
-              align-items: stretch;
-            }}
-            .badge {{
-              display: inline-flex;
-              width: fit-content;
-              padding: 6px 11px;
-              border-radius: 999px;
-              background: var(--accent-soft);
-              color: var(--accent-strong);
-              font-size: 12px;
-              letter-spacing: 0.08em;
-            }}
-            h1 {{
-              margin: 0;
-              font-size: 42px;
-              line-height: 1;
-            }}
-            .hero-copy {{
-              display: grid;
-              align-content: start;
-              gap: 10px;
-            }}
-            .hero-copy p {{
-              margin: 0;
-              max-width: 760px;
-              color: var(--muted);
-              line-height: 1.7;
-            }}
-            .hero-status-card {{
-              display: grid;
-              gap: 14px;
-              padding: 18px;
-              border-radius: 24px;
-              border: 1px solid rgba(31, 93, 83, 0.12);
-              background: linear-gradient(160deg, rgba(255, 252, 247, 0.95), rgba(249, 245, 237, 0.9));
-            }}
-            .hero-status-copy {{
-              margin: 0;
-              font-size: 15px;
-              line-height: 1.7;
-            }}
-            .hero-summary {{
-              display: grid;
-              grid-template-columns: repeat(2, minmax(0, 1fr));
-              gap: 10px;
-            }}
-            .hero-summary-card {{
-              display: grid;
-              gap: 6px;
-              padding: 12px 14px;
-              border-radius: 18px;
-              border: 1px solid rgba(65, 48, 27, 0.1);
-              background: rgba(255, 253, 249, 0.78);
-            }}
-            .hero-summary-card strong {{
-              color: var(--muted);
-              font-size: 12px;
-              font-weight: 500;
-            }}
-            .hero-summary-card span {{
-              font-size: 16px;
-              line-height: 1.5;
-            }}
-            .hero-summary-card.wide {{
-              grid-column: 1 / -1;
-              background: linear-gradient(135deg, rgba(31, 93, 83, 0.1), rgba(255, 249, 242, 0.95));
-            }}
-            .hero-note {{
-              margin: 0;
-              color: var(--muted);
+            .input-error {{
+              margin-top: 8px;
+              padding: 8px 14px;
+              border-radius: var(--radius-sm);
+              background: var(--danger-soft);
+              color: var(--danger);
               font-size: 13px;
-              line-height: 1.7;
+              display: none;
             }}
-            .hero-links {{
+
+            /* 计数条 */
+            .count-bar {{
               display: flex;
-              flex-wrap: wrap;
-              gap: 10px;
-              margin-top: 12px;
-            }}
-            .hero-links a {{
-              color: var(--accent-strong);
-              text-decoration: none;
-              border-bottom: 1px solid rgba(31, 93, 83, 0.22);
-            }}
-            .focus-action-card {{
-              display: grid;
-              gap: 14px;
-              margin-top: 16px;
-              padding: 18px;
-              border-radius: 24px;
-              border: 1px solid rgba(31, 93, 83, 0.12);
-              background:
-                linear-gradient(135deg, rgba(31, 93, 83, 0.12), rgba(255, 249, 242, 0.94)),
-                rgba(255, 251, 246, 0.92);
-              box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.52);
-            }}
-            .focus-action-top {{
-              display: flex;
-              justify-content: space-between;
-              align-items: start;
+              align-items: center;
               gap: 16px;
+              margin-bottom: 16px;
+              font-size: 13px;
+              color: var(--text-secondary);
             }}
-            .focus-action-copy {{
-              display: grid;
+            .count-bar .count {{
+              font-weight: 600;
+              color: var(--text);
+            }}
+            .count-bar .dot {{
+              width: 6px; height: 6px;
+              border-radius: 50%;
+              display: inline-block;
+              margin-right: 4px;
+            }}
+            .count-bar .dot.blue {{ background: var(--primary); }}
+            .count-bar .dot.orange {{ background: var(--warning); }}
+            .count-bar .dot.red {{ background: var(--danger); }}
+            .count-bar .dot.green {{ background: var(--success); }}
+
+            /* 任务列表 */
+            .task-list {{
+              display: flex;
+              flex-direction: column;
               gap: 8px;
             }}
-            .focus-action-kicker {{
-              display: inline-flex;
-              width: fit-content;
-              padding: 6px 10px;
-              border-radius: 999px;
-              background: rgba(31, 93, 83, 0.14);
-              color: var(--accent-strong);
+            .task-empty {{
+              text-align: center;
+              padding: 48px 20px;
+              color: var(--text-secondary);
+              font-size: 14px;
+            }}
+            .task-empty .icon {{
+              font-size: 40px;
+              margin-bottom: 12px;
+              opacity: 0.4;
+            }}
+
+            /* 任务卡片 */
+            .task-card {{
+              background: var(--bg-card);
+              border: 1px solid var(--border);
+              border-radius: var(--radius-md);
+              padding: 14px 18px;
+              cursor: pointer;
+              transition: border-color var(--transition), box-shadow var(--transition);
+              position: relative;
+            }}
+            .task-card:hover {{
+              border-color: var(--primary);
+              box-shadow: var(--shadow-card);
+            }}
+            .task-card.expanded {{
+              border-color: var(--primary);
+              box-shadow: 0 0 0 2px rgba(59,130,246,.08);
+            }}
+            .task-card-header {{
+              display: flex;
+              align-items: center;
+              gap: 10px;
+              min-height: 24px;
+            }}
+            .task-status-dot {{
+              width: 8px; height: 8px;
+              border-radius: 50%;
+              flex-shrink: 0;
+            }}
+            .task-status-dot.processing {{
+              background: var(--primary);
+              animation: pulse-dot 1.5s ease-in-out infinite;
+            }}
+            .task-status-dot.pending {{ background: var(--warning); }}
+            .task-status-dot.done {{ background: var(--success); }}
+            .task-status-dot.failed {{ background: var(--danger); }}
+            @keyframes pulse-dot {{
+              0%, 100% {{ opacity: 1; }}
+              50% {{ opacity: 0.3; }}
+            }}
+            .task-title {{
+              flex: 1;
+              font-size: 14px;
+              font-weight: 500;
+              color: var(--text);
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+            }}
+            .task-card.done-card .task-title {{
+              color: var(--text-secondary);
+            }}
+            .task-status-label {{
               font-size: 12px;
-              letter-spacing: 0.08em;
+              font-weight: 600;
+              padding: 2px 8px;
+              border-radius: 999px;
+              flex-shrink: 0;
             }}
-            .focus-action-copy h2 {{
-              margin: 0;
-              font-size: 22px;
-              line-height: 1.2;
+            .task-status-label.processing {{
+              background: var(--primary-soft);
+              color: var(--primary);
             }}
-            .focus-action-copy p {{
-              margin: 0;
-              color: var(--muted);
+            .task-status-label.pending {{
+              background: var(--warning-soft);
+              color: #B45309;
+            }}
+            .task-status-label.done {{
+              background: var(--success-soft);
+              color: #047857;
+            }}
+            .task-status-label.failed {{
+              background: var(--danger-soft);
+              color: var(--danger);
+            }}
+            .task-actions {{
+              display: flex;
+              gap: 6px;
+              flex-shrink: 0;
+            }}
+            .task-actions button {{
+              padding: 4px 12px;
+              border: 1px solid var(--border);
+              border-radius: var(--radius-sm);
+              background: var(--bg-card);
+              font-size: 12px;
+              font-weight: 500;
+              cursor: pointer;
+              transition: all var(--transition);
+            }}
+            .task-actions .btn-primary {{
+              background: var(--primary);
+              color: #fff;
+              border-color: var(--primary);
+            }}
+            .task-actions .btn-primary:hover {{
+              background: var(--primary-hover);
+            }}
+            .task-actions .btn-danger {{
+              color: var(--danger);
+              border-color: var(--danger-soft);
+            }}
+            .task-actions .btn-danger:hover {{
+              background: var(--danger-soft);
+            }}
+            .task-progress {{
+              margin-top: 8px;
+              height: 3px;
+              background: var(--border-light);
+              border-radius: 2px;
+              overflow: hidden;
+            }}
+            .task-progress-bar {{
+              height: 100%;
+              background: var(--primary);
+              border-radius: 2px;
+              transition: width 0.5s ease;
+            }}
+
+            /* 展开详情 */
+            .task-detail {{
+              display: none;
+              margin-top: 14px;
+              padding-top: 14px;
+              border-top: 1px solid var(--border-light);
+            }}
+            .task-card.expanded .task-detail {{
+              display: block;
+            }}
+            .detail-section {{
+              margin-bottom: 14px;
+            }}
+            .detail-section h4 {{
+              font-size: 12px;
+              font-weight: 600;
+              color: var(--text-secondary);
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+              margin-bottom: 8px;
+            }}
+            .detail-preview {{
+              background: var(--bg-input);
+              border: 1px solid var(--border-light);
+              border-radius: var(--radius-sm);
+              padding: 16px;
+              max-height: 300px;
+              overflow-y: auto;
               font-size: 14px;
               line-height: 1.7;
             }}
-            .focus-action-cta {{
-              display: grid;
-              gap: 8px;
-              justify-items: end;
-              min-width: 200px;
-            }}
-            .focus-action-cta button {{
-              width: auto;
-              min-width: 144px;
-            }}
-            .focus-action-grid {{
-              display: grid;
-              grid-template-columns: repeat(5, minmax(0, 1fr));
-              gap: 10px;
-            }}
-            .focus-action-item {{
-              display: grid;
-              gap: 8px;
-              padding: 14px;
-              border-radius: 18px;
-              border: 1px solid rgba(65, 48, 27, 0.1);
-              background: rgba(255, 253, 249, 0.82);
-            }}
-            .focus-action-item.wide {{
-              grid-column: span 2;
-              background: linear-gradient(135deg, rgba(161, 69, 52, 0.08), rgba(255, 252, 247, 0.94));
-            }}
-            .focus-action-item strong {{
-              color: var(--muted);
-              font-size: 12px;
-              font-weight: 500;
-            }}
-            .focus-action-item span {{
-              font-size: 15px;
-              line-height: 1.7;
-            }}
-            .panel {{
-              background: var(--paper);
-              border: 1px solid var(--line);
-              border-radius: 24px;
-              padding: 18px;
-              box-shadow: var(--shadow);
-              backdrop-filter: blur(10px);
-            }}
-            .layout {{
-              display: grid;
-              grid-template-columns: 380px minmax(0, 1fr);
-              gap: 18px;
-              align-items: start;
-            }}
-            .stack {{
-              display: grid;
-              gap: 18px;
-            }}
-            .detail-column {{
-              min-width: 0;
-            }}
-            .panel-head {{
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              gap: 12px;
-              margin-bottom: 14px;
-            }}
-            .panel-tools {{
-              display: flex;
-              align-items: center;
-              gap: 10px;
-              flex-wrap: wrap;
-            }}
-            .panel h2 {{
-              margin: 0;
-              font-size: 19px;
-            }}
-            .panel-intro {{
-              margin: 0 0 14px;
-              color: var(--muted);
-              font-size: 13px;
-              line-height: 1.7;
-            }}
-            .mini {{
-              color: var(--muted);
-              font-size: 13px;
-            }}
-            .composer {{
-              display: grid;
-              gap: 12px;
-            }}
-            .field {{
-              display: grid;
-              gap: 6px;
-            }}
-            .composer-row {{
-              display: grid;
-              grid-template-columns: 1fr;
-            }}
-            .composer-actions {{
-              display: grid;
-              grid-template-columns: 120px minmax(0, 1fr);
-              gap: 10px;
-            }}
-            label {{
-              color: var(--muted);
-              font-size: 13px;
-            }}
-            .field-hint {{
-              margin: 0;
-              color: var(--muted);
-              font-size: 13px;
-              line-height: 1.7;
-            }}
-            input, button, .button-link {{
-              width: 100%;
-              font: inherit;
-              border-radius: 999px;
-            }}
-            input {{
-              border: 1px solid var(--line);
-              background: #fffdf9;
-              padding: 18px 20px;
-              color: var(--text);
-            }}
-            input:focus-visible,
-            button:focus-visible,
-            .button-link:focus-visible,
-            a:focus-visible,
-            summary:focus-visible {{
-              outline: 2px solid rgba(31, 93, 83, 0.18);
-              outline-offset: 3px;
-            }}
-            input:focus-visible {{
-              border-color: rgba(31, 93, 83, 0.4);
-            }}
-            button,
-            .button-link {{
-              border: none;
-              padding: 14px 16px;
-              min-height: 48px;
-              display: inline-flex;
-              align-items: center;
-              justify-content: center;
-              cursor: pointer;
-              background: var(--accent);
-              color: #f7faf8;
-              text-decoration: none;
-              text-align: center;
-              line-height: 1.35;
-              transition: transform 120ms ease, background 120ms ease, opacity 120ms ease;
-            }}
-            button:hover,
-            .button-link:hover {{
-              background: var(--accent-strong);
-              transform: translateY(-1px);
-            }}
-            button.secondary,
-            .button-link.secondary {{
-              background: #dfceb3;
-              color: #2f261d;
-            }}
-            button.ghost,
-            .button-link.ghost {{
-              background: transparent;
-              border: 1px solid rgba(31, 93, 83, 0.22);
-              color: var(--accent-strong);
-            }}
-            button.warn,
-            .button-link.warn {{
-              background: var(--gold);
-            }}
-            button.danger,
-            .button-link.danger {{
-              background: var(--danger);
-            }}
-            button:disabled {{
-              opacity: 0.48;
-              cursor: not-allowed;
-              transform: none;
-            }}
-            button[aria-busy="true"] {{
-              opacity: 0.82;
-              cursor: progress;
-            }}
-            .status-line {{
-              display: flex;
-              flex-wrap: wrap;
-              gap: 8px;
-              align-items: center;
-            }}
-            .status-chip {{
-              display: inline-flex;
-              align-items: center;
-              width: fit-content;
-              padding: 7px 12px;
-              border-radius: 999px;
-              font-size: 13px;
-              background: var(--accent-soft);
-              color: var(--accent-strong);
-            }}
-            .status-chip.waiting {{
-              background: rgba(176, 122, 24, 0.12);
-              color: #875f11;
-            }}
-            .status-chip.done {{
-              background: rgba(47, 124, 83, 0.12);
-              color: var(--ok);
-            }}
-            .status-chip.fail {{
-              background: rgba(161, 69, 52, 0.12);
-              color: var(--danger);
-            }}
-            .overview-strip {{
-              display: grid;
-              grid-template-columns: repeat(4, minmax(0, 1fr));
-              gap: 12px;
-            }}
-            .overview-card {{
-              display: grid;
-              gap: 8px;
-              min-width: 0;
-              padding: 16px;
-              border-radius: 20px;
-              border: 1px solid var(--line);
-              background: rgba(255, 251, 246, 0.9);
-              box-shadow: 0 14px 32px rgba(58, 40, 18, 0.08);
-            }}
-            .overview-card.highlight {{
-              grid-column: span 2;
-              background: linear-gradient(135deg, rgba(31, 93, 83, 0.1), rgba(255, 249, 242, 0.96));
-            }}
-            .overview-card strong {{
-              display: block;
-              color: var(--muted);
-              font-size: 12px;
-              font-weight: 500;
-            }}
-            .overview-card span {{
-              display: block;
-              font-size: 28px;
-              line-height: 1.1;
-            }}
-            .overview-card p {{
-              margin: 0;
-              color: var(--muted);
-              font-size: 13px;
-              line-height: 1.7;
-            }}
-            .task-toolbar {{
-              display: grid;
-              gap: 10px;
-            }}
-            .filter-row, .advanced-links {{
-              display: flex;
-              flex-wrap: wrap;
-              gap: 8px;
-            }}
-            .search-row {{
-              display: grid;
-              grid-template-columns: minmax(0, 1fr) auto;
-              gap: 8px;
-              align-items: center;
-            }}
-            .search-row button {{
-              width: auto;
-            }}
-            .pill {{
-              padding: 9px 14px;
-              border-radius: 999px;
-              border: 1px solid rgba(31, 93, 83, 0.16);
-              background: transparent;
-              color: var(--accent-strong);
-            }}
-            .pill.active {{
-              background: var(--accent);
-              color: #f7faf8;
-              border-color: transparent;
-            }}
-            .tiny-button {{
-              width: auto;
-              padding: 9px 13px;
-              font-size: 13px;
-              background: #efe3ce;
-              color: #342a20;
-            }}
-            .advanced-shell {{
-              border-radius: 18px;
-              border: 1px dashed rgba(65, 48, 27, 0.16);
-              padding: 10px 12px;
-              background: rgba(255, 253, 249, 0.56);
-            }}
-            .advanced-shell summary {{
-              cursor: pointer;
-              color: var(--muted);
-              font-size: 13px;
-            }}
-            .advanced-shell[open] {{
-              background: rgba(255, 253, 249, 0.92);
-            }}
-            .advanced-shell[open] .advanced-links {{
-              margin-top: 10px;
-            }}
-            .advanced-links a {{
-              color: var(--accent-strong);
-              text-decoration: none;
-              border-bottom: 1px solid rgba(31, 93, 83, 0.22);
-              font-size: 13px;
-            }}
-            .task-list {{
-              display: grid;
-              align-content: start;
-              grid-auto-rows: max-content;
-              gap: 10px;
-            }}
-            .task-card {{
-              display: grid;
-              align-content: start;
-              gap: 8px;
-              width: 100%;
-              padding: 14px 15px;
-              color: var(--text);
-              font: inherit;
-              border-radius: 20px;
-              border: 1px solid var(--line);
-              background: #fffdf9;
-              min-width: 0;
-              position: relative;
-              isolation: isolate;
-              cursor: pointer;
-              appearance: none;
-              text-align: left;
-              transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
-            }}
-            .task-card:hover {{
-              background: #fffdf9;
-              color: var(--text);
-              transform: translateY(-1px);
-              border-color: rgba(31, 93, 83, 0.35);
-              box-shadow: 0 12px 26px rgba(58, 40, 18, 0.08);
-            }}
-            .task-card.selected {{
-              border-color: rgba(31, 93, 83, 0.45);
-              box-shadow: 0 14px 28px rgba(31, 93, 83, 0.11);
-              background: linear-gradient(135deg, rgba(31, 93, 83, 0.08), #fffdf9 45%);
-            }}
-            .task-card.tone-waiting {{
-              border-color: rgba(176, 122, 24, 0.26);
-            }}
-            .task-card.tone-fail {{
-              border-color: rgba(161, 69, 52, 0.24);
-            }}
-            .task-card.tone-done {{
-              border-color: rgba(47, 124, 83, 0.24);
-            }}
-            .task-title {{
-              font-size: 16px;
-              line-height: 1.45;
-              overflow-wrap: anywhere;
-            }}
-            .task-eyebrow {{
-              color: var(--muted);
-              font-size: 12px;
-            }}
-            .task-reason {{
-              color: #3a3026;
-              font-size: 13px;
-              line-height: 1.6;
-            }}
-            .task-meta {{
-              color: var(--muted);
-              font-size: 12px;
-              line-height: 1.6;
-              overflow-wrap: anywhere;
-            }}
-            .progress-track {{
-              width: 100%;
-              height: 10px;
-              border-radius: 999px;
-              background: rgba(31, 93, 83, 0.08);
-              overflow: hidden;
-            }}
-            .progress-fill {{
-              height: 100%;
-              border-radius: 999px;
-              background: linear-gradient(90deg, #2f7c53, #1f5d53);
-            }}
-            .empty {{
-              padding: 22px 18px;
-              border-radius: 20px;
-              border: 1px dashed rgba(65, 48, 27, 0.18);
-              color: var(--muted);
-              background: rgba(255, 253, 249, 0.75);
-            }}
-            .task-list[aria-busy="true"],
-            .detail-grid[aria-busy="true"] {{
-              opacity: 0.8;
-            }}
-            .detail-grid {{
-              display: grid;
-              gap: 18px;
-              align-content: start;
-            }}
-            .workspace-overview {{
-              display: grid;
-              grid-template-columns: repeat(4, minmax(0, 1fr));
-              gap: 10px;
-            }}
-            .workspace-overview-card {{
-              display: grid;
-              gap: 6px;
-              min-width: 0;
-              padding: 14px;
-              border-radius: 18px;
-              border: 1px solid var(--line);
-              background: #fffdf9;
-            }}
-            .workspace-overview-card.strong {{
-              grid-column: span 2;
-              background: linear-gradient(135deg, rgba(31, 93, 83, 0.12), rgba(255, 249, 242, 0.96));
-            }}
-            .workspace-overview-card strong {{
-              color: var(--muted);
-              font-size: 12px;
-              font-weight: 500;
-            }}
-            .workspace-overview-card span {{
-              font-size: 20px;
-              line-height: 1.35;
-              word-break: break-word;
-            }}
-            .workspace-overview-card p {{
-              margin: 0;
-              color: var(--muted);
-              font-size: 13px;
-              line-height: 1.65;
-            }}
-            .workspace-layout {{
-              display: grid;
-              grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.92fr);
-              gap: 14px;
-              align-items: start;
-            }}
-            .workspace-stack {{
-              display: grid;
-              gap: 14px;
-            }}
-            .summary-block {{
-              display: grid;
-              gap: 12px;
-            }}
-            .summary-title {{
-              display: grid;
-              gap: 8px;
-            }}
-            .summary-title h3 {{
-              margin: 0;
-              font-size: 28px;
-              line-height: 1.25;
-            }}
-            .summary-title a {{
-              width: fit-content;
-              color: var(--accent-strong);
-              text-decoration: none;
-              border-bottom: 1px solid rgba(31, 93, 83, 0.22);
-            }}
-            .kv-grid {{
-              display: grid;
-              grid-template-columns: repeat(2, minmax(0, 1fr));
-              gap: 10px;
-            }}
-            .quick-facts {{
-              display: flex;
-              flex-wrap: wrap;
-              gap: 8px;
-            }}
-            .fact-pill {{
-              display: inline-flex;
-              align-items: center;
-              padding: 8px 12px;
-              border-radius: 999px;
-              border: 1px solid var(--line);
-              background: #fffdf9;
-              color: var(--muted);
-              font-size: 12px;
-            }}
-            .kv {{
-              padding: 14px;
-              border-radius: 18px;
-              border: 1px solid var(--line);
-              background: #fffdf9;
-            }}
-            .kv strong {{
-              display: block;
-              margin-bottom: 8px;
-              font-size: 12px;
-              color: var(--muted);
-              font-weight: 500;
-            }}
-            .kv span {{
-              word-break: break-word;
-              line-height: 1.6;
-            }}
-            .big-hint {{
-              padding: 18px;
-              border-radius: 22px;
-              border: 1px solid rgba(31, 93, 83, 0.14);
-              background: linear-gradient(135deg, rgba(31, 93, 83, 0.08), rgba(255, 249, 242, 0.94));
-            }}
-            .big-hint strong {{
-              display: block;
-              margin-bottom: 8px;
-              font-size: 13px;
-              color: var(--muted);
-              font-weight: 500;
-            }}
-            .big-hint span {{
-              font-size: 21px;
-              line-height: 1.45;
-            }}
-            .action-grid {{
-              display: grid;
-              grid-template-columns: repeat(2, minmax(0, 1fr));
-              gap: 10px;
-            }}
-            .action-grid.single {{
-              grid-template-columns: 1fr;
-            }}
-            .action-grid.compact {{
-              grid-template-columns: repeat(2, minmax(0, 1fr));
-            }}
-            .detail-sections {{
-              display: grid;
-              gap: 14px;
-            }}
-            .detail-section {{
-              display: grid;
-              gap: 12px;
-              padding: 16px;
-              border-radius: 22px;
-              border: 1px solid var(--line);
-              background: rgba(255, 253, 249, 0.9);
-            }}
-            .detail-section-head {{
-              display: flex;
-              justify-content: space-between;
-              align-items: flex-start;
-              gap: 12px;
-              flex-wrap: wrap;
-            }}
-            .detail-section-head strong {{
-              display: block;
-              font-size: 16px;
-            }}
-            .detail-section-head span {{
-              color: var(--muted);
-              font-size: 13px;
-              line-height: 1.7;
-            }}
-            .section-actions {{
-              display: flex;
-              flex-wrap: wrap;
-              gap: 10px;
-            }}
-            .section-actions .button-link,
-            .section-actions button {{
-              width: auto;
-              min-width: 132px;
-            }}
-            .section-hint {{
-              margin: 0;
-              color: var(--muted);
-              font-size: 13px;
-              line-height: 1.7;
-            }}
-            .section-metrics {{
-              display: grid;
-              gap: 10px;
-            }}
-            .metric-item {{
-              display: flex;
-              justify-content: space-between;
-              gap: 16px;
-              align-items: flex-start;
-              padding-bottom: 10px;
-              border-bottom: 1px dashed rgba(65, 48, 27, 0.14);
-            }}
-            .metric-item:last-child {{
-              padding-bottom: 0;
-              border-bottom: none;
-            }}
-            .metric-item strong {{
-              font-size: 13px;
-              color: var(--muted);
-              font-weight: 500;
-            }}
-            .metric-item span {{
-              text-align: right;
-              word-break: break-word;
-            }}
-            .action-empty {{
-              padding: 14px 16px;
-              border-radius: 18px;
-              border: 1px dashed rgba(65, 48, 27, 0.18);
-              color: var(--muted);
-              background: rgba(255, 253, 249, 0.82);
-            }}
-            .detail-more {{
-              border-radius: 20px;
-              border: 1px dashed rgba(65, 48, 27, 0.18);
-              padding: 12px 14px;
-              background: rgba(255, 253, 249, 0.82);
-            }}
-            .detail-more summary {{
-              cursor: pointer;
-              color: var(--muted);
-              font-size: 13px;
-            }}
-            .detail-more[open] {{
-              background: #fffdf9;
-            }}
-            .detail-more[open] .detail-more-grid {{
-              margin-top: 12px;
-            }}
-            .detail-more-grid {{
-              display: grid;
-              gap: 14px;
-            }}
-            .utility-grid {{
-              display: flex;
-              flex-wrap: wrap;
-              gap: 10px;
-            }}
-            .utility-grid button {{
-              width: auto;
-              min-width: 132px;
-            }}
-            .latest-box {{
-              display: grid;
-              gap: 8px;
-              padding: 16px;
-              border-radius: 20px;
-              border: 1px solid var(--line);
-              background: #fffdf9;
-            }}
-            .latest-box strong {{
-              font-size: 13px;
-              color: var(--muted);
-              font-weight: 500;
-            }}
-            .latest-box p {{
-              margin: 0;
-              line-height: 1.7;
-            }}
-            .error-box {{
-              border-color: rgba(161, 69, 52, 0.16);
-              background: linear-gradient(180deg, rgba(255, 248, 246, 0.96), rgba(255, 252, 249, 0.9));
-            }}
-            .danger-confirm-box {{
-              display: grid;
-              gap: 12px;
-              padding: 14px;
-              border-radius: 18px;
-              border: 1px solid rgba(161, 69, 52, 0.24);
-              background: rgba(255, 247, 244, 0.88);
-            }}
-            .danger-confirm-copy {{
-              margin: 0;
-              color: #6d4d45;
-              font-size: 13px;
-              line-height: 1.7;
-            }}
-            .danger-confirm-actions {{
-              display: flex;
-              flex-wrap: wrap;
-              gap: 10px;
-            }}
-            .danger-inline-note {{
-              margin: 0;
-              color: var(--muted);
-              font-size: 12px;
-              line-height: 1.7;
-            }}
-            .danger-card {{
-              border-color: rgba(161, 69, 52, 0.18);
-              background: linear-gradient(180deg, rgba(255, 248, 245, 0.96), rgba(255, 252, 249, 0.92));
-            }}
-            .danger-card .button-link,
-            .danger-card button {{
-              width: auto;
-            }}
-            .article-preview-shell {{
-              margin-top: 2px;
-              padding: 16px;
-              border-radius: 18px;
-              border: 1px solid rgba(65, 48, 27, 0.12);
-              background: linear-gradient(180deg, rgba(255, 252, 247, 0.98), rgba(247, 242, 233, 0.96));
-              overflow: auto;
-            }}
-            .article-preview-shell img {{
+            .detail-preview img {{
               max-width: 100%;
-              height: auto;
+              border-radius: var(--radius-sm);
             }}
-            .article-preview-shell section {{
-              margin: 0 auto;
+            .detail-meta {{
+              display: grid;
+              grid-template-columns: auto 1fr;
+              gap: 4px 12px;
+              font-size: 13px;
             }}
-            .footer-note {{
-              color: var(--muted);
-              font-size: 12px;
-              line-height: 1.7;
+            .detail-meta dt {{
+              color: var(--text-secondary);
+              font-weight: 500;
             }}
-            __ADMIN_NAV_STYLES__
-            @media (max-width: 1080px) {{
-              .hero-grid {{ grid-template-columns: 1fr; }}
-              .focus-action-top {{ grid-template-columns: 1fr; }}
-              .focus-action-grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
-              .focus-action-item.wide {{ grid-column: span 2; }}
-              .overview-strip {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
-              .layout {{ grid-template-columns: 1fr; }}
-              .workspace-overview {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
-              .workspace-overview-card.strong {{ grid-column: span 2; }}
-              .workspace-layout {{ grid-template-columns: 1fr; }}
-              .action-grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+            .detail-meta dd {{
+              color: var(--text);
             }}
-            @media (max-width: 720px) {{
-              main {{ padding: 18px 14px 32px; }}
-              .hero {{ padding: 18px; }}
-              .hero-note {{ font-size: 12px; line-height: 1.6; }}
-              .focus-action-card {{ padding: 16px; }}
-              .focus-action-top {{
-                display: grid;
-                grid-template-columns: 1fr;
-              }}
-              .focus-action-cta {{
-                justify-items: start;
-                min-width: 0;
-              }}
-              .focus-action-grid {{ grid-template-columns: 1fr; }}
-              .focus-action-item.wide {{ grid-column: span 1; }}
-              .panel {{ padding: 16px; border-radius: 20px; }}
-              h1 {{ font-size: 32px; }}
-              .hero-summary {{ grid-template-columns: 1fr; }}
-              .filter-row {{
-                flex-wrap: nowrap;
-                overflow-x: auto;
-                padding-bottom: 4px;
-                scrollbar-width: none;
-              }}
-              .filter-row::-webkit-scrollbar {{ display: none; }}
-              .pill {{ flex: 0 0 auto; white-space: nowrap; }}
-              .composer-actions {{ grid-template-columns: 1fr; }}
-              .overview-strip {{ grid-template-columns: 1fr; }}
-              .overview-card.highlight {{ grid-column: span 1; }}
-              .workspace-overview {{ grid-template-columns: 1fr; }}
-              .workspace-overview-card.strong {{ grid-column: span 1; }}
-              .kv-grid {{ grid-template-columns: 1fr; }}
-              .action-grid {{ grid-template-columns: 1fr; }}
-              .action-grid.compact {{ grid-template-columns: 1fr; }}
-              .detail-section-head {{ flex-direction: column; }}
-              .search-row {{ grid-template-columns: 1fr; }}
+            .detail-actions {{
+              display: flex;
+              gap: 8px;
+              margin-top: 14px;
             }}
-            __ADMIN_SHARED_STYLES__
+            .detail-actions button {{
+              padding: 8px 20px;
+              border: none;
+              border-radius: var(--radius-sm);
+              font-size: 13px;
+              font-weight: 600;
+              cursor: pointer;
+              transition: all var(--transition);
+            }}
+            .detail-actions .btn-confirm {{
+              background: var(--success);
+              color: #fff;
+            }}
+            .detail-actions .btn-confirm:hover {{
+              background: #059669;
+            }}
+            .detail-actions .btn-push {{
+              background: var(--primary);
+              color: #fff;
+            }}
+            .detail-actions .btn-push:hover {{
+              background: var(--primary-hover);
+            }}
+            .detail-actions .btn-retry {{
+              background: var(--warning-soft);
+              color: #92400E;
+              border: 1px solid rgba(245,158,11,.2);
+            }}
+            .detail-actions .btn-retry:hover {{
+              background: var(--warning);
+              color: #fff;
+            }}
+            .detail-actions .btn-delete {{
+              background: transparent;
+              color: var(--danger);
+              border: 1px solid var(--danger-soft);
+            }}
+            .detail-actions .btn-delete:hover {{
+              background: var(--danger-soft);
+            }}
+            .detail-actions button:disabled {{
+              opacity: 0.5;
+              cursor: not-allowed;
+            }}
+
+            /* 底部高级入口 */
+            .advanced-link {{
+              text-align: center;
+              margin-top: 32px;
+              padding-top: 20px;
+              border-top: 1px solid var(--border-light);
+            }}
+            .advanced-link a {{
+              font-size: 13px;
+              color: var(--text-secondary);
+              text-decoration: none;
+              transition: color var(--transition);
+            }}
+            .advanced-link a:hover {{
+              color: var(--primary);
+            }}
+
+            /* 加载动画 */
+            @keyframes spin {{
+              to {{ transform: rotate(360deg); }}
+            }}
+            .spinner {{
+              display: inline-block;
+              width: 14px; height: 14px;
+              border: 2px solid var(--border);
+              border-top-color: var(--primary);
+              border-radius: 50%;
+              animation: spin 0.6s linear infinite;
+              vertical-align: middle;
+              margin-right: 6px;
+            }}
           </style>
         </head>
-        <body>
-          <a class="skip-link" href="#task-region">跳到任务主区</a>
-          <main id="main-content" class="admin-main">
-            <div class="shell">
-              __ADMIN_SECTION_NAV__
-              __ADMIN_HERO__
-              __ADMIN_OVERVIEW__
+        <body class="admin-app">
+          <script>__ADMIN_SHARED_SCRIPT_HELPERS__</script>
 
-              <div class="layout">
-                <section class="stack" id="task-region">
-                  <section class="panel">
-                    <div class="panel-head">
-                      <h2>开始一个任务</h2>
-                      <span class="mini">唯一主动作</span>
-                    </div>
-                    <p class="panel-intro">只接受微信公众号文章链接。提交后默认一路跑到微信草稿箱；如果这篇文章以前跑过，会直接帮你定位到原任务。</p>
-                    <div class="composer">
-                      <div class="composer-row field">
-                        <label for="ingest-url">微信公众号文章链接</label>
-                        <input
-                          id="ingest-url"
-                          type="url"
-                          placeholder="https://mp.weixin.qq.com/s/..."
-                          autocomplete="url"
-                          aria-describedby="ingest-url-hint"
-                        />
-                        <p class="field-hint" id="ingest-url-hint">支持直接粘贴手机分享出来的链接。点击“开始处理”后，左侧列表会自动刷新并切到当前任务。</p>
-                      </div>
-                      <div class="composer-actions">
-                        <button id="paste-button" class="secondary" type="button">粘贴</button>
-                        <button id="ingest-button" type="button">开始处理</button>
-                      </div>
-                      <div class="footer-note">默认会一路跑到微信草稿箱。</div>
-                    </div>
-                  </section>
+          <main class="admin-main">
+            <div class="flow-container">
+              <!-- 输入区 -->
+              <section class="input-section">
+                <div class="input-bar">
+                  <input
+                    id="url-input"
+                    type="url"
+                    placeholder="粘贴微信文章链接..."
+                    autocomplete="off"
+                  />
+                  <button id="submit-btn">开始</button>
+                </div>
+                <div class="input-error" id="input-error"></div>
+              </section>
 
-                  <section class="panel">
-                    <div class="panel-head">
-                      <h2>任务列表</h2>
-                      <div class="panel-tools">
-                        <span class="mini" id="task-count">0 个</span>
-                        <span class="mini" id="generated-at">刚刚更新</span>
-                        <button id="refresh-button" class="tiny-button" type="button">刷新列表</button>
-                      </div>
-                    </div>
-                    <p class="panel-intro">左侧只负责筛选和切换任务。所有操作、草稿入口、预览和删除都在右侧工作区完成。</p>
-                    <div class="task-toolbar">
-                      <div class="filter-row">
-                        <button class="pill active" data-filter="all" data-label="全部" type="button">全部</button>
-                        <button class="pill" data-filter="doing" data-label="处理中" type="button">处理中</button>
-                        <button class="pill" data-filter="waiting" data-label="等我处理" type="button">等我处理</button>
-                        <button class="pill" data-filter="ready" data-label="待推草稿" type="button">待推草稿</button>
-                        <button class="pill" data-filter="done" data-label="已进草稿" type="button">已进草稿</button>
-                        <button class="pill" data-filter="failed" data-label="失败" type="button">失败</button>
-                      </div>
-                      <div class="search-row">
-                        <input id="task-search" type="search" placeholder="搜标题、链接或任务号" autocomplete="off" />
-                        <button id="clear-search-button" class="tiny-button ghost" type="button">清空</button>
-                      </div>
-                    </div>
-                    <div class="task-list" id="task-list" role="listbox" aria-label="最近任务列表" aria-busy="false">
-                      <div class="empty">还没有任务。</div>
-                    </div>
-                  </section>
-                </section>
-
-                <section class="stack detail-column">
-                  <section class="panel">
-                    <div class="panel-head">
-                      <h2>工作区</h2>
-                      <span class="mini" id="selected-task-code">先点左边任意一条</span>
-                    </div>
-                    <p class="panel-intro">右侧固定按当前动作、微信草稿、成稿预览、详细信息和危险操作分区展示。</p>
-                    <div class="detail-grid" id="task-detail" aria-live="polite" aria-busy="false">
-                      <div class="empty">选中一条任务后，这里会告诉你现在到了哪一步，以及下一步该按哪个按钮。</div>
-                    </div>
-                  </section>
-                </section>
+              <!-- 计数条 -->
+              <div class="count-bar" id="count-bar">
+                <span><span class="dot blue"></span> 处理中 <span class="count" id="cnt-processing">0</span></span>
+                <span><span class="dot orange"></span> 待确认 <span class="count" id="cnt-pending">0</span></span>
+                <span><span class="dot red"></span> 失败 <span class="count" id="cnt-failed">0</span></span>
+                <span><span class="dot green"></span> 已推送 <span class="count" id="cnt-done">0</span></span>
               </div>
+
+              <!-- 任务列表 -->
+              <div class="task-list" id="task-list">
+                <div class="task-empty">
+                  <div class="icon">📋</div>
+                  粘贴一个微信文章链接开始
+                </div>
+              </div>
+
             </div>
           </main>
 
           <script>
-            __ADMIN_SHARED_SCRIPT_HELPERS__
-            const INITIAL_TASK_ID = {json.dumps(task_id, ensure_ascii=False)};
-            const INITIAL_PARAMS = new URLSearchParams(window.location.search);
-            const INITIAL_FILTER = INITIAL_PARAMS.get("filter");
-            const INITIAL_SEARCH = (INITIAL_PARAMS.get("q") || "").trim();
-            const ACTIVE = new Set([
-              "queued",
-              "deduping",
-              "fetching_source",
-              "source_ready",
-              "analyzing_source",
-              "searching_related",
-              "fetching_related",
-              "building_brief",
-              "brief_ready",
-              "generating",
-              "reviewing",
-              "pushing_wechat_draft",
-            ]);
-            const WAITING = new Set(["needs_manual_review", "needs_regenerate", "needs_manual_source"]);
-            const READY_TO_PUSH = new Set(["review_passed"]);
-            const FAILED = new Set([
-              "fetch_failed",
-              "analyze_failed",
-              "search_failed",
-              "brief_failed",
-              "generate_failed",
-              "review_failed",
-              "push_failed",
-              "needs_manual_source",
-            ]);
+            // 状态映射
+            const PROCESSING = new Set(["queued", "building_brief", "generating", "reviewing"]);
+            const PENDING = new Set(["needs_manual_review", "needs_regenerate", "review_passed", "needs_manual_source"]);
             const DONE = new Set(["draft_saved"]);
-            const STATUS_LABELS = {{
-              queued: "排队中",
-              deduping: "去重中",
-              fetching_source: "抓原文",
-              source_ready: "原文就绪",
-              analyzing_source: "分析原文",
-              searching_related: "搜同题",
-              fetching_related: "抓参考",
-              building_brief: "做 brief",
-              brief_ready: "brief 就绪",
-              generating: "写稿中",
-              reviewing: "审稿中",
-              review_passed: "已通过",
-              pushing_wechat_draft: "推草稿",
-              draft_saved: "已进草稿",
-              fetch_failed: "抓取失败",
-              analyze_failed: "分析失败",
-              search_failed: "搜索失败",
-              brief_failed: "brief 失败",
-              generate_failed: "写稿失败",
-              review_failed: "审稿失败",
-              push_failed: "推稿失败",
-              needs_manual_source: "等人工补原文",
-              needs_manual_review: "等人工判断",
-              needs_regenerate: "需要重写",
-            }};
-            const STATUS_PROGRESS = {{
-              queued: 5,
-              deduping: 10,
-              fetching_source: 20,
-              source_ready: 30,
-              analyzing_source: 40,
-              searching_related: 50,
-              fetching_related: 60,
-              building_brief: 70,
-              brief_ready: 75,
-              generating: 80,
-              reviewing: 90,
-              review_passed: 95,
-              pushing_wechat_draft: 97,
-              draft_saved: 100,
-              fetch_failed: 100,
-              analyze_failed: 100,
-              search_failed: 100,
-              brief_failed: 100,
-              generate_failed: 100,
-              review_failed: 100,
-              push_failed: 100,
-              needs_manual_source: 100,
-              needs_manual_review: 100,
-              needs_regenerate: 100,
-            }};
-            const FILTER_KEYS = new Set(["all", "doing", "waiting", "ready", "done", "failed"]);
-            const HAS_INITIAL_FILTER = FILTER_KEYS.has(INITIAL_FILTER || "");
 
-            const state = {{
-              snapshot: null,
-              selectedTaskId: INITIAL_TASK_ID,
-              filter: HAS_INITIAL_FILTER ? INITIAL_FILTER : "all",
-              search: INITIAL_SEARCH,
-              filterPinned: HAS_INITIAL_FILTER,
-              detailExpandedByTask: {{}},
-              deleteConfirmTaskId: null,
-              pendingAction: null,
-              isIngesting: false,
-              isRefreshing: false,
+            const statusCategory = (s) => {{
+              if (PROCESSING.has(s)) return "processing";
+              if (PENDING.has(s)) return "pending";
+              if (DONE.has(s)) return "done";
+              if (String(s || "").endsWith("_failed")) return "failed";
+              return "processing";
             }};
 
-            const elements = {{
-              flashMessage: document.getElementById("flash-message"),
-              autoRefresh: document.getElementById("auto-refresh"),
-              heroFocus: document.getElementById("hero-focus"),
-              focusSummary: document.getElementById("focus-summary"),
-              focusCtaHint: document.getElementById("focus-cta-hint"),
-              focusJumpButton: document.getElementById("focus-jump-button"),
-              focusBottleneck: document.getElementById("focus-bottleneck"),
-              focusAction: document.getElementById("focus-action"),
-              focusTarget: document.getElementById("focus-target"),
-              focusReason: document.getElementById("focus-reason"),
-              focusRisk: document.getElementById("focus-risk"),
-              ingestUrl: document.getElementById("ingest-url"),
-              ingestButton: document.getElementById("ingest-button"),
-              pasteButton: document.getElementById("paste-button"),
-              refreshButton: document.getElementById("refresh-button"),
-              taskSearch: document.getElementById("task-search"),
-              clearSearchButton: document.getElementById("clear-search-button"),
-              taskCount: document.getElementById("task-count"),
-              taskList: document.getElementById("task-list"),
-              selectedTaskCode: document.getElementById("selected-task-code"),
-              taskDetail: document.getElementById("task-detail"),
-              generatedAt: document.getElementById("generated-at"),
-              overviewTotal: document.getElementById("overview-total"),
-              metricActive: document.getElementById("metric-active"),
-              metricManual: document.getElementById("metric-manual"),
-              metricDraft: document.getElementById("metric-draft"),
-              metricFailed: document.getElementById("metric-failed"),
-              metricTodaySubmitted: document.getElementById("metric-today-submitted"),
-              metricTodayDraft: document.getElementById("metric-today-draft"),
-              overviewFocus: document.getElementById("overview-focus"),
-              overviewFocusNote: document.getElementById("overview-focus-note"),
-              filterButtons: Array.from(document.querySelectorAll("[data-filter]")),
-            }};
-            const SESSION_EXPIRED_MESSAGE = "后台会话已失效，请刷新页面重新进入后台。";
-            const SESSION_RESTORE_NOTE = "已保留当前 task、筛选和未提交链接，刷新后会自动恢复。";
-            const STORAGE_KEYS = {{
-              selectedTaskId: "phase7_home_task_id",
-              filter: "phase7_home_filter",
-              search: "phase7_home_search",
-              filterPinned: "phase7_home_filter_pinned",
-              ingestUrl: "phase7_home_ingest_url",
-            }};
-            const {{
-              buildSessionExpiredError,
-              escapeHtml,
-              parseJsonResponse,
-              storageGet,
-              storageRemove,
-              storageSet,
-            }} = AdminUiShared;
-            const hydrateArticlePreview = (root, generations) => {{
-              if (!root || !Array.isArray(generations)) return;
-              root.querySelectorAll("[data-generation-html]").forEach((node) => {{
-                const generationId = node.getAttribute("data-generation-html");
-                const generation = generations.find((item) => item.generation_id === generationId);
-                node.innerHTML = generation?.html_content || '<div class="empty">暂无 HTML 预览。</div>';
-              }});
+            const statusLabel = (s) => {{
+              const cat = statusCategory(s);
+              if (cat === "processing") return "处理中";
+              if (cat === "pending") {{
+                if (s === "review_passed") return "待推送";
+                if (s === "needs_regenerate") return "待重写";
+                return "待确认";
+              }}
+              if (cat === "done") return "已推送 ✓";
+              if (cat === "failed") return "失败";
+              return s;
             }};
 
-            const formatDateTime = (value) => {{
-              if (!value) return "刚刚";
-              const date = new Date(value);
-              if (Number.isNaN(date.getTime())) return "刚刚";
-              return new Intl.DateTimeFormat("zh-CN", {{
-                month: "2-digit",
-                day: "2-digit",
-                hour: "2-digit",
-                minute: "2-digit",
-              }}).format(date);
-            }};
-            const formatPercent = (value) => {{
-              if (value === null || value === undefined) return "暂无";
-              return `${{Math.round(value)}}%`;
-            }};
-            const persistUiState = () => {{
-              if (state.selectedTaskId) {{
-                storageSet(STORAGE_KEYS.selectedTaskId, state.selectedTaskId);
-              }} else {{
-                storageRemove(STORAGE_KEYS.selectedTaskId);
-              }}
-              storageSet(STORAGE_KEYS.filterPinned, state.filterPinned ? "true" : "false");
-              if (state.filterPinned) {{
-                storageSet(STORAGE_KEYS.filter, state.filter);
-              }} else {{
-                storageRemove(STORAGE_KEYS.filter);
-              }}
-              if (state.search) {{
-                storageSet(STORAGE_KEYS.search, state.search);
-              }} else {{
-                storageRemove(STORAGE_KEYS.search);
-              }}
-              const draftUrl = elements.ingestUrl.value.trim();
-              if (draftUrl) {{
-                storageSet(STORAGE_KEYS.ingestUrl, draftUrl);
-              }} else {{
-                storageRemove(STORAGE_KEYS.ingestUrl);
-              }}
-            }};
-            const restoreUiState = () => {{
-              const storedTaskId = storageGet(STORAGE_KEYS.selectedTaskId, "");
-              const storedFilter = storageGet(STORAGE_KEYS.filter, "");
-              const storedSearch = storageGet(STORAGE_KEYS.search, "");
-              const storedFilterPinned = storageGet(STORAGE_KEYS.filterPinned, "");
-              const storedIngestUrl = storageGet(STORAGE_KEYS.ingestUrl, "");
-              if (!INITIAL_TASK_ID && storedTaskId) {{
-                state.selectedTaskId = storedTaskId;
-              }}
-              state.filterPinned = storedFilterPinned === "true";
-              if (state.filterPinned && storedFilter) {{
-                state.filter = storedFilter;
-              }}
-              state.search = storedSearch || "";
-              elements.taskSearch.value = state.search;
-              elements.ingestUrl.value = storedIngestUrl || "";
-            }};
-            const sessionExpiredError = () => buildSessionExpiredError(
-              SESSION_EXPIRED_MESSAGE,
-              SESSION_RESTORE_NOTE,
-              persistUiState,
-            );
-            const reviewAiTraceScore = (review) => (review && review.ai_trace_score !== null && review.ai_trace_score !== undefined)
-              ? Number(review.ai_trace_score)
-              : null;
-            const reviewAiTraceLabel = (review) => {{
-              const score = reviewAiTraceScore(review);
-              return score === null ? "暂无" : `${{Math.round(score)}}分`;
-            }};
-            const reviewAiTracePatternCount = (review) => Array.isArray(review?.ai_trace_patterns)
-              ? review.ai_trace_patterns.length
-              : 0;
-            const reviewHumanizeLabel = (review) => review?.humanize_applied
-              ? `已定点润色 ${{Array.isArray(review?.humanize_block_ids) ? review.humanize_block_ids.length : 0}} 段`
-              : "未触发";
-            const reviewVoiceSummary = (review) => shorten(review?.voice_summary || "", 120) || "暂无";
-            const aiTraceStateLabel = (diagnosis) => {{
-              if (!diagnosis) return "暂无诊断";
-              if (diagnosis.state === "completed") return diagnosis.applied ? "已执行并生效" : "已执行";
-              if (diagnosis.state === "running") return "执行中";
-              if (diagnosis.state === "skipped") return "已跳过";
-              if (diagnosis.state === "failed") return "执行失败";
-              return diagnosis.triggered ? "已评估" : "未触发";
-            }};
-            const selectionSourceLabel = (selected) => {{
-              if (!selected) return "默认跟随最新已通过版本";
-              if (selected.source === "manual_selected") return "人工改选历史版本";
-              if (selected.source === "manual_approved") return "人工确认当前版本";
-              if (selected.source === "latest_accepted") return "默认采用最新已通过版本";
-              return "默认采用最新版本";
-            }};
-            const renderAiTraceDiagnosisCompact = (diagnosis) => {{
-              if (!diagnosis) {{
-                return '<div class="action-empty">当前版本还没有 AI 去痕诊断。</div>';
-              }}
-              const reasons = Array.isArray(diagnosis.reasons) && diagnosis.reasons.length
-                ? diagnosis.reasons.join("；")
-                : "暂无额外说明";
-              const targetIds = Array.isArray(diagnosis.rewrite_target_block_ids) && diagnosis.rewrite_target_block_ids.length
-                ? diagnosis.rewrite_target_block_ids.join(", ")
-                : "无";
-              const rewrittenIds = Array.isArray(diagnosis.rewritten_block_ids) && diagnosis.rewritten_block_ids.length
-                ? diagnosis.rewritten_block_ids.join(", ")
-                : "无";
-              return `
-                <div class="section-metrics">
-                  <div class="metric-item"><strong>诊断状态</strong><span>${{escapeHtml(aiTraceStateLabel(diagnosis))}}</span></div>
-                  <div class="metric-item"><strong>AI 痕迹 / 阈值</strong><span>${{escapeHtml(diagnosis.ai_trace_score ?? "暂无")}} / ${{escapeHtml(diagnosis.threshold_score)}}</span></div>
-                  <div class="metric-item"><strong>改写目标</strong><span>${{escapeHtml(targetIds)}}</span></div>
-                  <div class="metric-item"><strong>实际改写</strong><span>${{escapeHtml(rewrittenIds)}}</span></div>
-                  <div class="metric-item"><strong>最近事件</strong><span>${{escapeHtml(diagnosis.last_event_action || "暂无")}} · ${{escapeHtml(formatDateTime(diagnosis.last_event_at))}}</span></div>
-                </div>
-                <p class="section-hint">${{escapeHtml(reasons)}}</p>
-              `;
-            }};
-            const renderRelatedArticlesCompact = (articles) => {{
-              if (!Array.isArray(articles) || articles.length === 0) {{
-                return '<div class="action-empty">当前还没有入选参考文章。</div>';
-              }}
-              return `
-                <div class="detail-sections">
-                  ${{articles.map((item) => `
-                    <article class="detail-section">
-                      <div class="detail-section-head">
-                        <div>
-                          <strong>${{escapeHtml(item.title || item.url)}}</strong>
-                          <span>${{escapeHtml(item.source_site || "未知站点")}} · ${{escapeHtml(formatDateTime(item.published_at))}}</span>
-                        </div>
-                        <div class="section-actions">
-                          <a href="${{escapeHtml(item.url)}}" target="_blank" rel="noreferrer" class="button-link ghost">打开原文</a>
-                        </div>
-                      </div>
-                      <div class="section-metrics">
-                        <div class="metric-item"><strong>查询词</strong><span>${{escapeHtml(item.query_text || "暂无")}}</span></div>
-                        <div class="metric-item"><strong>相关 / 多样性</strong><span>${{escapeHtml(item.relevance_score ?? "-")}} / ${{escapeHtml(item.diversity_score ?? "-")}}</span></div>
-                        <div class="metric-item"><strong>是否入选</strong><span>${{escapeHtml(item.selected ? "已入选" : "未入选")}}</span></div>
-                      </div>
-                      <p class="section-hint">${{escapeHtml(shorten(item.summary || "", 160) || "暂无摘要")}}</p>
-                    </article>
-                  `).join("")}}
-                </div>
-              `;
-            }};
-            const timelineTone = (status) => {{
-              if (["completed", "selected", "reused"].includes(status)) return "done";
-              if (["failed", "blocked"].includes(status)) return "fail";
-              if (["manual", "skipped"].includes(status)) return "waiting";
-              return "";
-            }};
-            const renderTimelineCompact = (items) => {{
-              if (!Array.isArray(items) || items.length === 0) {{
-                return '<div class="action-empty">当前还没有流水线时间线。</div>';
-              }}
-              const recentItems = [...items].reverse().slice(0, 6);
-              return `
-                <div class="detail-sections">
-                  ${{recentItems.map((item) => `
-                    <article class="detail-section">
-                      <div class="detail-section-head">
-                        <div>
-                          <strong>${{escapeHtml(item.title || item.action)}}</strong>
-                          <span>${{escapeHtml(item.summary || "暂无摘要")}}</span>
-                        </div>
-                        <span class="status-chip ${{timelineTone(item.status)}}">${{escapeHtml(item.status || "info")}}</span>
-                      </div>
-                      <div class="section-metrics">
-                        <div class="metric-item"><strong>时间</strong><span>${{escapeHtml(formatDateTime(item.created_at))}}</span></div>
-                        <div class="metric-item"><strong>阶段</strong><span>${{escapeHtml(item.stage || "system")}}</span></div>
-                        <div class="metric-item"><strong>动作</strong><span>${{escapeHtml(item.action || "unknown")}}</span></div>
-                      </div>
-                    </article>
-                  `).join("")}}
-                </div>
-              `;
-            }};
-
-            const statusLabel = (status) => STATUS_LABELS[status] || status || "未知";
-
-            const statusTone = (status) => {{
-              if (DONE.has(status)) return "done";
-              if (FAILED.has(status)) return "fail";
-              if (WAITING.has(status)) return "waiting";
-              if (READY_TO_PUSH.has(status)) return "waiting";
-              return "";
-            }};
-
-            const shorten = (value, limit = 220) => {{
-              if (!value) return "";
-              return value.length > limit ? `${{value.slice(0, limit)}}…` : value;
-            }};
-            const progressForStatus = (status, fallback = 0) => {{
-              if (!status) return fallback;
-              return STATUS_PROGRESS[status] ?? fallback;
-            }};
-
-            const compactUrl = (value, limit = 54) => {{
-              if (!value) return "";
-              try {{
-                const parsed = new URL(value);
-                const searchSuffix = parsed.search ? "…" : "";
-                return shorten(`${{parsed.hostname}}${{parsed.pathname}}${{searchSuffix}}`, limit);
-              }} catch (_error) {{
-                return shorten(value, limit);
-              }}
-            }};
-
-            const isWechatArticleUrl = (value) => {{
-              try {{
-                return new URL(value).hostname === "mp.weixin.qq.com";
-              }} catch (_error) {{
-                return false;
-              }}
-            }};
-
-            const setFlashMessage = (message, tone = "") => {{
-              elements.flashMessage.textContent = message;
-              elements.autoRefresh.className = `status-chip ${{tone}}`.trim();
-              elements.autoRefresh.textContent = tone === "fail"
-                ? "同步异常"
-                : (tone === "waiting" ? "正在更新" : "自动刷新中");
-            }};
-            const setRegionsBusy = (busy) => {{
-              elements.taskList.setAttribute("aria-busy", busy ? "true" : "false");
-              elements.taskDetail.setAttribute("aria-busy", busy ? "true" : "false");
-            }};
-            const setButtonBusy = (button, busy, pendingLabel = "处理中…") => {{
-              if (!button) return;
-              if (!button.dataset.defaultLabel) {{
-                button.dataset.defaultLabel = button.textContent.trim();
-              }}
-              button.disabled = busy;
-              button.setAttribute("aria-busy", busy ? "true" : "false");
-              button.textContent = busy ? pendingLabel : button.dataset.defaultLabel;
-            }};
-            const withStaticButtonBusy = async (button, pendingLabel, work) => {{
-              if (!button || button.disabled) return;
-              setButtonBusy(button, true, pendingLabel);
-              try {{
-                await work();
-              }} finally {{
-                setButtonBusy(button, false);
-              }}
-            }};
-            const actionBusyLabel = (action, fallback) => {{
-              const labels = {{
-                retry: "重跑中…",
-                approve: "通过中…",
-                reject: "退回中…",
-                "push-draft": "推送中…",
-                delete: "删除中…",
+            // 进度估算
+            const statusProgress = (s) => {{
+              const map = {{
+                "queued": 10,
+                "building_brief": 30,
+                "generating": 55,
+                "reviewing": 80,
+                "needs_manual_review": 90,
+                "needs_regenerate": 70,
+                "review_passed": 95,
+                "draft_saved": 100,
               }};
-              return labels[action] || `${{fallback}}中…`;
-            }};
-            const setPendingAction = (action, taskId) => {{
-              state.pendingAction = {{ action, taskId }};
-              renderTaskDetail();
-            }};
-            const clearPendingAction = () => {{
-              state.pendingAction = null;
-              renderTaskDetail();
-            }};
-            const armDeleteConfirm = (taskId) => {{
-              state.deleteConfirmTaskId = taskId;
-              renderTaskDetail();
-            }};
-            const clearDeleteConfirm = (taskId = null, rerender = true) => {{
-              if (taskId && state.deleteConfirmTaskId !== taskId) return;
-              state.deleteConfirmTaskId = null;
-              if (rerender) {{
-                renderTaskDetail();
-              }}
-            }};
-            const setDetailExpanded = (taskId, expanded) => {{
-              if (!taskId) return;
-              if (expanded) {{
-                state.detailExpandedByTask[taskId] = true;
-                return;
-              }}
-              delete state.detailExpandedByTask[taskId];
-            }};
-            const isDetailExpanded = (taskId) => Boolean(taskId && state.detailExpandedByTask[taskId]);
-            const scrollTaskDetailIntoView = () => {{
-              if (!window.matchMedia("(max-width: 1080px)").matches) return;
-              const panel = elements.taskDetail.closest(".panel");
-              if (!panel) return;
-              window.requestAnimationFrame(() => {{
-                panel.scrollIntoView({{ behavior: "smooth", block: "start" }});
-              }});
-            }};
-            const scrollPreviewIntoView = () => {{
-              const preview = document.getElementById("preview-section");
-              if (!preview) return;
-              window.requestAnimationFrame(() => {{
-                preview.scrollIntoView({{ behavior: "smooth", block: "start" }});
-              }});
+              return map[s] || 50;
             }};
 
-            const copyText = async (label, value) => {{
-              try {{
-                await navigator.clipboard.writeText(value);
-                setFlashMessage(`${{label}}已复制。`);
-              }} catch (_error) {{
-                setFlashMessage(`复制${{label}}失败，请手动复制。`, "waiting");
-              }}
-            }};
+            // DOM 元素
+            const urlInput = document.getElementById("url-input");
+            const submitBtn = document.getElementById("submit-btn");
+            const inputError = document.getElementById("input-error");
+            const taskList = document.getElementById("task-list");
+            const cntProcessing = document.getElementById("cnt-processing");
+            const cntPending = document.getElementById("cnt-pending");
+            const cntFailed = document.getElementById("cnt-failed");
+            const cntDone = document.getElementById("cnt-done");
 
-            const nextStepText = (task) => {{
-              if (!task) return "先在左边点一条任务。";
-              if (task.error) return `先处理这个报错：${{task.error}}`;
-              switch (task.status) {{
-                case "queued":
-                case "deduping":
-                case "fetching_source":
-                case "analyzing_source":
-                case "searching_related":
-                case "fetching_related":
-                case "building_brief":
-                case "generating":
-                case "reviewing":
-                case "pushing_wechat_draft":
-                  return "系统在跑，你先等一下。";
-                case "brief_ready":
-                case "source_ready":
-                  return "刚到中间态，系统会继续往下走。";
-                case "needs_manual_review":
-                  return "现在轮到你。点“通过”或“驳回重写”。";
-                case "needs_regenerate":
-                  return "点“重新跑一版”，再来一稿。";
-                case "review_passed":
-                  return "已经合格。点“推草稿”就会进公众号后台。";
-                case "draft_saved":
-                  return "已经进草稿箱，去公众号后台发布。";
-                case "needs_manual_source":
-                  return "原文没抓到，先看高级页面补原文。";
-                default:
-                  if (FAILED.has(task.status)) return "先点“重新跑一版”。还不行再看高级页面。";
-                  return "看左边状态，系统会继续更新。";
-              }}
-            }};
+            let allTasks = [];
+            let expandedTaskId = null;
 
-            const currentTasks = () => state.snapshot?.tasks || [];
-
-            const findSelectedTask = () => {{
-              if (!state.selectedTaskId) return null;
-              const workspace = state.snapshot?.workspace;
-              if (workspace && workspace.task_id === state.selectedTaskId) return workspace;
-              return currentTasks().find((item) => item.task_id === state.selectedTaskId) || null;
-            }};
-
-            const matchesSearch = (task) => {{
-              if (!state.search) return true;
-              const needle = state.search.toLowerCase();
-              return [
-                task.title || "",
-                task.source_url || "",
-                task.task_code || "",
-              ].some((value) => value.toLowerCase().includes(needle));
-            }};
-
-            const matchesFilter = (task, filter = state.filter) => {{
-              if (filter === "doing" && !ACTIVE.has(task.status)) return false;
-              if (filter === "waiting" && !WAITING.has(task.status)) return false;
-              if (filter === "ready" && !READY_TO_PUSH.has(task.status)) return false;
-              if (filter === "done" && !DONE.has(task.status)) return false;
-              if (filter === "failed" && !FAILED.has(task.status)) return false;
-              return matchesSearch(task);
-            }};
-
-            const filteredTasks = () => currentTasks().filter((task) => matchesFilter(task));
-            const filterCountsFromVisibleTasks = () => {{
-              const searchableTasks = currentTasks().filter(matchesSearch);
-              return {{
-                all: searchableTasks.length,
-                doing: searchableTasks.filter((task) => ACTIVE.has(task.status)).length,
-                waiting: searchableTasks.filter((task) => WAITING.has(task.status)).length,
-                ready: searchableTasks.filter((task) => READY_TO_PUSH.has(task.status)).length,
-                done: searchableTasks.filter((task) => DONE.has(task.status)).length,
-                failed: searchableTasks.filter((task) => FAILED.has(task.status)).length,
-              }};
-            }};
-
-            const alignSelectedTaskToVisibleTasks = () => {{
-              const visibleTasks = filteredTasks();
-              if (!visibleTasks.length) {{
-                if (!state.selectedTaskId) {{
-                  return {{ changed: false, needsReload: false }};
-                }}
-                state.selectedTaskId = null;
-                syncUrl();
-                return {{ changed: true, needsReload: false }};
-              }}
-              if (visibleTasks.some((item) => item.task_id === state.selectedTaskId)) {{
-                return {{ changed: false, needsReload: false }};
-              }}
-              const previousSelectedTaskId = state.selectedTaskId;
-              state.selectedTaskId = visibleTasks[0].task_id;
-              syncUrl();
-              return {{
-                changed: true,
-                needsReload: state.selectedTaskId !== previousSelectedTaskId,
-              }};
-            }};
-
-            const suggestFilter = (summary) => {{
-              const visibleCounts = filterCountsFromVisibleTasks();
-              if (visibleCounts.waiting > 0) return "waiting";
-              if (visibleCounts.ready > 0) return "ready";
-              if (visibleCounts.doing > 0) return "doing";
-              if (visibleCounts.failed > 0) return "failed";
-              if (visibleCounts.done > 0) return "done";
-              if (!summary) return "all";
-              if (summary.filtered_manual > 0) return "waiting";
-              if (summary.filtered_review_passed > 0) return "ready";
-              if (summary.filtered_active > 0) return "doing";
-              if (summary.filtered_failed > 0) return "failed";
-              if (summary.filtered_draft_saved > 0) return "done";
-              return "all";
-            }};
-            const focusSummary = (summary) => {{
-              if (!summary) {{
-                return {{
-                  headline: "先贴第一条链接开始。",
-                  note: "新任务会自动排队，主控台会把当前任务切到右侧详情。",
-                }};
-              }}
-              if (summary.filtered_manual > 0) {{
-                return {{
-                  headline: `先处理 ${{summary.filtered_manual}} 条等你判断的任务`,
-                  note: "优先看“等我处理”，避免已写完的任务卡在人工审核或重写环节。",
-                }};
-              }}
-              if (summary.filtered_review_passed > 0) {{
-                return {{
-                  headline: `有 ${{summary.filtered_review_passed}} 条待推草稿任务`,
-                  note: "这些任务已经审稿通过，下一步是推到微信草稿箱，不再算进“等我处理”。",
-                }};
-              }}
-              if (summary.filtered_failed > 0) {{
-                return {{
-                  headline: `有 ${{summary.filtered_failed}} 条失败任务待处理`,
-                  note: "先打开失败任务看报错，再决定重跑还是去高级页面补数据。",
-                }};
-              }}
-              if (summary.filtered_active > 0) {{
-                return {{
-                  headline: `系统正在自动推进 ${{summary.filtered_active}} 条任务`,
-                  note: "当前以观察为主，右侧详情会持续更新到最新状态。",
-                }};
-              }}
-              if (summary.filtered_draft_saved > 0) {{
-                return {{
-                  headline: `已有 ${{summary.filtered_draft_saved}} 条任务进草稿`,
-                  note: "可以去公众号后台检查排版、补图和正式发布。",
-                }};
-              }}
-              return {{
-                headline: summary.today_submitted > 0 ? "今天已经有任务进来，可以从列表继续看。" : "先贴第一条链接开始。",
-                note: "提交新链接后，系统会按既定流程自动往下跑到草稿箱。",
-              }};
-            }};
-
-            const appUrl = (path, params = null) => {{
-              const url = new URL(path, window.location.origin);
-              if (params) {{
-                Object.entries(params).forEach(([key, value]) => {{
-                  if (value !== null && value !== undefined && value !== "") {{
-                    url.searchParams.set(key, String(value));
-                  }}
-                }});
-              }}
-              return url.toString();
-            }};
-
-            const syncUrl = () => {{
-              try {{
-                const url = new URL(window.location.pathname + window.location.search, window.location.origin);
-                if (state.selectedTaskId) {{
-                  url.searchParams.set("task_id", state.selectedTaskId);
-                }} else {{
-                  url.searchParams.delete("task_id");
-                }}
-                window.history.replaceState({{}}, "", url);
-              }} catch (_error) {{
-                // Browsers may block replaceState when the current URL includes Basic Auth credentials.
-              }}
-              persistUiState();
-            }};
-
-            const renderSummary = () => {{
-              const summary = state.snapshot?.summary;
-              if (!summary) return;
-              const focus = focusSummary(summary);
-              elements.overviewTotal.textContent = summary.filtered_total;
-              elements.metricActive.textContent = summary.filtered_active;
-              elements.metricManual.textContent = summary.filtered_manual;
-              elements.metricDraft.textContent = summary.filtered_draft_saved;
-              elements.metricFailed.textContent = summary.filtered_failed;
-              elements.metricTodaySubmitted.textContent = summary.today_submitted;
-              elements.metricTodayDraft.textContent = summary.today_draft_saved;
-              elements.generatedAt.textContent = `${{formatDateTime(summary.generated_at)}} 更新`;
-              elements.heroFocus.textContent = focus.headline;
-              elements.overviewFocus.textContent = focus.headline;
-              elements.overviewFocusNote.textContent = `${{focus.note}} 审稿通过率 ${{formatPercent(summary.today_review_success_rate)}}，推稿成功率 ${{formatPercent(summary.today_auto_push_success_rate)}}。`;
-              const counts = filterCountsFromVisibleTasks();
-              elements.filterButtons.forEach((button) => {{
-                const label = button.dataset.label || button.textContent || "";
-                const count = counts[button.dataset.filter] ?? 0;
-                button.textContent = `${{label}} ${{count}}`;
-              }});
-            }};
-
-            const renderTaskList = () => {{
-              const tasks = filteredTasks();
-              elements.taskCount.textContent = `${{tasks.length}} 个`;
-              if (!tasks.length) {{
-                const emptyText = state.search
-                  ? "没有找到。点“清空”试试。"
-                  : (state.filter === "all" ? "这里还没有任务。" : "当前筛选下没有任务。可以点“全部”看看。");
-                elements.taskList.innerHTML = `<div class="empty">${{emptyText}}</div>`;
-                return;
-              }}
-              elements.taskList.innerHTML = tasks.map((task) => {{
-                const selected = task.task_id === state.selectedTaskId ? "selected" : "";
-                const tone = statusTone(task.status);
-                const toneClass = tone ? `tone-${{tone}}` : "";
-                const title = escapeHtml(task.title || task.source_url || "未命名任务");
-                const meta = escapeHtml(compactUrl(task.source_url || "", 60) || task.task_code);
-                const nextStep = escapeHtml(shorten(nextStepText(task), 54));
-                const created = formatDateTime(task.created_at);
-                const updated = formatDateTime(task.updated_at);
-                const selectedAttr = task.task_id === state.selectedTaskId ? "true" : "false";
-                const summaryTone = WAITING.has(task.status)
-                  ? "需要你处理"
-                  : (READY_TO_PUSH.has(task.status) ? "待推草稿" : (FAILED.has(task.status) ? "需要修复" : (DONE.has(task.status) ? "已完成" : "自动处理中")));
-                return `
-                  <button
-                    type="button"
-                    class="task-card ${{selected}} ${{toneClass}}"
-                    data-task-id="${{task.task_id}}"
-                    role="option"
-                    aria-selected="${{selectedAttr}}"
-                    aria-controls="task-detail"
-                  >
-                    <div class="status-line">
-                      <span class="status-chip ${{statusTone(task.status)}}">${{statusLabel(task.status)}}</span>
-                      <span class="task-eyebrow">${{summaryTone}}</span>
-                    </div>
-                    <div class="task-title">${{title}}</div>
-                    <div class="task-reason">${{nextStep}}</div>
-                    <div class="progress-track"><div class="progress-fill" style="width:${{Math.max(task.progress || 0, 4)}}%"></div></div>
-                    <div class="task-meta">${{meta}}</div>
-                    <div class="task-meta">进度 ${{task.progress}}% · 创建：${{created}} · 更新：${{updated}}</div>
-                    <div class="task-meta">任务号：${{escapeHtml(task.task_code)}}</div>
-                  </button>
-                `;
-              }}).join("");
-            }};
-
-            const renderTaskDetail = () => {{
-              const task = findSelectedTask();
-              if (!task) {{
-                elements.selectedTaskCode.textContent = "先点左边任意一条";
-                const emptyDetail = filteredTasks().length
-                  ? "选中一条任务后，这里会告诉你现在到了哪一步，以及下一步该按哪个按钮。"
-                  : (state.search ? "当前搜索没有找到任务。换个关键词，或者点“全部”再看。" : "当前筛选下没有任务。换个筛选看看。");
-                elements.taskDetail.innerHTML = `<div class="empty">${{emptyDetail}}</div>`;
-                return;
-              }}
-              elements.selectedTaskCode.textContent = task.task_code || task.task_id;
-              const workspace = state.snapshot?.workspace && state.snapshot.workspace.task_id === task.task_id
-                ? state.snapshot.workspace
-                : null;
-              const latestGeneration = workspace?.generations?.[0] || null;
-              const selectedGeneration = workspace?.selected_generation || null;
-              const activeGeneration = workspace?.generations?.find((item) => item.generation_id === selectedGeneration?.generation_id)
-                || latestGeneration;
-              const latestDecision = latestGeneration?.review?.final_decision || latestGeneration?.status || "暂无";
-              const activeDecision = selectedGeneration?.decision || activeGeneration?.review?.final_decision || activeGeneration?.status || latestDecision;
-              const rawSourceUrl = task.source_url || "";
-              const sourceUrl = escapeHtml(rawSourceUrl);
-              const sourceLabel = escapeHtml(compactUrl(rawSourceUrl, 80));
-              const title = escapeHtml(task.title || workspace?.source_article?.title || "未命名任务");
-              const hint = escapeHtml(nextStepText(task));
-              const digest = escapeHtml(activeGeneration?.digest || "这里会显示当前采用版本的摘要。");
-              const rawMediaId = task.wechat_media_id || workspace?.wechat_media_id || "";
-              const rawDraftUrl = workspace?.wechat_draft_url || task.wechat_draft_url || "";
-              const rawDraftHint = workspace?.wechat_draft_url_hint || task.wechat_draft_url_hint || "";
-              const rawDraftDirect = Boolean(workspace?.wechat_draft_url_direct || task.wechat_draft_url_direct);
-              const mediaId = escapeHtml(rawMediaId || "还没有");
-              const draftUrl = escapeHtml(rawDraftUrl);
-              const draftHint = escapeHtml(rawDraftHint || "还没有微信草稿记录。");
-              const draftLinkLabel = rawDraftDirect ? "打开微信草稿" : "打开公众号后台";
-              const deleteArmed = state.deleteConfirmTaskId === task.task_id;
-              const previewAvailable = Boolean(activeGeneration?.generation_id);
-              const canRetry = !ACTIVE.has(task.status);
-              const canApprove = task.status === "needs_manual_review";
-              const canReject = ["needs_manual_review", "review_passed"].includes(task.status);
-              const canPush = task.status === "review_passed";
-              const actionButtons = [];
-              if (canRetry) {{
-                actionButtons.push({{
-                  id: "retry-button",
-                  action: "retry",
-                  klass: "secondary",
-                  label: task.status === "draft_saved" ? "再来一版" : "重新跑一版",
-                }});
-              }}
-              if (canApprove) {{
-                actionButtons.push({{
-                  id: "approve-button",
-                  action: "approve",
-                  klass: "",
-                  label: "通过",
-                }});
-              }}
-              if (canReject) {{
-                actionButtons.push({{
-                  id: "reject-button",
-                  action: "reject",
-                  klass: "warn",
-                  label: "驳回重写",
-                }});
-              }}
-              if (canPush) {{
-                actionButtons.push({{
-                  id: "push-button",
-                  action: "push-draft",
-                  klass: "ghost",
-                  label: "推草稿",
-                }});
-              }}
-              const actionGridClass = actionButtons.length === 1
-                ? " single"
-                : (actionButtons.length === 2 ? " compact" : "");
-              const actionHtml = actionButtons.length
-                ? `<div class="action-grid${{actionGridClass}}">${{actionButtons.map((button) => `
-                    <button
-                      type="button"
-                      id="${{button.id}}"
-                      class="${{button.klass}}"
-                      ${{state.pendingAction?.taskId === task.task_id ? "disabled" : ""}}
-                      aria-busy="${{state.pendingAction?.taskId === task.task_id && state.pendingAction?.action === button.action ? "true" : "false"}}"
-                    >${{state.pendingAction?.taskId === task.task_id && state.pendingAction?.action === button.action ? actionBusyLabel(button.action, button.label) : button.label}}</button>
-                  `).join("")}}</div>`
-                : '<div class="action-empty">现在先不用点按钮，等系统自己跑完就行。</div>';
-              const visibleError = escapeHtml(shorten(task.error || "", 280));
-              const sourceLink = rawSourceUrl
-                ? `<a href="${{sourceUrl}}" title="${{sourceUrl}}" target="_blank" rel="noreferrer">${{sourceLabel}}</a>`
-                : "";
-              const taskCode = escapeHtml(task.task_code || task.task_id);
-              const adoptedVersionLabel = escapeHtml(activeGeneration ? `v${{activeGeneration.version_no}}` : "暂无");
-              const adoptedSourceLabel = escapeHtml(selectionSourceLabel(selectedGeneration));
-              const latestTitle = escapeHtml(latestGeneration?.title || "还没有生成稿件");
-              const latestPromptVersion = escapeHtml(latestGeneration?.prompt_version || "未记录 Prompt 版本");
-              const latestAiTrace = escapeHtml(reviewAiTraceLabel(latestGeneration?.review));
-              const latestHumanize = escapeHtml(reviewHumanizeLabel(latestGeneration?.review));
-              const latestPatternCount = escapeHtml(reviewAiTracePatternCount(latestGeneration?.review));
-              const latestVoiceSummary = escapeHtml(reviewVoiceSummary(latestGeneration?.review));
-              const activeTitle = escapeHtml(activeGeneration?.title || "还没有生成稿件");
-              const activePromptVersion = escapeHtml(activeGeneration?.prompt_version || "未记录 Prompt 版本");
-              const activeAiTrace = escapeHtml(reviewAiTraceLabel(activeGeneration?.review));
-              const activeHumanize = escapeHtml(reviewHumanizeLabel(activeGeneration?.review));
-              const activePatternCount = escapeHtml(reviewAiTracePatternCount(activeGeneration?.review));
-              const activeVoiceSummary = escapeHtml(reviewVoiceSummary(activeGeneration?.review));
-              const activeDiagnosis = activeGeneration?.ai_trace_diagnosis || null;
-              const draftState = rawMediaId
-                ? (rawDraftDirect ? "已有直达草稿" : "已记录后台入口")
-                : "还没进草稿";
-              const utilityButtons = [
-                `<button type="button" id="copy-task-id" class="tiny-button">复制任务号</button>`,
-                rawSourceUrl ? `<button type="button" id="copy-source-url" class="tiny-button">复制原文链接</button>` : "",
-                previewAvailable ? `<button type="button" id="jump-preview" class="tiny-button">定位预览</button>` : "",
-              ].filter(Boolean).join("");
-              elements.taskDetail.innerHTML = `
-                <div class="summary-block">
-                  <div class="summary-title">
-                    <div class="status-line">
-                      <span class="status-chip ${{statusTone(task.status)}}">${{statusLabel(task.status)}}</span>
-                      <span class="mini">进度 ${{task.progress}}%</span>
-                    </div>
-                    <h3>${{title}}</h3>
-                    ${{sourceLink}}
-                  </div>
-                  <div class="big-hint">
-                    <strong>现在该做什么</strong>
-                    <span>${{hint}}</span>
-                  </div>
-                </div>
-
-                <div class="workspace-overview">
-                  <article class="workspace-overview-card strong">
-                    <strong>当前动作</strong>
-                    <span>${{hint}}</span>
-                    <p>${{WAITING.has(task.status)
-                      ? "这条任务已经等你处理，右侧动作区只保留当前最相关的按钮。"
-                      : (READY_TO_PUSH.has(task.status)
-                        ? "这条任务已经审稿通过，下一步是推到微信草稿箱。"
-                        : "系统还会继续往下推进，先关注状态变化和成稿内容。")}}</p>
-                  </article>
-                  <article class="workspace-overview-card">
-                    <strong>任务状态</strong>
-                    <span>${{statusLabel(task.status)}}</span>
-                    <p>进度 ${{task.progress}}%${{WAITING.has(task.status) ? "，当前需要人工介入。" : (READY_TO_PUSH.has(task.status) ? "，当前可以推草稿。" : "，当前不用额外操作。")}}</p>
-                  </article>
-                  <article class="workspace-overview-card">
-                    <strong>最近更新</strong>
-                    <span>${{formatDateTime(task.updated_at)}}</span>
-                    <p>创建时间 ${{formatDateTime(task.created_at)}}，任务号 ${{taskCode}}</p>
-                  </article>
-                  <article class="workspace-overview-card">
-                    <strong>草稿状态</strong>
-                    <span>${{escapeHtml(rawMediaId ? "已生成" : "未生成")}}</span>
-                    <p>${{escapeHtml(draftState)}}${{rawDraftUrl ? ` · ${{compactUrl(rawDraftUrl, 42)}}` : ""}}</p>
-                  </article>
-                  <article class="workspace-overview-card">
-                    <strong>当前采用版本</strong>
-                    <span>${{adoptedVersionLabel}}</span>
-                    <p>${{escapeHtml(activeDecision)}} · ${{adoptedSourceLabel}}</p>
-                  </article>
-                  <article class="workspace-overview-card">
-                    <strong>AI 去痕诊断</strong>
-                    <span>${{escapeHtml(aiTraceStateLabel(activeDiagnosis))}}</span>
-                    <p>${{activeAiTrace}} · ${{activeHumanize}} · 命中 ${{activePatternCount}} 类模式</p>
-                  </article>
-                </div>
-
-                <div class="workspace-layout">
-                  <section class="detail-section" id="preview-section">
-                    <div class="detail-section-head">
-                      <div>
-                        <strong>成稿预览</strong>
-                        <span>这里优先展示当前采用版本，避免你在总览页看见的内容和实际将推送的版本不一致。</span>
-                      </div>
-                    </div>
-                    ${{previewAvailable
-                      ? `<div class="article-preview-shell" data-generation-html="${{escapeHtml(activeGeneration.generation_id)}}"></div>`
-                      : '<div class="empty">还没有生成稿件，所以这里暂时没有预览。</div>'}}
-                    ${{previewAvailable ? `<div class="latest-box"><strong>当前采用版本</strong><p>${{activeTitle}}</p><p class="mini">${{activePromptVersion}} · ${{escapeHtml(activeDecision)}} · AI 痕迹 ${{activeAiTrace}}</p><p class="mini">${{activeHumanize}} · ${{adoptedSourceLabel}}</p><p>${{digest}}</p><p class="mini">${{activeVoiceSummary}}</p>${{latestGeneration && activeGeneration && latestGeneration.generation_id !== activeGeneration.generation_id ? `<p class="mini">最新生成稿：${{latestTitle}} · ${{escapeHtml(latestDecision)}}</p>` : ""}}</div>` : ""}}
-                  </section>
-
-                  <div class="workspace-stack">
-                    <section class="detail-section">
-                      <div class="detail-section-head">
-                        <div>
-                          <strong>当前动作</strong>
-                          <span>这里只放当前最相关的操作，避免把按钮散在各个区域。</span>
-                        </div>
-                      </div>
-                      ${{actionHtml}}
-                      <div class="utility-grid">
-                        ${{utilityButtons}}
-                      </div>
-                      <div class="section-metrics">
-                        <div class="metric-item"><strong>当前采用版本</strong><span>${{adoptedVersionLabel}}</span></div>
-                        <div class="metric-item"><strong>版本结论</strong><span>${{escapeHtml(activeDecision)}}</span></div>
-                        <div class="metric-item"><strong>AI 痕迹</strong><span>${{activeAiTrace}}</span></div>
-                        <div class="metric-item"><strong>定点润色</strong><span>${{activeHumanize}}</span></div>
-                        <div class="metric-item"><strong>参考文章</strong><span>${{task.related_article_count || 0}} 篇</span></div>
-                      </div>
-                    </section>
-
-                    <section class="detail-section">
-                      <div class="detail-section-head">
-                        <div>
-                          <strong>微信草稿</strong>
-                          <span>入口、media_id 和说明都收在这里，避免在预览区重复出现。</span>
-                        </div>
-                        <div class="section-actions">
-                          ${{rawDraftUrl ? `<a href="${{draftUrl}}" target="_blank" rel="noreferrer" class="button-link ghost">${{escapeHtml(draftLinkLabel)}}</a>` : ""}}
-                          ${{rawDraftUrl ? `<button type="button" id="copy-draft-url" class="secondary">复制草稿入口</button>` : ""}}
-                          ${{rawMediaId ? `<button type="button" id="copy-media-id" class="secondary">复制 media_id</button>` : ""}}
-                        </div>
-                      </div>
-                      <div class="section-metrics">
-                        <div class="metric-item"><strong>草稿状态</strong><span>${{escapeHtml(draftState)}}</span></div>
-                        <div class="metric-item"><strong>草稿 media_id</strong><span>${{mediaId}}</span></div>
-                        <div class="metric-item"><strong>草稿入口</strong><span>${{escapeHtml(rawDraftUrl || "还没有")}}</span></div>
-                      </div>
-                      <p class="section-hint">${{draftHint}}</p>
-                    </section>
-
-                    ${{task.error ? `<section class="detail-section error-box"><div class="detail-section-head"><div><strong>报错</strong><span>先看这条报错，再决定是重跑还是去高级页面补数据。</span></div></div><p class="section-hint">${{visibleError}}</p></section>` : ""}}
-                  </div>
-                </div>
-
-                <details class="detail-more" ${{isDetailExpanded(task.task_id) ? "open" : ""}}>
-                  <summary>详细信息</summary>
-                  <div class="detail-more-grid">
-                    <div class="kv-grid">
-                      <div class="kv"><strong>任务号</strong><span>${{taskCode}}</span></div>
-                      <div class="kv"><strong>原文链接</strong><span>${{escapeHtml(rawSourceUrl || "还没有")}}</span></div>
-                      <div class="kv"><strong>作者</strong><span>${{escapeHtml(workspace?.source_article?.author || "未知")}}</span></div>
-                      <div class="kv"><strong>源文摘要</strong><span>${{escapeHtml(workspace?.source_article?.summary || "暂无")}}</span></div>
-                      <div class="kv"><strong>新角度</strong><span>${{escapeHtml(workspace?.brief?.new_angle || "暂无")}}</span></div>
-                      <div class="kv"><strong>定位</strong><span>${{escapeHtml(workspace?.brief?.positioning || "暂无")}}</span></div>
-                      <div class="kv"><strong>当前采用版本</strong><span>${{adoptedVersionLabel}} · ${{escapeHtml(activeDecision)}}</span></div>
-                      <div class="kv"><strong>采用来源</strong><span>${{adoptedSourceLabel}}</span></div>
-                    </div>
-                    <section class="detail-section">
-                      <div class="detail-section-head">
-                        <div>
-                          <strong>AI 去痕诊断</strong>
-                          <span>这里解释为什么触发、跳过或完成 AI 去痕，便于快速判断这一版是否还能继续沿用。</span>
-                        </div>
-                      </div>
-                      ${{renderAiTraceDiagnosisCompact(activeDiagnosis)}}
-                    </section>
-                    <section class="detail-section">
-                      <div class="detail-section-head">
-                        <div>
-                          <strong>参考文章</strong>
-                          <span>总览页直接给出当前任务的入选素材，方便快速回看，不必跳去 Phase 5 才能打开原文。</span>
-                        </div>
-                      </div>
-                      ${{renderRelatedArticlesCompact(workspace?.related_articles || [])}}
-                    </section>
-                    <section class="detail-section">
-                      <div class="detail-section-head">
-                        <div>
-                          <strong>流水线时间线</strong>
-                          <span>这里只展示最近 6 个关键事件；如果要看完整 payload 和多版本细节，再去 Phase 5 审核台。</span>
-                        </div>
-                      </div>
-                      ${{renderTimelineCompact(workspace?.timeline || [])}}
-                    </section>
-                  </div>
-                </details>
-
-                <section class="detail-section danger-card">
-                  <div class="detail-section-head">
-                    <div>
-                      <strong>危险操作</strong>
-                      <span>如果这条任务已经不需要了，可以彻底删除。删除后任务、生成稿、草稿记录和审计关联都会一起清理。</span>
-                    </div>
-                    <div class="section-actions">
-                      <button
-                        type="button"
-                        id="delete-task-button"
-                        class="danger"
-                        ${{state.pendingAction?.taskId === task.task_id || deleteArmed ? "disabled" : ""}}
-                        aria-busy="${{state.pendingAction?.taskId === task.task_id && state.pendingAction?.action === "delete" ? "true" : "false"}}"
-                      >${{state.pendingAction?.taskId === task.task_id && state.pendingAction?.action === "delete" ? actionBusyLabel("delete", "彻底删除") : (deleteArmed ? "删除确认中" : "彻底删除")}}</button>
-                    </div>
-                  </div>
-                  ${{deleteArmed ? `
-                    <div class="danger-confirm-box">
-                      <p class="danger-confirm-copy">将删除任务 <strong>${{title}}</strong>（${{taskCode}}）以及关联的生成稿、草稿记录和审计索引。这个操作无法恢复。</p>
-                      <div class="danger-confirm-actions">
-                        <button
-                          type="button"
-                          id="confirm-delete-task-button"
-                          class="danger"
-                          ${{state.pendingAction?.taskId === task.task_id ? "disabled" : ""}}
-                          aria-busy="${{state.pendingAction?.taskId === task.task_id && state.pendingAction?.action === "delete" ? "true" : "false"}}"
-                        >${{state.pendingAction?.taskId === task.task_id && state.pendingAction?.action === "delete" ? actionBusyLabel("delete", "确认彻底删除") : "确认彻底删除"}}</button>
-                        <button type="button" id="cancel-delete-task-button" class="ghost" ${{state.pendingAction?.taskId === task.task_id ? "disabled" : ""}}>取消</button>
-                      </div>
-                    </div>
-                  ` : '<p class="danger-inline-note">先点“彻底删除”，页面内会再确认一次，避免误删。</p>'}}
-                </section>
-              `;
-
-              hydrateArticlePreview(elements.taskDetail, workspace?.generations || []);
-              actionButtons.forEach((button) => {{
-                elements.taskDetail.querySelector(`#${{button.id}}`)?.addEventListener("click", () => runAction(button.action, task.task_id));
-              }});
-              elements.taskDetail.querySelector(".detail-more")?.addEventListener("toggle", (event) => {{
-                setDetailExpanded(task.task_id, event.currentTarget.open);
-              }});
-              elements.taskDetail.querySelector("#copy-task-id")?.addEventListener("click", () => copyText("任务号", task.task_code || task.task_id));
-              if (rawMediaId) {{
-                elements.taskDetail.querySelector("#copy-media-id")?.addEventListener("click", () => copyText("草稿号", rawMediaId));
-              }}
-              if (rawDraftUrl) {{
-                elements.taskDetail.querySelector("#copy-draft-url")?.addEventListener("click", () => copyText("草稿入口", rawDraftUrl));
-              }}
-              if (rawSourceUrl) {{
-                elements.taskDetail.querySelector("#copy-source-url")?.addEventListener("click", () => copyText("原文链接", rawSourceUrl));
-              }}
-              if (previewAvailable) {{
-                elements.taskDetail.querySelector("#jump-preview")?.addEventListener("click", scrollPreviewIntoView);
-              }}
-              elements.taskDetail.querySelector("#delete-task-button")?.addEventListener("click", () => {{
-                armDeleteConfirm(task.task_id);
-                setFlashMessage("请再确认一次是否彻底删除当前任务。", "waiting");
-              }});
-              elements.taskDetail.querySelector("#cancel-delete-task-button")?.addEventListener("click", () => {{
-                clearDeleteConfirm(task.task_id);
-                setFlashMessage("已取消删除。");
-              }});
-              elements.taskDetail.querySelector("#confirm-delete-task-button")?.addEventListener("click", () => runAction("delete", task.task_id));
-            }};
-
-            const render = () => {{
-              renderSummary();
-              renderTaskList();
-              renderTaskDetail();
-              elements.clearSearchButton.disabled = !state.search;
-              elements.filterButtons.forEach((button) => {{
-                button.classList.toggle("active", button.dataset.filter === state.filter);
-              }});
-              persistUiState();
-            }};
-
-            const applyOptimisticTaskState = (taskId, status) => {{
-              if (!state.snapshot || !taskId || !status) return;
-              const progress = progressForStatus(status);
-              const updatedAt = new Date().toISOString();
-              state.snapshot.tasks = (state.snapshot.tasks || []).map((task) => {{
-                if (task.task_id !== taskId) return task;
-                return {{
-                  ...task,
-                  status,
-                  progress,
-                  error: null,
-                  updated_at: updatedAt,
-                }};
-              }});
-              if (state.snapshot.workspace?.task_id === taskId) {{
-                state.snapshot.workspace = {{
-                  ...state.snapshot.workspace,
-                  status,
-                  progress,
-                  error: null,
-                  updated_at: updatedAt,
-                }};
-              }}
-              render();
-            }};
-
-            const loadSnapshot = async (options = {{}}) => {{
-              const {{ showBusy = true }} = options;
-              if (showBusy) {{
-                setRegionsBusy(true);
-              }}
-              try {{
-                const requestedTaskId = state.selectedTaskId;
-                const response = await fetch(appUrl("/admin/api/home-snapshot", {{
-                  limit: 18,
-                  selected_task_id: state.selectedTaskId,
-                }}), {{
-                  headers: {{ Accept: "application/json" }},
-                  cache: "no-store",
-                }});
-                if (!response.ok) {{
-                  if (response.status === 401) {{
-                    throw sessionExpiredError();
-                  }}
-                  throw new Error("加载任务列表失败。");
-                }}
-                state.snapshot = await response.json();
-                if (!state.filterPinned) {{
-                  state.filter = suggestFilter(state.snapshot.summary);
-                }}
-                if (!state.selectedTaskId && state.snapshot.tasks.length) {{
-                  state.selectedTaskId = state.snapshot.tasks[0].task_id;
-                }}
-                if (!requestedTaskId && state.selectedTaskId && !state.snapshot.workspace) {{
-                  await loadSnapshot(options);
-                  return;
-                }}
-                if (
-                  state.selectedTaskId &&
-                  !state.snapshot.workspace &&
-                  !state.snapshot.tasks.some((item) => item.task_id === state.selectedTaskId)
-                ) {{
-                  state.selectedTaskId = state.snapshot.tasks[0]?.task_id || null;
-                }}
-                if (
-                  state.deleteConfirmTaskId &&
-                  !state.snapshot.tasks.some((item) => item.task_id === state.deleteConfirmTaskId)
-                ) {{
-                  state.deleteConfirmTaskId = null;
-                }}
-                const selectionAlignment = alignSelectedTaskToVisibleTasks();
-                if (selectionAlignment.needsReload && state.selectedTaskId) {{
-                  await loadSnapshot(options);
-                  return;
-                }}
-                syncUrl();
-                render();
-              }} finally {{
-                if (showBusy) {{
-                  setRegionsBusy(false);
-                }}
-              }}
-            }};
-
-            const apiRequest = async (url, {{ method = "POST", payload = undefined }} = {{}}) => {{
-              persistUiState();
-              const response = await fetch(url, {{
+            // API 请求
+            const api = async (method, path, body) => {{
+              const opts = {{
                 method,
-                headers: {{
-                  "Content-Type": "application/json",
-                  Accept: "application/json",
-                }},
-                body: method === "DELETE"
-                  ? undefined
-                  : (payload ? JSON.stringify(payload) : JSON.stringify({{}})),
-              }});
-              const data = await parseJsonResponse(response);
-              if (!response.ok) {{
-                if (response.status === 401) {{
-                  throw sessionExpiredError();
-                }}
-                throw new Error(data.detail || "操作失败。");
+                headers: {{ "Content-Type": "application/json" }},
+                credentials: "same-origin",
+              }};
+              if (body) opts.body = JSON.stringify(body);
+              const res = await fetch(path, opts);
+              if (!res.ok) {{
+                const err = await res.json().catch(() => ({{ detail: res.statusText }}));
+                throw new Error(err.detail || res.statusText);
               }}
-              return data;
+              return res.json();
             }};
-            const apiPost = async (url, payload) => apiRequest(url, {{ method: "POST", payload }});
-            const apiDelete = async (url) => apiRequest(url, {{ method: "DELETE" }});
 
-            const runAction = async (action, taskId) => {{
-              const labels = {{
-                retry: "已重新入队。",
-                approve: "已通过。",
-                reject: "已改成重写。",
-                "push-draft": "已推送到微信草稿箱。",
-                delete: "任务已彻底删除。",
-              }};
-              const pendingMessages = {{
-                retry: "正在重新跑一版…",
-                approve: "正在人工通过…",
-                reject: "正在退回重写…",
-                "push-draft": "正在推送到微信草稿箱…",
-                delete: "正在删除任务…",
-              }};
-              if (state.pendingAction) return;
+            // 显示错误
+            const showError = (msg) => {{
+              inputError.textContent = msg;
+              inputError.style.display = "block";
+              setTimeout(() => {{ inputError.style.display = "none"; }}, 5000);
+            }};
+
+            // 提交链接
+            const submitUrl = async () => {{
+              const url = urlInput.value.trim();
+              if (!url) return;
+              submitBtn.disabled = true;
+              submitBtn.textContent = "提交中...";
+              inputError.style.display = "none";
               try {{
-                if (action === "delete") {{
-                  clearDeleteConfirm(taskId, false);
-                }}
-                setPendingAction(action, taskId);
-                setFlashMessage(pendingMessages[action] || "正在处理…", "waiting");
-                if (action === "delete") {{
-                  await apiDelete(appUrl(`/admin/api/tasks/${{taskId}}`));
-                  if (state.selectedTaskId === taskId) {{
-                    state.selectedTaskId = null;
-                  }}
-                }} else {{
-                  const result = await apiPost(appUrl(`/admin/api/tasks/${{taskId}}/${{action}}`));
-                  state.selectedTaskId = taskId;
-                  if (action === "retry") {{
-                    applyOptimisticTaskState(taskId, result?.status || "queued");
-                  }}
-                }}
-                await loadSnapshot();
-                if (action !== "delete") {{
-                  scrollTaskDetailIntoView();
-                }}
-                setFlashMessage(labels[action] || "完成了。", action === "push-draft" || action === "delete" ? "done" : "");
-              }} catch (error) {{
-                setFlashMessage(error.message || "操作失败。", "fail");
+                await api("POST", "/admin/api/ingest", {{ url }});
+                urlInput.value = "";
+                await refreshTasks();
+              }} catch (e) {{
+                showError(e.message || "提交失败");
               }} finally {{
-                clearPendingAction();
+                submitBtn.disabled = false;
+                submitBtn.textContent = "开始";
               }}
             }};
 
-            const ingestTask = async () => {{
-              const url = elements.ingestUrl.value.trim();
-              if (!url) {{
-                setFlashMessage("先贴一个微信文章链接。", "waiting");
-                elements.ingestUrl.focus();
-                return;
-              }}
-              if (!isWechatArticleUrl(url)) {{
-                setFlashMessage("这里只收微信公众号文章链接。", "waiting");
-                elements.ingestUrl.focus();
-                return;
-              }}
-              if (state.isIngesting) return;
+            submitBtn.addEventListener("click", submitUrl);
+            urlInput.addEventListener("keydown", (e) => {{
+              if (e.key === "Enter") submitUrl();
+            }});
+
+            // 刷新任务列表
+            const refreshTasks = async () => {{
               try {{
-                state.isIngesting = true;
-                setButtonBusy(elements.ingestButton, true, "提交中…");
-                setButtonBusy(elements.pasteButton, true, "处理中…");
-                setFlashMessage("任务已提交，开始排队。", "waiting");
-                const data = await apiPost(appUrl("/admin/api/ingest"), {{ url }});
-                state.selectedTaskId = data.task_id;
-                elements.ingestUrl.value = "";
-                persistUiState();
-                await loadSnapshot();
-                scrollTaskDetailIntoView();
-                if (data.deduped) {{
-                  setFlashMessage("这篇文章之前跑过，已经帮你打开原来的任务。", "waiting");
+                const data = await api("GET", "/admin/api/home-snapshot?limit=30");
+                allTasks = data.tasks || [];
+                renderTasks();
+              }} catch (e) {{
+                console.error("刷新失败:", e);
+              }}
+            }};
+
+            // 渲染任务列表
+            const renderTasks = () => {{
+              // 计数
+              let pCnt = 0, nCnt = 0, fCnt = 0, dCnt = 0;
+              allTasks.forEach((t) => {{
+                const cat = statusCategory(t.status);
+                if (cat === "processing") pCnt++;
+                else if (cat === "pending") nCnt++;
+                else if (cat === "failed") fCnt++;
+                else if (cat === "done") dCnt++;
+              }});
+              cntProcessing.textContent = pCnt;
+              cntPending.textContent = nCnt;
+              cntFailed.textContent = fCnt;
+              cntDone.textContent = dCnt;
+
+              if (!allTasks.length) {{
+                taskList.innerHTML = `
+                  <div class="task-empty">
+                    <div class="icon">\U0001F4CB</div>
+                    粘贴一个微信文章链接开始
+                  </div>`;
+                return;
+              }}
+
+              // 排序：待确认 → 处理中 → 失败 → 已推送
+              const order = {{ pending: 0, processing: 1, failed: 2, done: 3 }};
+              const sorted = [...allTasks].sort((a, b) => {{
+                const oa = order[statusCategory(a.status)] ?? 1;
+                const ob = order[statusCategory(b.status)] ?? 1;
+                if (oa !== ob) return oa - ob;
+                return new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at);
+              }});
+
+              taskList.innerHTML = sorted.map((t) => {{
+                const cat = statusCategory(t.status);
+                const label = statusLabel(t.status);
+                const progress = statusProgress(t.status);
+                const title = t.title || t.source_url || t.id.slice(0, 12);
+                const isExpanded = expandedTaskId === t.id;
+                const cardClass = `task-card ${{isExpanded ? "expanded" : ""}} ${{cat === "done" ? "done-card" : ""}}`;
+
+                // 卡片内按钮
+                let actions = "";
+                if (cat === "pending") {{
+                  if (t.status === "review_passed") {{
+                    actions = `<div class="task-actions">
+                      <button class="btn-primary" data-action="push" data-id="${{t.id}}">推送</button>
+                    </div>`;
+                  }} else {{
+                    actions = `<div class="task-actions">
+                      <button class="btn-primary" data-action="approve" data-id="${{t.id}}">确认</button>
+                    </div>`;
+                  }}
+                }} else if (cat === "failed") {{
+                  actions = `<div class="task-actions">
+                    <button class="btn-danger" data-action="retry" data-id="${{t.id}}">重试</button>
+                  </div>`;
+                }}
+
+                // 进度条（仅处理中）
+                let progressBar = "";
+                if (cat === "processing") {{
+                  progressBar = `<div class="task-progress"><div class="task-progress-bar" style="width:${{progress}}%"></div></div>`;
+                }}
+
+                // 展开详情区
+                let detailHtml = "";
+                if (isExpanded) {{
+                  detailHtml = `<div class="task-detail" id="detail-${{t.id}}">加载中...</div>`;
+                }}
+
+                return `
+                  <div class="${{cardClass}}" data-task-id="${{t.id}}">
+                    <div class="task-card-header">
+                      <div class="task-status-dot ${{cat}}"></div>
+                      <div class="task-title">${{escapeHtml(title)}}</div>
+                      <span class="task-status-label ${{cat}}">${{label}}</span>
+                      ${{actions}}
+                    </div>
+                    ${{progressBar}}
+                    ${{detailHtml}}
+                  </div>`;
+              }}).join("");
+
+              // 如果有展开的任务，加载详情
+              if (expandedTaskId) {{
+                loadTaskDetail(expandedTaskId);
+              }}
+            }};
+
+            // 加载任务详情
+            const loadTaskDetail = async (taskId) => {{
+              const detailEl = document.getElementById(`detail-${{taskId}}`);
+              if (!detailEl) return;
+
+              try {{
+                const data = await api("GET", `/admin/api/home-snapshot?limit=1&selected_task_id=${{taskId}}`);
+                const detail = data.selected_detail;
+                if (!detail) {{
+                  detailEl.innerHTML = `<div style="color:var(--text-secondary);font-size:13px;">无详情</div>`;
                   return;
                 }}
-                setFlashMessage("任务已收到，左边会自己刷新。");
-              }} catch (error) {{
-                setFlashMessage(error.message || "提交失败。", "fail");
-              }} finally {{
-                state.isIngesting = false;
-                setButtonBusy(elements.ingestButton, false);
-                setButtonBusy(elements.pasteButton, false);
+
+                const task = detail.task || {{}};
+                const gen = detail.latest_generation;
+                const cat = statusCategory(task.status);
+
+                // 预览
+                let previewHtml = "";
+                if (gen?.html_content) {{
+                  previewHtml = `
+                    <div class="detail-section">
+                      <h4>文章预览</h4>
+                      <div class="detail-preview">${{gen.html_content}}</div>
+                    </div>`;
+                }}
+
+                // 元信息
+                const meta = [];
+                if (task.source_url) meta.push(["来源", `<a href="${{escapeHtml(task.source_url)}}" target="_blank" style="color:var(--primary);word-break:break-all;">${{escapeHtml(task.source_url.substring(0, 60))}}</a>`]);
+                if (task.created_at) meta.push(["创建", escapeHtml(new Date(task.created_at).toLocaleString("zh-CN"))]);
+                if (task.updated_at) meta.push(["更新", escapeHtml(new Date(task.updated_at).toLocaleString("zh-CN"))]);
+                if (task.error) meta.push(["错误", `<span style="color:var(--danger)">${{escapeHtml(task.error)}}</span>`]);
+
+                let metaHtml = "";
+                if (meta.length) {{
+                  metaHtml = `
+                    <div class="detail-section">
+                      <h4>信息</h4>
+                      <dl class="detail-meta">
+                        ${{meta.map(([k, v]) => `<dt>${{k}}</dt><dd>${{v}}</dd>`).join("")}}
+                      </dl>
+                    </div>`;
+                }}
+
+                // 操作按钮
+                let actionsHtml = "";
+                if (cat === "pending") {{
+                  if (task.status === "review_passed") {{
+                    actionsHtml = `<div class="detail-actions">
+                      <button class="btn-push" data-action="push" data-id="${{task.id}}">推送到草稿箱</button>
+                      <button class="btn-delete" data-action="delete" data-id="${{task.id}}">删除</button>
+                    </div>`;
+                  }} else {{
+                    actionsHtml = `<div class="detail-actions">
+                      <button class="btn-confirm" data-action="approve" data-id="${{task.id}}">确认通过</button>
+                      <button class="btn-retry" data-action="retry" data-id="${{task.id}}">重新生成</button>
+                      <button class="btn-delete" data-action="delete" data-id="${{task.id}}">删除</button>
+                    </div>`;
+                  }}
+                }} else if (cat === "failed") {{
+                  actionsHtml = `<div class="detail-actions">
+                    <button class="btn-retry" data-action="retry" data-id="${{task.id}}">重试</button>
+                    <button class="btn-delete" data-action="delete" data-id="${{task.id}}">删除</button>
+                  </div>`;
+                }} else if (cat === "done") {{
+                  actionsHtml = `<div class="detail-actions">
+                    <button class="btn-delete" data-action="delete" data-id="${{task.id}}">删除</button>
+                  </div>`;
+                }}
+
+                detailEl.innerHTML = previewHtml + metaHtml + actionsHtml;
+
+              }} catch (e) {{
+                detailEl.innerHTML = `<div style="color:var(--danger);font-size:13px;">${{escapeHtml(e.message)}}</div>`;
               }}
             }};
 
-            const refreshVisibleSelection = async () => {{
-              clearDeleteConfirm(null, false);
-              const selectionAlignment = alignSelectedTaskToVisibleTasks();
-              if (selectionAlignment.needsReload && state.selectedTaskId) {{
-                await loadSnapshot();
+            // 事件代理
+            taskList.addEventListener("click", async (e) => {{
+              // 处理操作按钮
+              const actionBtn = e.target.closest("[data-action]");
+              if (actionBtn) {{
+                e.stopPropagation();
+                const action = actionBtn.dataset.action;
+                const id = actionBtn.dataset.id;
+                actionBtn.disabled = true;
+                const origText = actionBtn.textContent;
+                actionBtn.textContent = "处理中...";
+                try {{
+                  if (action === "approve") {{
+                    await api("POST", `/admin/api/tasks/${{id}}/approve`, {{ device_id: "admin-web" }});
+                  }} else if (action === "push") {{
+                    await api("POST", `/admin/api/tasks/${{id}}/push`, {{ device_id: "admin-web" }});
+                  }} else if (action === "retry") {{
+                    await api("POST", `/admin/api/tasks/${{id}}/retry`);
+                  }} else if (action === "delete") {{
+                    if (!confirm("确定要删除这个任务吗？")) {{
+                      actionBtn.disabled = false;
+                      actionBtn.textContent = origText;
+                      return;
+                    }}
+                    await api("DELETE", `/admin/api/tasks/${{id}}`);
+                  }}
+                  await refreshTasks();
+                }} catch (err) {{
+                  showError(err.message || "操作失败");
+                  actionBtn.disabled = false;
+                  actionBtn.textContent = origText;
+                }}
                 return;
               }}
-              render();
-            }};
 
-            elements.filterButtons.forEach((button) => {{
-              button.addEventListener("click", () => {{
-                state.filterPinned = true;
-                state.filter = button.dataset.filter;
-                refreshVisibleSelection().catch((error) => setFlashMessage(error.message || "加载任务失败。", "fail"));
-              }});
-            }});
-
-            elements.ingestUrl.addEventListener("input", () => persistUiState());
-            elements.taskSearch.addEventListener("input", (event) => {{
-              state.search = event.target.value.trim();
-              refreshVisibleSelection().catch((error) => setFlashMessage(error.message || "加载任务失败。", "fail"));
-            }});
-
-            elements.clearSearchButton.addEventListener("click", () => {{
-              state.search = "";
-              elements.taskSearch.value = "";
-              refreshVisibleSelection().catch((error) => setFlashMessage(error.message || "加载任务失败。", "fail"));
-            }});
-
-            elements.taskList.addEventListener("click", (event) => {{
-              const card = event.target.closest("[data-task-id]");
+              // 处理卡片点击 → 展开/收起
+              const card = e.target.closest(".task-card");
               if (!card) return;
-              clearDeleteConfirm(null, false);
-              state.selectedTaskId = card.dataset.taskId;
-              syncUrl();
-              loadSnapshot()
-                .then(() => scrollTaskDetailIntoView())
-                .catch((error) => setFlashMessage(error.message || "加载任务失败。", "fail"));
-            }});
-
-            elements.ingestButton.addEventListener("click", ingestTask);
-            elements.ingestUrl.addEventListener("keydown", (event) => {{
-              if (event.key === "Enter") {{
-                event.preventDefault();
-                ingestTask();
+              const id = card.dataset.taskId;
+              if (expandedTaskId === id) {{
+                expandedTaskId = null;
+              }} else {{
+                expandedTaskId = id;
               }}
+              renderTasks();
             }});
 
-            elements.pasteButton.addEventListener("click", async () => {{
-              try {{
-                const text = await navigator.clipboard.readText();
-                if (text) {{
-                  elements.ingestUrl.value = text.trim();
-                  elements.ingestUrl.focus();
-                  persistUiState();
-                  setFlashMessage("已粘贴。");
-                }}
-              }} catch (_error) {{
-                setFlashMessage("请手动粘贴链接。", "waiting");
-              }}
-            }});
-
-            elements.refreshButton.addEventListener("click", () => {{
-              if (state.isRefreshing) return;
-              withStaticButtonBusy(elements.refreshButton, "刷新中…", async () => {{
-                state.isRefreshing = true;
-                setFlashMessage("正在刷新…", "waiting");
-                try {{
-                  await loadSnapshot();
-                  setFlashMessage("已经刷新。");
-                }} finally {{
-                  state.isRefreshing = false;
-                }}
-              }}).catch((error) => setFlashMessage(error.message || "刷新失败。", "fail"));
-            }});
-
-            const boot = async () => {{
-              restoreUiState();
-              syncUrl();
-              try {{
-                await loadSnapshot();
-                setFlashMessage("自动刷新中。");
-              }} catch (error) {{
-                setFlashMessage(error.message || "页面初始化失败。", "fail");
-              }}
-              window.setInterval(() => {{
-                if (state.pendingAction || state.isIngesting || state.isRefreshing) return;
-                loadSnapshot({{ showBusy: false }}).catch((error) => setFlashMessage(error.message || "刷新失败，稍后会再试。", "fail"));
-              }}, 4000);
+            // 自动刷新
+            let refreshTimer = null;
+            const startAutoRefresh = () => {{
+              refreshTimer = setInterval(refreshTasks, 8000);
+            }};
+            const stopAutoRefresh = () => {{
+              if (refreshTimer) clearInterval(refreshTimer);
             }};
 
-            boot();
+            // 页面可见性控制
+            document.addEventListener("visibilitychange", () => {{
+              if (document.hidden) {{
+                stopAutoRefresh();
+              }} else {{
+                refreshTasks();
+                startAutoRefresh();
+              }}
+            }});
+
+            // 初始化
+            refreshTasks();
+            startAutoRefresh();
           </script>
         </body>
         </html>
         """
     )
-    return render_admin_page(
-        html.replace("__ADMIN_HERO__", hero_html).replace("__ADMIN_OVERVIEW__", overview_html),
-        "portal",
-    )
+    return render_admin_page(html, "portal")
 
 
 @router.get("/admin/console", response_class=HTMLResponse, tags=["admin"], dependencies=[Depends(verify_admin_basic_auth)])
@@ -2797,20 +1067,12 @@ def unified_console() -> str:
         ),
     )
     overview_html = admin_overview_strip(
-        "监控快照",
+        "",
         "".join(
             [
-                admin_overview_card("当前筛选", "0", "当前筛选条件下能看到的任务总量。", value_id="overview-filtered-count"),
-                admin_overview_card("待人工处理", "0", "优先关注需要人工审核或重写的任务。", value_id="overview-manual-count"),
-                admin_overview_card("队列健康", "等待快照", "基于 worker 心跳、堆积和处理深度判断。", value_id="overview-ops-state"),
-                admin_overview_card(
-                    "当前优先",
-                    "先拉一次监控快照，确认今天有哪些任务真正卡住了。",
-                    "这页只负责判断“哪里卡住了”；真正的业务动作仍然分别去总览、Phase 5 和 Phase 6 完成。",
-                    highlight=True,
-                    value_id="overview-focus",
-                    description_id="overview-focus-note",
-                ),
+                admin_overview_card("任务", "0", value_id="overview-filtered-count"),
+                admin_overview_card("待处理", "0", value_id="overview-manual-count"),
+                admin_overview_card("队列", "等待快照", value_id="overview-ops-state"),
             ]
         ),
     )
@@ -2824,50 +1086,15 @@ def unified_console() -> str:
           <title>高级监控台</title>
           <style>
             :root {
-              --bg: #efe8dd;
-              --panel: rgba(255, 251, 246, 0.94);
-              --line: #d4c2ad;
-              --text: #221a11;
-              --muted: #6d6256;
-              --accent: #255d52;
-              --accent-dark: #173f38;
-              --danger: #9e4032;
-              --warn: #b07a18;
-              --ok: #2f7c53;
-              --shadow: 0 18px 48px rgba(55, 40, 21, 0.1);
-            }
-            * { box-sizing: border-box; }
-            body {
-              margin: 0;
-              line-height: 1.5;
-              color: var(--text);
-              font-family: "PingFang SC", "Noto Serif SC", serif;
-              min-height: 100vh;
-              background:
-                radial-gradient(circle at top left, rgba(255, 229, 175, 0.5), transparent 26%),
-                radial-gradient(circle at bottom right, rgba(178, 222, 208, 0.42), transparent 28%),
-                linear-gradient(140deg, #efe8dd 0%, #f6f2ea 44%, #ebe1d2 100%);
-            }
-            .skip-link {
-              position: absolute;
-              top: 16px;
-              left: 16px;
-              transform: translateY(-180%);
-              padding: 10px 14px;
-              border-radius: 999px;
-              background: var(--accent-dark);
-              color: #f7faf8;
-              text-decoration: none;
-              z-index: 20;
-              transition: transform 120ms ease;
-            }
-            .skip-link:focus-visible {
-              transform: translateY(0);
-            }
-            main {
-              max-width: 1440px;
-              margin: 0 auto;
-              padding: 28px 20px 54px;
+              --bg: var(--bg-body);
+              --panel: var(--bg-card);
+              --line: var(--border);
+              --muted: var(--text-secondary);
+              --accent: var(--primary);
+              --accent-dark: var(--primary-hover);
+              --warn: var(--warning);
+              --ok: var(--success);
+              --shadow: var(--shadow-card);
             }
             .hero {
               display: grid;
@@ -3674,8 +1901,7 @@ def unified_console() -> str:
             <section class="layout" id="monitor-region">
               <div class="stack">
                 <section class="panel">
-                  <h2>先准备监控</h2>
-                  <p class="panel-intro">这里控制刷新策略和当前选中任务。默认复用后台会话；SSE 优先，断开时自动回退轮询。如果只是临时排查，可以关掉自动更新手动刷新；若提示未授权，刷新页面重新进入后台即可。</p>
+                  <h2>控制</h2>
                   <div class="grid">
                     <div class="grid two">
                       <div class="field">
@@ -3700,8 +1926,7 @@ def unified_console() -> str:
                 </section>
 
                 <section class="panel">
-                  <h2>筛选条件</h2>
-                  <p class="panel-intro">先按状态和来源收缩范围，再决定要不要按关键词或起始时间继续压缩。看板按状态分组后，优先处理待人工、失败和待推草稿任务。</p>
+                  <h2>筛选</h2>
                   <div class="grid">
                     <div class="field">
                       <label for="status-filter">状态</label>
@@ -3744,16 +1969,14 @@ def unified_console() -> str:
                 </section>
 
                 <section class="panel">
-                  <h2>最近响应</h2>
-                  <p class="panel-intro">这里保留最近一次完整响应，方便复制排障、核对筛选是否生效，或确认某次实时更新到底推了什么。</p>
+                  <h2>响应</h2>
                   <pre id="output">等待刷新...</pre>
                 </section>
               </div>
 
               <div class="stack">
                 <section class="panel">
-                  <h2>任务快照</h2>
-                  <p class="panel-intro">先看今天的总体趋势，再判断是问题集中在人工审核、失败恢复，还是队列堆积。</p>
+                  <h2>快照</h2>
                   <div class="metrics" id="metrics" aria-busy="false">
                     <div class="metric-card"><strong>当前筛选</strong><span>0</span></div>
                   </div>
@@ -3762,8 +1985,7 @@ def unified_console() -> str:
                 <section class="panel" id="alerts-panel">
                   <div class="panel-row">
                     <div>
-                      <h2>告警与静默</h2>
-                      <p class="panel-intro">这里把异常先按级别排好，再决定要不要继续追。静默只会隐藏提醒，不会改动后端状态或真实队列。</p>
+                      <h2>告警</h2>
                     </div>
                     <div class="panel-tools">
                       <span class="mini-note" id="alerts-summary">等待监控快照</span>
@@ -3771,39 +1993,35 @@ def unified_console() -> str:
                     </div>
                   </div>
                   <div class="alerts-grid" id="alerts" aria-busy="false">
-                    <div class="hint">等待监控快照。</div>
+                    <div class="hint">等待快照</div>
                   </div>
                 </section>
 
                 <section class="panel" id="trends-panel">
-                  <h2>最近 24 小时趋势</h2>
-                  <p class="panel-intro">按最近 24 小时、每 3 小时一桶聚合当前筛选范围。先看提交量和失败量，再看审稿与推草稿成功率是否明显走低。</p>
+                  <h2>24h 趋势</h2>
                   <div class="trend-grid" id="trends" aria-busy="false">
-                    <div class="hint">等待监控快照。</div>
+                    <div class="hint">等待快照</div>
                   </div>
                 </section>
 
                 <section class="panel" id="operations-panel">
-                  <h2>队列与 Worker 观测</h2>
-                  <p class="panel-intro">实时显示四条队列的 backlog、处理中任务和 worker 心跳。worker 超过阈值未上报时，会标为 stale 或 offline。</p>
+                  <h2>队列 / Worker</h2>
                   <div class="ops-grid" id="operations" aria-busy="false">
-                    <div class="hint">等待监控快照。</div>
+                    <div class="hint">等待快照</div>
                   </div>
                 </section>
 
                 <section class="panel" id="board-panel">
-                  <h2>状态分组看板</h2>
-                  <p class="panel-intro">看板按状态分组，卡片里会给出“下一步”提示。这里只负责定位任务，不直接执行审核或反馈动作。</p>
+                  <h2>看板</h2>
                   <div class="board" id="board" aria-busy="false">
-                    <div class="hint">先点“立即刷新”。</div>
+                    <div class="hint">点击“立即刷新”</div>
                   </div>
                 </section>
 
                 <section class="panel">
-                  <h2>任务详情</h2>
-                  <p class="panel-intro">点开任务后，这里显示聚合信息、最新 generation 和审计轨迹，帮助你判断接下来该去 Phase 5 还是 Phase 6。</p>
+                  <h2>详情</h2>
                   <div id="workspace" class="workspace" aria-busy="false">
-                    <div class="hint">从看板点“查看详情”后，这里会显示聚合任务信息。</div>
+                    <div class="hint">← 从看板选择任务</div>
                   </div>
                 </section>
               </div>
@@ -4086,23 +2304,23 @@ def unified_console() -> str:
               overviewFilteredCountEl.textContent = summary ? String(summary.filtered_total) : "0";
               overviewManualCountEl.textContent = summary ? String(summary.filtered_manual) : "0";
               overviewOpsStateEl.textContent = opsHealth.label;
-              let focus = "先拉一次监控快照，确认今天有哪些任务真正卡住了。";
-              let note = "这页先判断哪里有问题，真正的审核和反馈动作仍然分别去总览、Phase 5 与 Phase 6 完成。";
+              let focus = "无待处理任务";
+              let note = "";
               if (selectedTaskId) {
-                focus = "当前已经锁定一个任务，优先看详情、最新 generation 和审计轨迹。";
-                note = "判断问题归属后，再去 Phase 5 做审核，或去 Phase 6 做反馈补录与复盘。";
+                focus = `任务 ${selectedTaskId.slice(0, 8)}`;
+                note = "";
               } else if (summary) {
                 if (summary.filtered_manual > 0) {
-                  focus = `当前有 ${summary.filtered_manual} 个任务待人工处理，优先从这些状态组开始。`;
-                  note = "待人工和待重写通常最需要立刻介入，看板卡片会提示下一步回哪一页处理。";
+                  focus = `${summary.filtered_manual} 个待处理`;
+                  note = "";
                 } else if (summary.filtered_failed > 0) {
-                  focus = `当前有 ${summary.filtered_failed} 个失败任务，先看错误和审计轨迹。`;
-                  note = "失败任务通常先看详情页里的错误、审计和最新 generation，再决定是否重试。";
+                  focus = `${summary.filtered_failed} 个异常`;
+                  note = "";
                 } else if (summary.filtered_total === 0) {
-                  focus = "当前筛选下没有任务。换个筛选看看。";
-                  note = "可以放宽状态、来源或起始时间，先把需要关注的任务重新找出来。";
+                  focus = "当前筛选无结果";
+                  note = "";
                 } else {
-                  focus = "当前任务流可用，先看待推草稿、失败和异常堆积是否有新变化。";
+                  focus = "无异常";
                   note = opsHealth.note;
                 }
               }
@@ -4206,7 +2424,7 @@ def unified_console() -> str:
 
             const renderBoard = (tasks) => {
               if (!Array.isArray(tasks) || tasks.length === 0) {
-                boardEl.innerHTML = '<div class="hint">当前筛选下没有任务。换个筛选看看。</div>';
+                boardEl.innerHTML = '<div class="hint">当前筛选无结果</div>';
                 return;
               }
               const counts = tasks.reduce((map, item) => {
@@ -4537,44 +2755,6 @@ def unified_console() -> str:
 
 @router.get("/admin/settings", response_class=HTMLResponse, tags=["admin"], dependencies=[Depends(verify_admin_basic_auth)])
 def settings_console() -> str:
-    hero_html = admin_page_hero(
-        eyebrow="RUNTIME SETTINGS & STATUS",
-        title="运行参数设置",
-        description="这里可以热修改运行开关，也可以管理 LLM 供应商、模型选择与连通性测试；数据库、Redis、微信密钥等基础设施仍不在这里改。",
-        status_aria_label="设置页状态",
-        status_slot_html='<span class="status" id="status">等待加载</span>',
-        status_message="默认复用后台会话。先刷新设置和环境状态。",
-        summary_cards_html="".join(
-            [
-                admin_hero_summary_card("会影响什么", "只影响新任务，不回写基础设施。"),
-                admin_hero_summary_card("需要准备什么", "操作人标识和变更备注；默认复用后台会话。"),
-                admin_hero_summary_card(
-                    "当前建议",
-                    "先刷新，把可改设置和只读环境状态都拉下来。",
-                    wide=True,
-                    content_id="hero-focus",
-                ),
-            ]
-        ),
-    )
-    overview_html = admin_overview_strip(
-        "设置概览",
-        "".join(
-            [
-                admin_overview_card("可改设置", "0", "当前支持通过网页覆盖的运行参数数量。", value_id="overview-settings-count"),
-                admin_overview_card("已覆盖", "0", "数据库里已经覆盖、不会再走环境默认的设置项。", value_id="overview-overrides-count"),
-                admin_overview_card("必填环境缺失", "0", "这些配置不在页面里修改，需要回服务器补齐。", value_id="overview-missing-count"),
-                admin_overview_card(
-                    "当前优先",
-                    "先刷新，把可改设置和只读环境状态都拉下来。",
-                    "页面先判断哪些能改、哪些只能看，再决定是否保存覆盖值。",
-                    highlight=True,
-                    value_id="overview-focus",
-                    description_id="overview-focus-note",
-                ),
-            ]
-        ),
-    )
     html = dedent(
         """\
         <!DOCTYPE html>
@@ -4582,1323 +2762,429 @@ def settings_console() -> str:
         <head>
           <meta charset="utf-8" />
           <meta name="viewport" content="width=device-width, initial-scale=1" />
-          <title>Phase 7B 设置台</title>
+          <title>设置</title>
           <style>
-            :root {
-              --bg: #efe8dd;
-              --panel: rgba(255, 251, 246, 0.94);
-              --line: #d4c2ad;
-              --text: #221a11;
-              --muted: #6d6256;
-              --accent: #255d52;
-              --accent-dark: #173f38;
-              --danger: #9e4032;
-              --warn: #b07a18;
-              --shadow: 0 18px 48px rgba(55, 40, 21, 0.1);
-            }
-            * { box-sizing: border-box; }
-            body {
-              margin: 0;
-              color: var(--text);
-              line-height: 1.5;
-              font-family: "PingFang SC", "Noto Serif SC", serif;
-              min-height: 100vh;
-              background:
-                radial-gradient(circle at top left, rgba(255, 229, 175, 0.5), transparent 26%),
-                radial-gradient(circle at bottom right, rgba(178, 222, 208, 0.42), transparent 28%),
-                linear-gradient(140deg, #efe8dd 0%, #f6f2ea 44%, #ebe1d2 100%);
-            }
-            .skip-link {
-              position: absolute;
-              top: 16px;
-              left: 16px;
-              transform: translateY(-180%);
-              padding: 10px 14px;
-              border-radius: 999px;
-              background: var(--accent-dark);
-              color: #f7faf8;
-              text-decoration: none;
-              z-index: 20;
-              transition: transform 120ms ease;
-            }
-            .skip-link:focus-visible {
-              transform: translateY(0);
-            }
-            main {
-              max-width: 1440px;
+            __ADMIN_SHARED_STYLES__
+
+            .settings-container {
+              max-width: 720px;
               margin: 0 auto;
-              padding: 28px 20px 48px;
-              display: grid;
-              gap: 18px;
+              padding: 32px 20px;
             }
-            .hero {
-              display: grid;
-              gap: 14px;
-              padding: 24px;
-              border: 1px solid var(--line);
-              border-radius: 28px;
-              background: linear-gradient(135deg, rgba(255, 248, 239, 0.92), rgba(248, 244, 237, 0.86));
-              box-shadow: var(--shadow);
-              backdrop-filter: blur(10px);
+            .section {
+              margin-bottom: 28px;
             }
-            .hero-grid {
-              display: grid;
-              grid-template-columns: minmax(0, 1.28fr) minmax(320px, 0.92fr);
-              gap: 18px;
-              align-items: stretch;
-            }
-            .hero-copy {
-              display: grid;
-              gap: 10px;
-              align-content: start;
-            }
-            .eyebrow {
-              display: inline-flex;
-              width: fit-content;
-              padding: 6px 10px;
-              border-radius: 999px;
-              font-size: 12px;
-              letter-spacing: 0.08em;
-              background: rgba(37, 93, 82, 0.12);
-              color: var(--accent-dark);
-            }
-            .hero h1 {
-              margin: 0;
-              font-size: 40px;
-              line-height: 1.05;
-            }
-            .hero p {
-              margin: 0;
-              max-width: 920px;
-              line-height: 1.75;
-              color: var(--muted);
-            }
-            .hero-status-card {
-              display: grid;
-              gap: 14px;
-              padding: 18px;
-              border-radius: 24px;
-              border: 1px solid rgba(37, 93, 82, 0.12);
-              background: linear-gradient(160deg, rgba(255, 252, 247, 0.95), rgba(249, 245, 237, 0.9));
-            }
-            .hero-status-copy {
-              margin: 0;
-              font-size: 15px;
-              line-height: 1.7;
-            }
-            .hero-summary {
-              display: grid;
-              grid-template-columns: repeat(2, minmax(0, 1fr));
-              gap: 10px;
-            }
-            .hero-summary-card {
-              display: grid;
-              gap: 6px;
-              padding: 12px 14px;
-              border-radius: 18px;
-              border: 1px solid rgba(65, 48, 27, 0.1);
-              background: rgba(255, 253, 249, 0.78);
-            }
-            .hero-summary-card strong {
-              color: var(--muted);
-              font-size: 12px;
-              font-weight: 500;
-            }
-            .hero-summary-card span {
-              font-size: 16px;
-              line-height: 1.55;
-            }
-            .hero-summary-card.wide {
-              grid-column: 1 / -1;
-              background: linear-gradient(135deg, rgba(37, 93, 82, 0.1), rgba(255, 249, 242, 0.95));
-            }
-            .overview-strip {
-              display: grid;
-              grid-template-columns: repeat(4, minmax(0, 1fr));
-              gap: 12px;
-            }
-            .overview-card {
-              display: grid;
-              gap: 8px;
-              min-width: 0;
-              padding: 16px;
-              border-radius: 20px;
-              border: 1px solid var(--line);
-              background: rgba(255, 251, 246, 0.9);
-              box-shadow: 0 14px 32px rgba(58, 40, 18, 0.08);
-            }
-            .overview-card.highlight {
-              grid-column: span 2;
-              background: linear-gradient(135deg, rgba(37, 93, 82, 0.1), rgba(255, 249, 242, 0.96));
-            }
-            .overview-card strong {
-              color: var(--muted);
-              font-size: 12px;
-              font-weight: 500;
-            }
-            .overview-card span {
-              display: block;
-              font-size: 28px;
-              line-height: 1.1;
-            }
-            .overview-card p {
-              margin: 0;
-              color: var(--muted);
-              font-size: 13px;
-              line-height: 1.7;
-            }
-            .layout {
-              display: grid;
-              grid-template-columns: 340px minmax(0, 1fr);
-              gap: 18px;
-              align-items: start;
-            }
-            .stack {
-              display: grid;
-              gap: 16px;
-            }
-            .panel {
-              background: var(--panel);
-              border: 1px solid var(--line);
-              border-radius: 22px;
-              padding: 20px;
-              box-shadow: var(--shadow);
-              backdrop-filter: blur(8px);
-            }
-            .panel h2 {
-              margin: 0 0 14px;
-              font-size: 18px;
-            }
-            .panel-intro {
-              margin: 0 0 14px;
-              color: var(--muted);
-              font-size: 13px;
-              line-height: 1.7;
-            }
-            .status {
-              display: inline-flex;
-              padding: 7px 12px;
-              border-radius: 999px;
-              background: rgba(37, 93, 82, 0.12);
-              color: var(--accent-dark);
-              font-size: 12px;
+            .section-header {
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
               margin-bottom: 12px;
             }
-            label {
-              display: block;
-              font-size: 13px;
-              color: var(--muted);
-              margin-bottom: 6px;
-            }
-            .field {
-              display: grid;
-              gap: 6px;
-            }
-            .field-hint {
-              margin: 0;
-              color: var(--muted);
-              font-size: 13px;
-              line-height: 1.7;
-            }
-            input, textarea, select, button {
-              width: 100%;
-              border-radius: 12px;
-              border: 1px solid var(--line);
-              font: inherit;
-            }
-            input, textarea, select {
-              padding: 11px 13px;
-              background: #fffdf8;
+            .section-title {
+              font-size: 14px;
+              font-weight: 600;
               color: var(--text);
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
             }
-            input:focus-visible,
-            textarea:focus-visible,
-            select:focus-visible,
-            button:focus-visible,
-            a:focus-visible,
-            summary:focus-visible {
-              outline: 2px solid rgba(37, 93, 82, 0.18);
-              outline-offset: 3px;
-            }
-            textarea {
-              min-height: 100px;
-              resize: vertical;
-            }
-            .checkbox {
-              display: flex;
-              align-items: center;
-              gap: 10px;
-              padding: 12px 13px;
-              border: 1px solid var(--line);
-              border-radius: 12px;
-              background: #fffdf8;
-            }
-            .checkbox input {
-              width: 18px;
-              height: 18px;
-              margin: 0;
-            }
-            button {
-              width: auto;
-              min-width: 128px;
-              padding: 10px 16px;
+            .section-action {
+              font-size: 12px;
+              color: var(--primary);
               cursor: pointer;
-              background: var(--accent);
-              color: #f8fbf7;
+              background: none;
               border: none;
-              transition: transform 0.12s ease, background 0.12s ease;
+              font-weight: 500;
             }
-            button:hover { background: var(--accent-dark); transform: translateY(-1px); }
-            button.secondary { background: #dcccb5; color: #2c241a; }
-            button.ghost {
-              background: #fffdf8;
-              color: var(--accent-dark);
-              border: 1px solid var(--line);
+            .section-action:hover {
+              text-decoration: underline;
             }
-            button[aria-busy="true"] {
-              opacity: 0.82;
-              cursor: progress;
+
+            /* 配置卡片 */
+            .config-card {
+              background: var(--bg-card);
+              border: 1px solid var(--border);
+              border-radius: var(--radius-md);
+              overflow: hidden;
             }
-            .actions {
+            .config-row {
               display: flex;
-              flex-wrap: wrap;
-              gap: 10px;
-              margin-top: 14px;
-            }
-            .hint, .list {
-              color: var(--muted);
-              line-height: 1.72;
-              font-size: 14px;
-            }
-            .list {
-              padding-left: 18px;
-              margin: 0;
-            }
-            .categories {
-              display: grid;
-              gap: 18px;
-            }
-            .category {
-              display: grid;
-              gap: 12px;
-            }
-            .category h3 {
-              margin: 0;
-              font-size: 20px;
-            }
-            .setting-grid {
-              display: grid;
-              grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-              gap: 14px;
-            }
-            .setting-card {
-              border: 1px solid var(--line);
-              border-radius: 18px;
-              padding: 16px;
-              background: #fffdf8;
-              display: grid;
-              gap: 12px;
-            }
-            .setting-card > div:first-child {
-              display: grid;
-              gap: 6px;
-            }
-            .env-grid {
-              display: grid;
-              grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-              gap: 14px;
-            }
-            .fold {
-              border: 1px dashed var(--line);
-              border-radius: 16px;
-              padding: 12px 14px;
-              background: rgba(255, 253, 248, 0.7);
-            }
-            .fold summary {
-              cursor: pointer;
-              color: var(--muted);
-              font-size: 13px;
-            }
-            .fold .list {
-              margin-top: 10px;
-            }
-            .env-card {
-              border: 1px solid var(--line);
-              border-radius: 18px;
-              padding: 14px;
-              background: #fffdf8;
-              display: grid;
-              gap: 8px;
-            }
-            .env-top {
-              display: flex;
+              align-items: center;
               justify-content: space-between;
-              gap: 10px;
-              align-items: center;
+              padding: 12px 18px;
+              border-bottom: 1px solid var(--border-light);
+              gap: 12px;
+              min-height: 44px;
             }
-            .env-top strong {
-              font-size: 14px;
+            .config-row:last-child {
+              border-bottom: none;
             }
-            .env-badge {
-              display: inline-flex;
-              align-items: center;
-              border-radius: 999px;
-              padding: 4px 8px;
-              font-size: 12px;
-              background: rgba(37, 93, 82, 0.12);
-              color: var(--accent-dark);
+            .config-key {
+              font-size: 13px;
+              font-weight: 500;
+              color: var(--text-secondary);
+              flex-shrink: 0;
+              min-width: 100px;
             }
-            .env-badge.warn {
-              background: rgba(171, 92, 47, 0.14);
-              color: #8a4a21;
-            }
-            .env-card code {
-              font-size: 12px;
-              color: var(--accent-dark);
-            }
-            .setting-card h4 {
-              margin: 0;
-              font-size: 16px;
-            }
-            .setting-card p {
-              margin: 0;
-              color: var(--muted);
-              line-height: 1.66;
-            }
-            .setting-meta {
-              display: grid;
-              gap: 6px;
-              font-size: 12px;
-              color: var(--muted);
-            }
-            .setting-meta strong {
+            .config-value {
+              font-size: 13px;
               color: var(--text);
+              text-align: right;
+              word-break: break-all;
+              flex: 1;
+            }
+            .config-value select,
+            .config-value input {
+              padding: 4px 8px;
+              border: 1px solid var(--border);
+              border-radius: var(--radius-sm);
+              font-size: 13px;
+              background: var(--bg-input);
+              color: var(--text);
+              text-align: right;
+              min-width: 140px;
+            }
+            .config-value select:focus,
+            .config-value input:focus {
+              outline: none;
+              border-color: var(--primary);
+            }
+
+            /* 状态标签 */
+            .badge {
+              display: inline-block;
+              padding: 2px 8px;
+              border-radius: 999px;
+              font-size: 11px;
               font-weight: 600;
             }
-            .setting-actions {
+            .badge.ok {
+              background: var(--success-soft);
+              color: #047857;
+            }
+            .badge.warn {
+              background: var(--warning-soft);
+              color: #B45309;
+            }
+            .badge.error {
+              background: var(--danger-soft);
+              color: var(--danger);
+            }
+            .badge.na {
+              background: var(--border-light);
+              color: var(--text-secondary);
+            }
+
+            /* 操作栏 */
+            .action-bar {
               display: flex;
-              flex-wrap: wrap;
-              gap: 10px;
+              gap: 8px;
+              margin-bottom: 24px;
             }
-            .llm-shell {
-              display: grid;
-              gap: 16px;
+            .action-bar button {
+              padding: 8px 20px;
+              border: none;
+              border-radius: var(--radius-sm);
+              font-size: 13px;
+              font-weight: 600;
+              cursor: pointer;
+              transition: all var(--transition);
             }
-            .llm-selection-card,
-            .llm-provider-card {
-              border: 1px solid var(--line);
-              border-radius: 18px;
-              padding: 16px;
-              background: #fffdf8;
-              display: grid;
-              gap: 12px;
+            .btn-refresh {
+              background: var(--bg-card);
+              color: var(--text);
+              border: 1px solid var(--border) !important;
             }
-            .llm-selection-grid {
-              display: grid;
-              grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-              gap: 12px;
+            .btn-refresh:hover {
+              border-color: var(--primary) !important;
+              color: var(--primary);
             }
-            .llm-provider-grid {
-              display: grid;
-              grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-              gap: 14px;
+            .btn-save {
+              background: var(--primary);
+              color: #fff;
             }
-            .llm-provider-head,
-            .llm-provider-top {
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              gap: 10px;
-              flex-wrap: wrap;
+            .btn-save:hover {
+              background: var(--primary-hover);
             }
-            .llm-provider-top h4,
-            .llm-provider-head h3,
-            .llm-selection-card h3 {
-              margin: 0;
+            .btn-save:disabled {
+              opacity: 0.5;
+              cursor: not-allowed;
             }
-            .llm-provider-note {
-              margin: 0;
-              font-size: 12px;
-              color: var(--muted);
-              line-height: 1.6;
+
+            /* 消息提示 */
+            .flash {
+              display: none;
+              padding: 10px 16px;
+              border-radius: var(--radius-sm);
+              font-size: 13px;
+              margin-bottom: 16px;
             }
-            .llm-provider-card textarea {
-              min-height: 120px;
+            .flash.ok {
+              background: var(--success-soft);
+              color: #047857;
             }
-            .card-note {
-              margin: 0;
-              font-size: 12px;
-              color: var(--muted);
-              line-height: 1.6;
+            .flash.fail {
+              background: var(--danger-soft);
+              color: var(--danger);
             }
-            pre {
-              margin: 0;
-              white-space: pre-wrap;
-              word-break: break-word;
-              background: #2f261a;
-              color: #f9f2de;
-              padding: 16px;
-              border-radius: 14px;
-              min-height: 220px;
-              line-height: 1.6;
-              overflow: auto;
+
+            /* 底部返回 */
+            .back-link {
+              text-align: center;
+              margin-top: 32px;
+              padding-top: 20px;
+              border-top: 1px solid var(--border-light);
             }
-            .empty {
-              border: 1px dashed var(--line);
-              border-radius: 18px;
-              padding: 24px;
-              color: var(--muted);
-              background: rgba(255, 255, 255, 0.4);
+            .back-link a {
+              font-size: 13px;
+              color: var(--text-secondary);
+              text-decoration: none;
             }
-            .categories[aria-busy="true"] {
-              opacity: 0.8;
+            .back-link a:hover {
+              color: var(--primary);
             }
-            __ADMIN_NAV_STYLES__
-            @media (max-width: 960px) {
-              .hero-grid { grid-template-columns: 1fr; }
-              .overview-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-              .layout { grid-template-columns: 1fr; }
+
+            .loading {
+              text-align: center;
+              padding: 20px;
+              color: var(--text-secondary);
+              font-size: 13px;
             }
-            @media (max-width: 720px) {
-              main { padding: 20px 14px 36px; }
-              .hero { padding: 18px; }
-              .panel { padding: 16px; border-radius: 20px; }
-              .hero h1 { font-size: 30px; }
-              .hero-summary { grid-template-columns: 1fr; }
-              .overview-strip { grid-template-columns: 1fr; }
-              .overview-card.highlight { grid-column: span 1; }
-              .setting-actions, .actions { flex-direction: column; }
-              button { width: 100%; }
-            }
-            __ADMIN_SHARED_STYLES__
           </style>
         </head>
-        <body>
-          <a class="skip-link" href="#settings-region">跳到设置主区</a>
+        <body class="admin-app">
+          <script>__ADMIN_SHARED_SCRIPT_HELPERS__</script>
+
           <main class="admin-main">
-            __ADMIN_SECTION_NAV__
-            __ADMIN_HERO__
-            __ADMIN_OVERVIEW__
+            <div class="settings-container">
+              <!-- 消息提示 -->
+              <div class="flash" id="flash-msg"></div>
 
-            <section class="layout" id="settings-region">
-              <div class="stack">
-                <section class="panel">
-                  <h2>先准备</h2>
-                  <p class="panel-intro">先准备操作元数据。页面默认复用后台会话；保存设置、恢复默认、发送测试告警都会复用这里的信息。如果长时间停留后提示未授权，刷新页面重新进入后台即可。</p>
-                  <div class="field" style="margin-top: 14px;">
-                    <label for="operator">operator</label>
-                    <input id="operator" type="text" value="admin-console" aria-describedby="operator-hint" />
-                  </div>
-                  <p class="field-hint" id="operator-hint">用于审计日志，建议填当前值班人或操作来源。</p>
-                  <div class="field" style="margin-top: 14px;">
-                    <label for="note">变更备注</label>
-                    <textarea id="note" placeholder="例如：将写稿模型切到新版本做小流量验证" aria-describedby="note-hint"></textarea>
-                  </div>
-                  <p class="field-hint" id="note-hint">备注会跟随变更和测试告警一起发送，尽量写清楚目的和影响范围。</p>
-                  <div class="actions">
-                    <button id="refresh">刷新</button>
-                    <button id="clear-output" class="secondary">清空</button>
-                  </div>
-                </section>
-
-                <section class="panel">
-                  <h2>不能改什么</h2>
-                  <p class="panel-intro">为了安全和部署稳定，下面这些仍然保留在服务器配置里，不开放网页编辑。</p>
-                  <details class="fold">
-                    <summary>展开说明</summary>
-                    <ul class="list">
-                      <li>这里只覆盖少量运行参数，不改数据库、Redis、域名或容器配置。</li>
-                      <li>除 LLM 供应商 API Key 外，其他密钥类值仍然只保留在服务器 `.env`，页面不显示也不支持改写。</li>
-                      <li>Phase 4 仍然受 `WECHAT_ENABLE_DRAFT_PUSH` 总开关约束。</li>
-                      <li>自动反馈切到 `http` 前，仍需在 `.env` 里配置 `FEEDBACK_SYNC_HTTP_URL` 与可选 `FEEDBACK_SYNC_API_KEY`。</li>
-                    </ul>
-                  </details>
-                </section>
-
-                <section class="panel">
-                  <h2>辅助工具</h2>
-                  <p class="panel-intro">这里放的是低频辅助操作，不应该干扰主流程。先刷新确认状态，再决定是否发测试告警或看调试输出。</p>
-                  <details class="fold">
-                    <summary>测试告警</summary>
-                    <div class="hint" id="alert-hint" style="margin-top: 10px;">先点“刷新”。若 `ALERT_WEBHOOK_URL` 未配置，这里会显示为不可用。</div>
-                    <div class="actions">
-                      <button id="send-alert">发送</button>
-                    </div>
-                  </details>
-                  <details class="fold" id="debug-output-panel">
-                    <summary>调试输出</summary>
-                    <pre id="output">等待请求。</pre>
-                  </details>
-                </section>
+              <!-- 操作栏 -->
+              <div class="action-bar">
+                <button class="btn-refresh" id="btn-refresh" onclick="loadAll()">刷新</button>
+                <button class="btn-save" id="btn-save" onclick="saveChanges()" disabled>保存修改</button>
               </div>
 
-              <div class="stack">
-                <section class="panel">
-                  <h2>LLM 供应商与模型</h2>
-                  <p class="panel-intro">这里管理当前可用的 LLM 供应商、每个供应商下可选模型，以及当前分析 / 写稿 / 审稿使用哪一个。测试按钮会先保存当前配置，再发送一条简单指令验证连通性。</p>
-                  <div id="llm-config" class="categories" aria-busy="false">
-                    <div class="empty">点击“刷新”拉取当前 LLM 配置。</div>
-                  </div>
-                </section>
-
-                <section class="panel">
-                  <h2>当前设置</h2>
-                  <p class="panel-intro">改完只影响新任务；恢复默认会回退到环境变量。优先处理确实需要热修改的项，不要把这里当作 `.env` 编辑器。</p>
-                  <div id="categories" class="categories" aria-busy="false">
-                    <div class="empty">点击“刷新”拉取当前设置。</div>
-                  </div>
-                </section>
-
-                <section class="panel">
-                  <h2>环境状态</h2>
-                  <p class="panel-intro">这里只读显示，密钥不会明文展示。它的作用是帮助你判断“能不能改”和“改了以后会不会真正生效”。</p>
-                  <div id="runtime-status" class="categories" aria-busy="false">
-                    <div class="empty">点击“刷新”拉取环境状态。</div>
-                  </div>
-                </section>
+              <!-- LLM 配置 -->
+              <div class="section">
+                <div class="section-header">
+                  <span class="section-title">LLM 配置</span>
+                  <button class="section-action" onclick="testLlm()">测试连通</button>
+                </div>
+                <div class="config-card" id="llm-card">
+                  <div class="loading">加载中...</div>
+                </div>
               </div>
-            </section>
+
+              <!-- 运行设置 -->
+              <div class="section">
+                <div class="section-header">
+                  <span class="section-title">运行设置</span>
+                </div>
+                <div class="config-card" id="settings-card">
+                  <div class="loading">加载中...</div>
+                </div>
+              </div>
+
+              <!-- 环境状态 -->
+              <div class="section">
+                <div class="section-header">
+                  <span class="section-title">环境状态</span>
+                </div>
+                <div class="config-card" id="env-card">
+                  <div class="loading">加载中...</div>
+                </div>
+              </div>
+
+              <!-- 返回工作台 -->
+              <div class="back-link">
+                <a href="/admin">← 返回工作台</a>
+              </div>
+            </div>
           </main>
 
           <script>
-            const statusEl = document.getElementById("status");
-            const flashMessageEl = document.getElementById("flash-message");
-            const heroFocusEl = document.getElementById("hero-focus");
-            const outputPanelEl = document.getElementById("debug-output-panel");
-            const outputEl = document.getElementById("output");
-            const alertHintEl = document.getElementById("alert-hint");
-            const operatorEl = document.getElementById("operator");
-            const noteEl = document.getElementById("note");
-            const llmConfigEl = document.getElementById("llm-config");
-            const categoriesEl = document.getElementById("categories");
-            const runtimeStatusEl = document.getElementById("runtime-status");
-            const overviewSettingsCountEl = document.getElementById("overview-settings-count");
-            const overviewOverridesCountEl = document.getElementById("overview-overrides-count");
-            const overviewMissingCountEl = document.getElementById("overview-missing-count");
-            const overviewFocusEl = document.getElementById("overview-focus");
-            const overviewFocusNoteEl = document.getElementById("overview-focus-note");
-            const CATEGORY_LABELS = {
-              phase4: "Phase 4 生成与审稿",
-              feedback: "Phase 6 自动反馈",
-            };
-            const HIDDEN_SETTING_KEYS = new Set(["phase4.write_model", "phase4.review_model"]);
-            const RUNTIME_CATEGORY_LABELS = {
-              app: "应用基础配置",
-              infra: "基础设施连接",
-              security: "访问控制与密钥",
-              integrations: "外部集成",
-              observability: "观测与告警",
-            };
-            let currentSettings = [];
-            let currentLLMConfig = null;
-            let currentRuntimeStatus = null;
-            const SESSION_EXPIRED_MESSAGE = "后台会话已失效，请刷新页面重新进入后台。";
+            const { apiUrl, escapeHtml, parseJsonResponse, setButtonBusy } = AdminUiShared;
 
-            const setStatus = (text, tone = "") => {
-              statusEl.textContent = text;
-              statusEl.className = `status ${tone}`.trim();
-              if (flashMessageEl) {
-                flashMessageEl.textContent = text;
-              }
-            };
-            const setDataBusy = (busy) => {
-              llmConfigEl.setAttribute("aria-busy", busy ? "true" : "false");
-              categoriesEl.setAttribute("aria-busy", busy ? "true" : "false");
-              runtimeStatusEl.setAttribute("aria-busy", busy ? "true" : "false");
-            };
-
-            const revealOutputPanel = () => {
-              if (outputPanelEl && !outputPanelEl.open) {
-                outputPanelEl.open = true;
-              }
-            };
-
-            const renderOutput = (value, { reveal = false } = {}) => {
-              outputEl.textContent = typeof value === "string" ? value : JSON.stringify(value, null, 2);
-              if (reveal) {
-                revealOutputPanel();
-              }
-            };
-            const apiUrl = (path) => new URL(path, window.location.origin).toString();
-
-            const escapeHtml = (value) =>
-              String(value ?? "")
-                .replace(/&/g, "&amp;")
-                .replace(/</g, "&lt;")
-                .replace(/>/g, "&gt;")
-                .replace(/"/g, "&quot;");
-
-            const formatValue = (value, valueType) => {
-              if (value === null || value === undefined) return "未设置";
-              if (valueType === "boolean") return value ? "true" : "false";
-              if (valueType === "integer_list" && Array.isArray(value)) return value.join(", ");
-              if (typeof value === "object") return JSON.stringify(value);
-              return String(value);
-            };
-            const getVisibleSettings = (settings = []) => settings.filter((item) => !HIDDEN_SETTING_KEYS.has(item.key));
-            const renderOverview = (settings = [], runtimeStatus = null) => {
-              const visibleSettings = getVisibleSettings(settings);
-              const overrideCount = visibleSettings.filter((item) => item.has_override).length;
-              const environment = runtimeStatus?.environment || [];
-              const missingRequired = environment.filter((item) => item.required && !item.configured).length;
-              let focus = "先刷新，把可改设置和只读环境状态都拉下来。";
-              let note = "页面先判断哪些能改、哪些只能看，再决定是否保存覆盖值。";
-              if (missingRequired > 0) {
-                focus = `先补齐 ${missingRequired} 项必填环境配置`;
-                note = "这些项不在页面里修改，需要回服务器环境变量或部署配置中补齐。";
-              } else if (overrideCount > 0) {
-                focus = `当前已有 ${overrideCount} 项数据库覆盖`;
-                note = "保存前先确认是否真的需要覆盖环境默认，避免历史覆盖长期遗留。";
-              } else if (visibleSettings.length > 0) {
-                focus = "设置已加载，可以按卡片逐项修改";
-                note = "优先改确实需要热更新的运行参数，改完再看只读环境状态是否匹配。";
-              }
-              overviewSettingsCountEl.textContent = String(visibleSettings.length);
-              overviewOverridesCountEl.textContent = String(overrideCount);
-              overviewMissingCountEl.textContent = String(missingRequired);
-              overviewFocusEl.textContent = focus;
-              overviewFocusNoteEl.textContent = note;
-              if (heroFocusEl) {
-                heroFocusEl.textContent = focus;
-              }
-            };
-
-            const readDraft = () => {
-              operatorEl.value = localStorage.getItem("phase7_settings_operator") || "admin-console";
-              noteEl.value = localStorage.getItem("phase7_settings_note") || "";
-            };
-
-            const saveDraft = () => {
-              localStorage.setItem("phase7_settings_operator", operatorEl.value.trim());
-              localStorage.setItem("phase7_settings_note", noteEl.value);
-            };
-
-            const request = async (path, options = {}) => {
-              saveDraft();
-              const headers = { ...(options.headers || {}) };
-              const response = await fetch(apiUrl(path), {
-                ...options,
-                headers,
+            // API 请求
+            const request = async (path, opts = {}) => {
+              const res = await fetch(apiUrl(path), {
                 credentials: "same-origin",
+                headers: { "Content-Type": "application/json" },
+                ...opts,
               });
-              const text = await response.text();
-              let body = null;
-              try {
-                body = text ? JSON.parse(text) : null;
-              } catch (_error) {
-                body = text;
+              if (!res.ok) {
+                const err = await res.json().catch(() => ({ detail: res.statusText }));
+                throw new Error(err.detail || res.statusText);
               }
-              if (!response.ok) {
-                if (response.status === 401) {
-                  throw new Error(SESSION_EXPIRED_MESSAGE);
-                }
-                const detail = body && typeof body === "object" && body.detail ? body.detail : text || response.statusText;
-                throw new Error(detail);
-              }
-              return body;
+              return res.json();
             };
-            const setButtonBusy = (button, busy, pendingLabel = "处理中...") => {
-              if (!button) return;
-              if (!button.dataset.defaultLabel) {
-                button.dataset.defaultLabel = button.textContent.trim();
-              }
-              button.disabled = busy;
-              button.setAttribute("aria-busy", busy ? "true" : "false");
-              button.textContent = busy ? pendingLabel : button.dataset.defaultLabel;
+
+            // 消息提示
+            const flash = (msg, type = "ok") => {
+              const el = document.getElementById("flash-msg");
+              el.textContent = msg;
+              el.className = `flash ${type}`;
+              el.style.display = "block";
+              setTimeout(() => { el.style.display = "none"; }, 4000);
             };
-            const withButtonBusy = async (button, pendingLabel, work) => {
-              if (!button || button.disabled) return;
-              setButtonBusy(button, true, pendingLabel);
+
+            // 状态
+            let llmConfig = null;
+            let settingsData = [];
+            let envData = [];
+            let pendingChanges = {};
+
+            // 加载全部
+            const loadAll = async () => {
+              setButtonBusy(document.getElementById("btn-refresh"), true);
               try {
-                await work();
-              } catch (error) {
-                setStatus("操作失败", "warn");
-                renderOutput(error.message || String(error), { reveal: true });
+                await Promise.all([loadLlm(), loadSettings(), loadEnv()]);
+                flash("已刷新");
+              } catch (e) {
+                flash(e.message || "加载失败", "fail");
               } finally {
-                setButtonBusy(button, false);
+                setButtonBusy(document.getElementById("btn-refresh"), false);
               }
             };
 
-            const buildInput = (setting) => {
-              const inputId = `setting-${setting.key}`;
-              if (setting.value_type === "boolean") {
-                const checked = setting.effective_value ? "checked" : "";
-                return `
-                  <label for="${inputId}">当前值</label>
-                  <label class="checkbox" for="${inputId}">
-                    <input id="${inputId}" type="checkbox" ${checked} />
-                    <span>启用</span>
-                  </label>
-                `;
-              }
-              if (setting.value_type === "enum") {
-                const options = (setting.options || [])
-                  .map((item) => {
-                    const selected = item.value === setting.effective_value ? "selected" : "";
-                    return `<option value="${escapeHtml(item.value)}" ${selected}>${escapeHtml(item.label)} (${escapeHtml(item.value)})</option>`;
-                  })
-                  .join("");
-                return `
-                  <label for="${inputId}">当前值</label>
-                  <select id="${inputId}">${options}</select>
-                `;
-              }
-              const value = setting.value_type === "integer_list"
-                ? formatValue(setting.effective_value, setting.value_type)
-                : escapeHtml(formatValue(setting.effective_value, setting.value_type));
-              return `
-                <label for="${inputId}">${setting.value_type === "integer_list" ? "当前值（逗号分隔）" : "当前值"}</label>
-                <input id="${inputId}" type="text" value="${value}" />
-              `;
+            // LLM 配置
+            const loadLlm = async () => {
+              const data = await request("/api/v1/admin/llm-config");
+              llmConfig = data;
+              const card = document.getElementById("llm-card");
+              const rows = [
+                configRow("供应商", escapeHtml(data.provider || "—")),
+                configRow("分析模型", escapeHtml(data.model_analyze || "—")),
+                configRow("写作模型", escapeHtml(data.model_write || "—")),
+                configRow("审核模型", escapeHtml(data.model_review || "—")),
+              ];
+              card.innerHTML = rows.join("");
             };
 
-            const createBlankLLMProvider = () => ({
-              provider_id: `provider-${Date.now()}`,
-              vendor: "openai-compatible",
-              label: "新供应商",
-              api_base: "https://api.example.com/v1",
-              models: ["model-name"],
-              has_api_key: false,
-              api_key_preview: null,
-              is_env_default: false,
-            });
-
-            const readProviderCards = () =>
-              Array.from(llmConfigEl.querySelectorAll(".llm-provider-card")).map((card) => {
-                const readField = (fieldName) =>
-                  (card.querySelector(`[data-field="${fieldName}"]`)?.value || "").trim();
-                const models = readField("models")
-                  .split("\\n")
-                  .map((item) => item.trim())
-                  .filter(Boolean);
-                return {
-                  provider_id: readField("provider_id"),
-                  vendor: readField("vendor"),
-                  label: readField("label"),
-                  api_base: readField("api_base"),
-                  models,
-                  api_key: readField("api_key") || null,
-                  has_api_key: card.dataset.hasApiKey === "true" || Boolean(readField("api_key")),
-                  api_key_preview: card.dataset.apiKeyPreview || null,
-                  is_env_default: card.dataset.isEnvDefault === "true",
-                };
-              });
-
-            const currentSelectionElements = () => ({
-              activeProviderEl: document.getElementById("llm-active-provider"),
-              analyzeModelEl: document.getElementById("llm-analyze-model"),
-              writeModelEl: document.getElementById("llm-write-model"),
-              reviewModelEl: document.getElementById("llm-review-model"),
-            });
-
-            const buildProviderOptionHtml = (providers, selectedValue) =>
-              providers
-                .map((provider) => {
-                  const selected = provider.provider_id === selectedValue ? "selected" : "";
-                  return `<option value="${escapeHtml(provider.provider_id)}" ${selected}>${escapeHtml(provider.label)} (${escapeHtml(provider.vendor)})</option>`;
-                })
-                .join("");
-
-            const buildModelOptionHtml = (models, selectedValue) =>
-              (models || [])
-                .map((model) => {
-                  const selected = model === selectedValue ? "selected" : "";
-                  return `<option value="${escapeHtml(model)}" ${selected}>${escapeHtml(model)}</option>`;
-                })
-                .join("");
-
-            const syncLLMModelSelectors = () => {
-              const providers = readProviderCards();
-              const { activeProviderEl, analyzeModelEl, writeModelEl, reviewModelEl } = currentSelectionElements();
-              if (!activeProviderEl || !analyzeModelEl || !writeModelEl || !reviewModelEl) return;
-              if (!providers.length) {
-                activeProviderEl.innerHTML = "";
-                analyzeModelEl.innerHTML = "";
-                writeModelEl.innerHTML = "";
-                reviewModelEl.innerHTML = "";
-                return;
-              }
-              const previousProviderId = activeProviderEl.value || currentLLMConfig?.selection?.active_provider_id || providers[0].provider_id;
-              const activeProvider = providers.find((item) => item.provider_id === previousProviderId) || providers[0];
-              activeProviderEl.innerHTML = buildProviderOptionHtml(providers, activeProvider.provider_id);
-              const models = activeProvider.models || [];
-              const previousAnalyze = analyzeModelEl.value || currentLLMConfig?.selection?.analyze_model;
-              const previousWrite = writeModelEl.value || currentLLMConfig?.selection?.write_model;
-              const previousReview = reviewModelEl.value || currentLLMConfig?.selection?.review_model;
-              const analyzeModel = models.includes(previousAnalyze) ? previousAnalyze : (models[0] || "");
-              const writeModel = models.includes(previousWrite) ? previousWrite : (models[0] || "");
-              const reviewModel = models.includes(previousReview) ? previousReview : (models[0] || "");
-              analyzeModelEl.innerHTML = buildModelOptionHtml(models, analyzeModel);
-              writeModelEl.innerHTML = buildModelOptionHtml(models, writeModel);
-              reviewModelEl.innerHTML = buildModelOptionHtml(models, reviewModel);
-            };
-
-            const snapshotLLMConfigForRender = () => {
-              const providers = readProviderCards();
-              const { activeProviderEl, analyzeModelEl, writeModelEl, reviewModelEl } = currentSelectionElements();
-              return {
-                providers,
-                selection: {
-                  active_provider_id: activeProviderEl?.value || providers[0]?.provider_id || "",
-                  analyze_model: analyzeModelEl?.value || providers[0]?.models?.[0] || "",
-                  write_model: writeModelEl?.value || providers[0]?.models?.[0] || "",
-                  review_model: reviewModelEl?.value || providers[0]?.models?.[0] || "",
-                },
-              };
-            };
-
-            const buildLLMConfigPayload = () => {
-              const snapshot = snapshotLLMConfigForRender();
-              return {
-                providers: snapshot.providers.map((provider) => ({
-                  provider_id: provider.provider_id,
-                  vendor: provider.vendor,
-                  label: provider.label,
-                  api_base: provider.api_base,
-                  models: provider.models,
-                  api_key: provider.api_key,
-                })),
-                active_provider_id: snapshot.selection.active_provider_id,
-                analyze_model: snapshot.selection.analyze_model,
-                write_model: snapshot.selection.write_model,
-                review_model: snapshot.selection.review_model,
-                operator: operatorEl.value.trim() || "admin-console",
-                note: noteEl.value.trim() || null,
-              };
-            };
-
-            const renderLLMConfig = (config) => {
-              currentLLMConfig = JSON.parse(JSON.stringify(config || { providers: [], selection: {} }));
-              const providers = currentLLMConfig.providers || [];
-              if (!providers.length) {
-                llmConfigEl.innerHTML = '<div class="empty">当前没有可用的 LLM 供应商。</div>';
-                return;
-              }
-              const selection = currentLLMConfig.selection || {};
-              llmConfigEl.innerHTML = `
-                <div class="llm-shell">
-                  <article class="llm-selection-card">
-                    <h3>当前生效选择</h3>
-                    <div class="llm-selection-grid">
-                      <div class="field">
-                        <label for="llm-active-provider">当前供应商</label>
-                        <select id="llm-active-provider">${buildProviderOptionHtml(providers, selection.active_provider_id || providers[0].provider_id)}</select>
-                      </div>
-                      <div class="field">
-                        <label for="llm-analyze-model">分析模型</label>
-                        <select id="llm-analyze-model"></select>
-                      </div>
-                      <div class="field">
-                        <label for="llm-write-model">写稿模型</label>
-                        <select id="llm-write-model"></select>
-                      </div>
-                      <div class="field">
-                        <label for="llm-review-model">审稿模型</label>
-                        <select id="llm-review-model"></select>
-                      </div>
-                    </div>
-                    <p class="card-note">分析模型会影响 Phase 3 的原文分析；写稿模型会影响 brief 生成、正文生成和 AI 去痕；审稿模型只影响结构化审稿。</p>
-                  </article>
-
-                  <section class="llm-shell">
-                    <div class="llm-provider-head">
-                      <h3>供应商配置</h3>
-                      <button id="add-llm-provider" class="ghost">新增供应商</button>
-                    </div>
-                    <div class="llm-provider-grid">
-                      ${providers.map((provider) => `
-                        <article
-                          class="llm-provider-card"
-                          data-provider-id="${escapeHtml(provider.provider_id)}"
-                          data-has-api-key="${provider.has_api_key ? "true" : "false"}"
-                          data-api-key-preview="${escapeHtml(provider.api_key_preview || "")}"
-                          data-is-env-default="${provider.is_env_default ? "true" : "false"}"
-                        >
-                          <div class="llm-provider-top">
-                            <h4>${escapeHtml(provider.label)}</h4>
-                            <span class="env-badge ${provider.is_env_default ? "" : "warn"}">${provider.is_env_default ? "环境默认" : "数据库配置"}</span>
-                          </div>
-                          <div class="field">
-                            <label>provider_id</label>
-                            <input data-field="provider_id" type="text" value="${escapeHtml(provider.provider_id)}" ${provider.is_env_default ? "readonly" : ""} />
-                          </div>
-                          <div class="field">
-                            <label>供应商标识</label>
-                            <input data-field="vendor" type="text" value="${escapeHtml(provider.vendor)}" />
-                          </div>
-                          <div class="field">
-                            <label>显示名称</label>
-                            <input data-field="label" type="text" value="${escapeHtml(provider.label)}" />
-                          </div>
-                          <div class="field">
-                            <label>API Base</label>
-                            <input data-field="api_base" type="url" value="${escapeHtml(provider.api_base)}" />
-                          </div>
-                          <div class="field">
-                            <label>模型列表（每行一个）</label>
-                            <textarea data-field="models">${escapeHtml((provider.models || []).join("\\n"))}</textarea>
-                          </div>
-                          <div class="field">
-                            <label>API Key</label>
-                            <input
-                              data-field="api_key"
-                              type="password"
-                              placeholder="${provider.has_api_key ? escapeHtml(`已保存：${provider.api_key_preview || "留空表示保持不变"}`) : "输入新的 API Key"}"
-                            />
-                          </div>
-                          <p class="llm-provider-note">${provider.has_api_key ? `当前已保存密钥 ${escapeHtml(provider.api_key_preview || "")}，留空表示保持不变。` : "保存前需要填写 API Key。测试会先自动保存当前配置。"} </p>
-                          <div class="setting-actions">
-                            <button data-action="test-llm">测试连通性</button>
-                            ${provider.is_env_default ? "" : '<button data-action="remove-llm" class="ghost">删除供应商</button>'}
-                          </div>
-                        </article>
-                      `).join("")}
-                    </div>
-                  </section>
-
-                  <div class="actions">
-                    <button id="save-llm-config">保存模型配置</button>
-                  </div>
-                </div>
-              `;
-              syncLLMModelSelectors();
-            };
-
-            const renderCategories = (settings) => {
-              const visibleSettings = getVisibleSettings(settings);
-              if (!visibleSettings.length) {
-                categoriesEl.innerHTML = '<div class="empty">没有可配置的运行参数。</div>';
-                return;
-              }
-              const groups = new Map();
-              visibleSettings.forEach((setting) => {
-                const category = setting.category || "other";
-                if (!groups.has(category)) groups.set(category, []);
-                groups.get(category).push(setting);
-              });
-              categoriesEl.innerHTML = Array.from(groups.entries()).map(([category, items]) => `
-                <section class="category">
-                  <h3>${escapeHtml(CATEGORY_LABELS[category] || category)}</h3>
-                  <div class="setting-grid">
-                    ${items.map((setting) => `
-                      <article class="setting-card" data-key="${escapeHtml(setting.key)}" data-value-type="${escapeHtml(setting.value_type)}">
-                        <div>
-                          <h4>${escapeHtml(setting.label)}</h4>
-                          <p>${escapeHtml(setting.description)}</p>
-                        </div>
-                        <div>
-                          ${buildInput(setting)}
-                        </div>
-                        <p class="card-note">当前看到的是实际生效值。想看来源和覆盖关系，再展开下面这块。</p>
-                        <details class="fold">
-                          <summary>查看来源与生效值</summary>
-                          <div class="setting-meta">
-                            <div><strong>环境默认：</strong> ${escapeHtml(formatValue(setting.default_value, setting.value_type))}</div>
-                            <div><strong>数据库覆盖：</strong> ${setting.has_override ? escapeHtml(formatValue(setting.stored_value, setting.value_type)) : "无"}</div>
-                            <div><strong>实际生效：</strong> ${escapeHtml(formatValue(setting.effective_value, setting.value_type))}</div>
-                            <div><strong>最后更新时间：</strong> ${setting.updated_at || "无"}</div>
-                          </div>
-                        </details>
-                        <div class="setting-actions">
-                          <button data-action="save">保存</button>
-                          <button data-action="reset" class="ghost">恢复默认</button>
-                        </div>
-                      </article>
-                    `).join("")}
-                  </div>
-                </section>
-              `).join("");
-            };
-
-            const renderRuntimeStatus = (payload) => {
-              currentRuntimeStatus = payload;
-              const envItems = payload.environment || [];
-              if (!envItems.length) {
-                runtimeStatusEl.innerHTML = '<div class="empty">没有环境状态可展示。</div>';
-              } else {
-                const groups = new Map();
-                envItems.forEach((item) => {
-                  const category = item.category || "other";
-                  if (!groups.has(category)) groups.set(category, []);
-                  groups.get(category).push(item);
-                });
-                runtimeStatusEl.innerHTML = Array.from(groups.entries()).map(([category, items]) => `
-                  <section class="category">
-                    <h3>${escapeHtml(RUNTIME_CATEGORY_LABELS[category] || category)}</h3>
-                    <div class="env-grid">
-                      ${items.map((item) => `
-                        <article class="env-card">
-                          <div class="env-top">
-                            <strong>${escapeHtml(item.label)}</strong>
-                            <span class="env-badge ${item.required && !item.configured ? "warn" : ""}">
-                              ${item.configured ? "已配置" : (item.required ? "缺失" : "未配置")}
-                            </span>
-                          </div>
-                          <code>${escapeHtml(item.key)}</code>
-                          <div class="hint">${item.secret ? "密钥类配置不展示明文。" : escapeHtml(item.preview || "无预览")}</div>
-                          <div class="hint">${item.note ? escapeHtml(item.note) : (item.required ? "当前阶段要求存在。" : "当前为可选项。")}</div>
-                        </article>
-                      `).join("")}
-                    </div>
-                  </section>
-                `).join("");
-              }
-
-              const alerts = payload.alerts || {};
-              if (alerts.enabled) {
-                alertHintEl.textContent = `告警已启用 · ${alerts.destination_preview || "Webhook 已配置"}。可以发一条测试消息。`;
-              } else {
-                alertHintEl.textContent = alerts.note || "当前未配置 ALERT_WEBHOOK_URL，测试告警按钮会返回错误。";
-              }
-            };
-
-            const parseValueFromCard = (setting, card) => {
-              const input = card.querySelector(`#setting-${CSS.escape(setting.key)}`);
-              if (!input) throw new Error("设置输入框不存在。");
-              if (setting.value_type === "boolean") return Boolean(input.checked);
-              if (setting.value_type === "integer_list") return input.value.trim();
-              return input.value.trim();
-            };
-
+            // 运行设置
             const loadSettings = async () => {
-              const settings = await request("/api/v1/admin/settings");
-              currentSettings = settings;
-              renderCategories(settings);
-              return settings;
-            };
-
-            const loadLLMConfig = async () => {
-              const payload = await request("/api/v1/admin/llm-config");
-              renderLLMConfig(payload);
-              return payload;
-            };
-
-            const loadRuntimeStatus = async () => {
-              const payload = await request("/api/v1/admin/runtime-status");
-              renderRuntimeStatus(payload);
-              return payload;
-            };
-
-            const loadAll = async ({ renderSnapshot = true, preserveStatus = false } = {}) => {
-              saveDraft();
-              if (!preserveStatus) {
-                setStatus("加载中");
+              const data = await request("/api/v1/admin/settings");
+              settingsData = data.settings || [];
+              const card = document.getElementById("settings-card");
+              if (!settingsData.length) {
+                card.innerHTML = '<div class="loading">无可配置项</div>';
+                return;
               }
-              setDataBusy(true);
+              card.innerHTML = settingsData.map((s) => {
+                const key = escapeHtml(s.key);
+                const val = escapeHtml(s.value ?? s.default ?? "");
+                if (s.type === "bool") {
+                  return configRowSelect(key, escapeHtml(s.label || s.key), val === "true" ? "true" : "false", [
+                    { v: "true", l: "开" },
+                    { v: "false", l: "关" },
+                  ]);
+                }
+                return configRowInput(key, escapeHtml(s.label || s.key), val);
+              }).join("");
+              pendingChanges = {};
+              document.getElementById("btn-save").disabled = true;
+            };
+
+            // 环境状态
+            const loadEnv = async () => {
+              const data = await request("/api/v1/admin/runtime-status");
+              envData = data;
+              const card = document.getElementById("env-card");
+              const items = data.checks || data.items || [];
+              if (Array.isArray(items) && items.length) {
+                card.innerHTML = items.map((item) => {
+                  const status = item.ok ? "ok" : (item.warning ? "warn" : "error");
+                  const label = item.ok ? "正常" : (item.warning ? "警告" : "异常");
+                  return `<div class="config-row">
+                    <span class="config-key">${escapeHtml(item.name || item.key)}</span>
+                    <span class="config-value"><span class="badge ${status}">${label}</span></span>
+                  </div>`;
+                }).join("");
+              } else {
+                // 如果返回的是平铺字段
+                const entries = Object.entries(data).filter(([k]) => !["ok", "message"].includes(k));
+                card.innerHTML = entries.map(([k, v]) => {
+                  const val = typeof v === "object" ? JSON.stringify(v) : String(v);
+                  return `<div class="config-row">
+                    <span class="config-key">${escapeHtml(k)}</span>
+                    <span class="config-value">${escapeHtml(val)}</span>
+                  </div>`;
+                }).join("") || '<div class="loading">无数据</div>';
+              }
+            };
+
+            // Helper: 只读行
+            const configRow = (label, value) => `
+              <div class="config-row">
+                <span class="config-key">${label}</span>
+                <span class="config-value">${value}</span>
+              </div>`;
+
+            // Helper: 输入行
+            const configRowInput = (key, label, value) => `
+              <div class="config-row">
+                <span class="config-key">${label}</span>
+                <span class="config-value">
+                  <input type="text" value="${value}" data-key="${key}" onchange="markChanged(this)" />
+                </span>
+              </div>`;
+
+            // Helper: 下拉行
+            const configRowSelect = (key, label, value, options) => `
+              <div class="config-row">
+                <span class="config-key">${label}</span>
+                <span class="config-value">
+                  <select data-key="${key}" onchange="markChanged(this)">
+                    ${options.map((o) => `<option value="${o.v}" ${o.v === value ? 'selected' : ''}>${o.l}</option>`).join("")}
+                  </select>
+                </span>
+              </div>`;
+
+            // 标记修改
+            const markChanged = (el) => {
+              pendingChanges[el.dataset.key] = el.value;
+              document.getElementById("btn-save").disabled = Object.keys(pendingChanges).length === 0;
+            };
+
+            // 保存修改
+            const saveChanges = async () => {
+              const btn = document.getElementById("btn-save");
+              setButtonBusy(btn, true);
               try {
-                const [llmConfig, settings, runtimeStatus] = await Promise.all([
-                  loadLLMConfig(),
-                  loadSettings(),
-                  loadRuntimeStatus(),
-                ]);
-                renderOverview(settings, runtimeStatus);
-                if (renderSnapshot) {
-                  renderOutput({ llm_config: llmConfig, settings, runtime_status: runtimeStatus });
+                for (const [key, value] of Object.entries(pendingChanges)) {
+                  await request(`/api/v1/admin/settings/${encodeURIComponent(key)}`, {
+                    method: "PUT",
+                    body: JSON.stringify({ value, operator: "admin-web", note: "" }),
+                  });
                 }
-                if (!preserveStatus) {
-                  setStatus(
-                    `已加载 · ${llmConfig.providers.length} 个供应商 / ${getVisibleSettings(settings).length} 项设置 / ${runtimeStatus.environment.length} 项环境状态`
-                  );
-                }
+                flash(`已保存 ${Object.keys(pendingChanges).length} 项`);
+                pendingChanges = {};
+                btn.disabled = true;
+                await loadSettings();
+              } catch (e) {
+                flash(e.message || "保存失败", "fail");
               } finally {
-                setDataBusy(false);
+                setButtonBusy(btn, false);
               }
             };
 
-            const updateSetting = async (setting, card, resetToDefault = false) => {
-              saveDraft();
-              setStatus(resetToDefault ? "恢复默认中" : "保存中");
-              const payload = {
-                operator: operatorEl.value.trim() || "admin-console",
-                note: noteEl.value.trim() || null,
-                reset_to_default: resetToDefault,
-              };
-              if (!resetToDefault) payload.value = parseValueFromCard(setting, card);
-              const result = await request(`/api/v1/admin/settings/${encodeURIComponent(setting.key)}`, {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload),
-              });
-              await loadAll({ renderSnapshot: false, preserveStatus: true });
-              renderOutput(result, { reveal: true });
-              setStatus(resetToDefault ? "已恢复默认" : "已保存");
+            // 测试 LLM 连通
+            const testLlm = async () => {
+              flash("测试中...");
+              try {
+                const result = await request("/api/v1/admin/llm-test", { method: "POST" });
+                flash(result.ok ? "LLM 连通正常 ✓" : `LLM 测试失败: ${result.message || "未知错误"}`, result.ok ? "ok" : "fail");
+              } catch (e) {
+                flash(e.message || "测试失败", "fail");
+              }
             };
 
-            const saveLLMConfig = async ({ renderResponse = true, preserveStatus = false } = {}) => {
-              saveDraft();
-              if (!preserveStatus) {
-                setStatus("保存模型配置中");
-              }
-              const payload = buildLLMConfigPayload();
-              const result = await request("/api/v1/admin/llm-config", {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload),
-              });
-              renderLLMConfig(result);
-              if (renderResponse) {
-                renderOutput(result, { reveal: true });
-              }
-              if (!preserveStatus) {
-                setStatus("模型配置已保存");
-              }
-              return result;
-            };
-
-            const pickLLMTestModel = (providerId) => {
-              const snapshot = snapshotLLMConfigForRender();
-              const provider = snapshot.providers.find((item) => item.provider_id === providerId);
-              if (!provider || !(provider.models || []).length) return "";
-              if (snapshot.selection.active_provider_id === providerId) {
-                return snapshot.selection.analyze_model || provider.models[0];
-              }
-              return provider.models[0];
-            };
-
-            const testLLMProvider = async (providerId) => {
-              const model = pickLLMTestModel(providerId);
-              if (!model) {
-                throw new Error("当前供应商还没有可测试的模型，请先填写模型列表。");
-              }
-              await saveLLMConfig({ renderResponse: false, preserveStatus: true });
-              setStatus("发送模型测试中");
-              const result = await request("/api/v1/admin/llm-test", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  provider_id: providerId,
-                  model,
-                  operator: operatorEl.value.trim() || "admin-console",
-                  note: noteEl.value.trim() || null,
-                }),
-              });
-              await loadAll({ renderSnapshot: false, preserveStatus: true });
-              renderOutput(result, { reveal: true });
-              setStatus(result.success ? "模型连通性测试通过" : "模型连通性测试失败", result.success ? "" : "warn");
-            };
-
-            document.getElementById("refresh").addEventListener("click", (event) => {
-              withButtonBusy(event.currentTarget, "刷新中...", async () => {
-                await loadAll();
-              });
-            });
-
-            document.getElementById("send-alert").addEventListener("click", (event) => {
-              withButtonBusy(event.currentTarget, "发送中...", async () => {
-                saveDraft();
-                setStatus("发送测试");
-                const result = await request("/api/v1/admin/alerts/test", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    operator: operatorEl.value.trim() || "admin-console",
-                    note: noteEl.value.trim() || null,
-                  }),
-                });
-                renderOutput(result, { reveal: true });
-                setStatus("测试告警已发送");
-              });
-            });
-
-            document.getElementById("clear-output").addEventListener("click", () => {
-              renderOutput("等待请求。");
-              setStatus("空闲");
-            });
-
-            [operatorEl, noteEl].forEach((element) => {
-              element.addEventListener("input", saveDraft);
-            });
-
-            categoriesEl.addEventListener("click", (event) => {
-              const button = event.target.closest("button[data-action]");
-              if (!button) return;
-              const card = button.closest(".setting-card");
-              if (!card) return;
-              const settingKey = card.dataset.key;
-              const setting = currentSettings.find((item) => item.key === settingKey);
-              if (!setting) return;
-              withButtonBusy(button, button.dataset.action === "reset" ? "恢复中..." : "保存中...", async () => {
-                await updateSetting(setting, card, button.dataset.action === "reset");
-              });
-            });
-
-            llmConfigEl.addEventListener("change", (event) => {
-              if (event.target && event.target.id === "llm-active-provider") {
-                syncLLMModelSelectors();
-              }
-            });
-
-            llmConfigEl.addEventListener("input", (event) => {
-              const target = event.target;
-              if (!(target instanceof HTMLElement)) return;
-              if (target.dataset && target.dataset.field) {
-                syncLLMModelSelectors();
-              }
-            });
-
-            llmConfigEl.addEventListener("click", (event) => {
-              const target = event.target;
-              if (!(target instanceof HTMLElement)) return;
-              if (target.id === "add-llm-provider") {
-                const snapshot = currentLLMConfig ? snapshotLLMConfigForRender() : { providers: [], selection: {} };
-                snapshot.providers.push(createBlankLLMProvider());
-                if (!snapshot.selection.active_provider_id) {
-                  snapshot.selection.active_provider_id = snapshot.providers[0].provider_id;
-                }
-                renderLLMConfig(snapshot);
-                setStatus("已新增供应商草稿");
-                return;
-              }
-              if (target.id === "save-llm-config") {
-                withButtonBusy(target, "保存中...", async () => {
-                  await saveLLMConfig();
-                  await loadRuntimeStatus();
-                });
-                return;
-              }
-              const button = target.closest("button[data-action]");
-              if (!button) return;
-              const card = button.closest(".llm-provider-card");
-              if (!card) return;
-              const providerId = (card.querySelector('[data-field="provider_id"]')?.value || "").trim();
-              if (button.dataset.action === "remove-llm") {
-                const snapshot = snapshotLLMConfigForRender();
-                snapshot.providers = snapshot.providers.filter((item) => item.provider_id !== providerId);
-                if (!snapshot.providers.length) {
-                  snapshot.providers = [createBlankLLMProvider()];
-                }
-                if (!snapshot.providers.some((item) => item.provider_id === snapshot.selection.active_provider_id)) {
-                  snapshot.selection.active_provider_id = snapshot.providers[0].provider_id;
-                  snapshot.selection.analyze_model = snapshot.providers[0].models[0] || "";
-                  snapshot.selection.write_model = snapshot.providers[0].models[0] || "";
-                  snapshot.selection.review_model = snapshot.providers[0].models[0] || "";
-                }
-                renderLLMConfig(snapshot);
-                setStatus("已移除供应商草稿");
-                return;
-              }
-              if (button.dataset.action === "test-llm") {
-                withButtonBusy(button, "测试中...", async () => {
-                  if (!providerId) {
-                    throw new Error("provider_id 不能为空。");
-                  }
-                  await testLLMProvider(providerId);
-                });
-              }
-            });
-
-            readDraft();
-            renderOverview([], null);
-            loadAll().catch((error) => {
-              setStatus("加载失败", "warn");
-              renderOutput(error.message || String(error));
-            });
+            // 初始化
+            loadAll();
           </script>
         </body>
         </html>
         """
     )
-    return render_admin_page(
-        html.replace("__ADMIN_HERO__", hero_html).replace("__ADMIN_OVERVIEW__", overview_html),
-        "settings",
-    )
+    return render_admin_page(html, "settings")
