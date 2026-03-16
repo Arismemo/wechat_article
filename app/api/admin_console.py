@@ -400,6 +400,8 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               align-items: center;
               gap: 10px;
               min-height: 24px;
+              position: relative;
+              padding-right: 90px;
             }}
             .task-status-dot {{
               width: 8px; height: 8px;
@@ -435,7 +437,11 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               font-weight: 600;
               padding: 2px 8px;
               border-radius: 999px;
-              flex-shrink: 0;
+              position: absolute;
+              right: 0;
+              top: 50%;
+              transform: translateY(-50%);
+              white-space: nowrap;
             }}
             .task-status-label.processing {{
               background: var(--primary-soft);
