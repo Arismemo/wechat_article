@@ -46,6 +46,9 @@ services:
       - "${API_PORT:-8000}:8000"
     volumes:
       - ./data:${LOCAL_STORAGE_ROOT:-/app/data}
+      - ./app:/app/app
+      - ./scripts:/app/scripts
+      - ./migrations:/app/migrations
     depends_on:
       postgres:
         condition: service_healthy
@@ -71,6 +74,9 @@ services:
     command: ["python", "scripts/run_phase2_worker.py"]
     volumes:
       - ./data:${LOCAL_STORAGE_ROOT:-/app/data}
+      - ./app:/app/app
+      - ./scripts:/app/scripts
+      - ./migrations:/app/migrations
     depends_on:
       postgres:
         condition: service_healthy
@@ -91,6 +97,9 @@ services:
     command: ["python", "scripts/run_phase3_worker.py"]
     volumes:
       - ./data:${LOCAL_STORAGE_ROOT:-/app/data}
+      - ./app:/app/app
+      - ./scripts:/app/scripts
+      - ./migrations:/app/migrations
     depends_on:
       postgres:
         condition: service_healthy
@@ -111,6 +120,9 @@ services:
     command: ["python", "scripts/run_phase4_worker.py"]
     volumes:
       - ./data:${LOCAL_STORAGE_ROOT:-/app/data}
+      - ./app:/app/app
+      - ./scripts:/app/scripts
+      - ./migrations:/app/migrations
     depends_on:
       postgres:
         condition: service_healthy
@@ -131,6 +143,9 @@ services:
     command: ["python", "scripts/run_feedback_worker.py"]
     volumes:
       - ./data:${LOCAL_STORAGE_ROOT:-/app/data}
+      - ./app:/app/app
+      - ./scripts:/app/scripts
+      - ./migrations:/app/migrations
     depends_on:
       postgres:
         condition: service_healthy
