@@ -9,9 +9,9 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.db.session import get_session_factory
-from app.services.phase4_pipeline_service import Phase4PipelineService
 from app.services.phase4_queue_service import Phase4QueueService
 from app.services.worker_heartbeat import heartbeat_refresh_interval, keep_worker_heartbeat
+from app.steps.executor import run_pipeline_for_phase
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -44,7 +44,7 @@ def main() -> None:
                 interval_seconds=heartbeat_interval,
                 logger=logger,
             ):
-                Phase4PipelineService(session).run(task_id)
+                run_pipeline_for_phase("phase4", session, task_id)
             logger.info("task %s completed", task_id)
         except Exception:  # noqa: BLE001
             logger.exception("task %s failed", task_id)
