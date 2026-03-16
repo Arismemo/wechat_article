@@ -396,12 +396,17 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               box-shadow: 0 0 0 2px rgba(59,130,246,.08);
             }}
             .task-card-header {{
+              display: grid;
+              grid-template-columns: 1fr auto;
+              align-items: center;
+              min-height: 24px;
+              gap: 12px;
+            }}
+            .task-card-info {{
               display: flex;
               align-items: center;
               gap: 10px;
-              min-height: 24px;
-              position: relative;
-              padding-right: 90px;
+              overflow: hidden;
             }}
             .task-status-dot {{
               width: 8px; height: 8px;
@@ -437,10 +442,6 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               font-weight: 600;
               padding: 2px 8px;
               border-radius: 999px;
-              position: absolute;
-              right: 0;
-              top: 50%;
-              transform: translateY(-50%);
               white-space: nowrap;
             }}
             .task-status-label.processing {{
@@ -938,8 +939,10 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                 return `
                   <div class="${{cardClass}}" data-task-id="${{t.task_id}}" style="cursor:pointer;">
                     <div class="task-card-header">
-                      <div class="task-status-dot ${{cat}}"></div>
-                      <div class="task-title">${{escapeHtml(title)}}</div>
+                      <div class="task-card-info">
+                        <div class="task-status-dot ${{cat}}"></div>
+                        <div class="task-title">${{escapeHtml(title)}}</div>
+                      </div>
                       <span class="task-status-label ${{cat}}">${{label}}</span>
                     </div>
                     ${{progressBar}}
