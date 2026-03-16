@@ -2,6 +2,9 @@
 
 声明所有 pipeline、phase、step 定义和步骤的可配置参数 schema，
 前端页面和 API 均从此处读取数据。
+
+STEP_CLASS_REGISTRY 提供 step_id -> 实现类的映射（延迟导入），
+供 PipelineRunner 动态组装 pipeline。
 """
 
 from __future__ import annotations
@@ -194,3 +197,37 @@ def serialize_pipeline(pipeline: PipelineDefinition) -> dict[str, Any]:
         ],
         "all_steps": all_steps,
     }
+
+
+# ---- Step 实现类映射（延迟导入） ----
+
+def _import_step(step_id: str) -> Any:
+    """延迟导入 Step 实现类，避免循环依赖。"""
+    mapping = {
+        "fetch_source":     ("app.steps.fetch_source", "FetchSourceStep"),
+        "analyze_source":   ("app.steps.analyze_source", "AnalyzeSourceStep"),
+        "search_related":   ("app.steps.search_related", "SearchRelatedStep"),
+        "fetch_related":    ("app.steps.search_related", "FetchRelatedStep"),
+        "build_brief":      ("app.steps.build_brief", "BuildBriefStep"),
+        "generate_article": ("app.steps.produce", "GenerateArticleStep"),
+        "review_article":   ("app.steps.produce", "ReviewArticleStep"),
+        "humanize_article": ("app.steps.produce", "HumanizeArticleStep"),
+        "push_draft":       ("app.steps.produce", "PushDraftStep"),
+    }
+    if step_id not in mapping:
+        raise KeyError(f"Unknown step: {step_id}")
+    module_path, class_name = mapping[step_id]
+    import importlib
+    module = importlib.import_module(module_path)
+    return getattr(module, class_name)
+
+
+def build_steps(pipeline: PipelineDefinition) -> list[Any]:
+    """根据 pipeline 定义构建 Step 实例列表。"""
+    steps = []
+    for phase in pipeline.phases:
+        for step_id in phase.steps:
+            step_class = _import_step(step_id)
+            steps.append(step_class())
+    return steps
+
