@@ -6,7 +6,7 @@ from time import sleep
 from textwrap import dedent
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.responses import HTMLResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -2897,7 +2897,8 @@ def unified_console() -> str:
 
 
 @router.get("/admin/pipeline", response_class=HTMLResponse, tags=["admin"], dependencies=[Depends(verify_admin_basic_auth)])
-def pipeline_console() -> str:
+def pipeline_console(response: Response) -> str:
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     import json as _json
     from app.core.pipeline_registry import ARTICLE_PIPELINE, serialize_pipeline
     _registry_json = _json.dumps(serialize_pipeline(ARTICLE_PIPELINE), ensure_ascii=False)
