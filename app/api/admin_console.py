@@ -510,24 +510,56 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             .modal-content {{
               background: #fff;
               border-radius: 12px;
-              width: min(720px, 92vw);
-              max-height: 85vh;
-              overflow-y: auto;
+              width: min(1100px, 94vw);
+              max-height: 88vh;
+              overflow: hidden;
               box-shadow: 0 20px 60px rgba(0,0,0,.2);
-              padding: 28px 32px;
+              padding: 0;
               position: relative;
+              display: flex;
+              flex-direction: column;
+            }}
+            .modal-header {{
+              padding: 20px 28px 16px;
+              border-bottom: 1px solid var(--border-light);
+              flex-shrink: 0;
             }}
             .modal-close {{
-              position: absolute; top: 14px; right: 18px;
+              position: absolute; top: 16px; right: 20px;
               background: none; border: none; font-size: 22px;
               cursor: pointer; color: var(--text-secondary);
-              line-height: 1; padding: 4px;
+              line-height: 1; padding: 4px; z-index: 1;
             }}
             .modal-close:hover {{ color: var(--text); }}
             .modal-title {{
               font-size: 18px; font-weight: 700;
-              margin-bottom: 18px; padding-right: 36px;
+              padding-right: 36px;
               line-height: 1.4;
+            }}
+            .modal-columns {{
+              display: grid;
+              grid-template-columns: 360px 1fr;
+              flex: 1;
+              overflow: hidden;
+            }}
+            .modal-left {{
+              padding: 20px 24px;
+              overflow-y: auto;
+              border-right: 1px solid var(--border-light);
+            }}
+            .modal-right {{
+              padding: 20px 24px;
+              overflow-y: auto;
+            }}
+            @media (max-width: 768px) {{
+              .modal-columns {{
+                grid-template-columns: 1fr;
+              }}
+              .modal-left {{
+                border-right: none;
+                border-bottom: 1px solid var(--border-light);
+                max-height: 40vh;
+              }}
             }}
             .detail-section {{
               margin-bottom: 18px;
@@ -545,8 +577,6 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               border: 1px solid var(--border-light);
               border-radius: var(--radius-sm);
               padding: 20px;
-              max-height: 400px;
-              overflow-y: auto;
               font-size: 14px;
               line-height: 1.8;
             }}
@@ -699,10 +729,15 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
 
           <!-- Modal 弹窗 -->
           <div class="modal-overlay" id="modal-overlay">
-            <div class="modal-content" id="modal-content">
+            <div class="modal-content">
               <button class="modal-close" id="modal-close">&times;</button>
-              <div class="modal-title" id="modal-title">加载中...</div>
-              <div id="modal-body">加载中...</div>
+              <div class="modal-header">
+                <div class="modal-title" id="modal-title">加载中...</div>
+              </div>
+              <div class="modal-columns">
+                <div class="modal-left" id="modal-left">加载中...</div>
+                <div class="modal-right" id="modal-right"></div>
+              </div>
             </div>
           </div>
 
@@ -764,13 +799,15 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             // DOM
             const modalOverlay = document.getElementById("modal-overlay");
             const modalTitle = document.getElementById("modal-title");
-            const modalBody = document.getElementById("modal-body");
+            const modalLeft = document.getElementById("modal-left");
+            const modalRight = document.getElementById("modal-right");
             const modalClose = document.getElementById("modal-close");
 
             // Modal 控制
             const openModal = (title) => {{
               modalTitle.textContent = title || "任务详情";
-              modalBody.innerHTML = '<div style="color:var(--text-secondary)">加载中...</div>';
+              modalLeft.innerHTML = '<div style="color:var(--text-secondary);padding:8px 0">加载中...</div>';
+              modalRight.innerHTML = '';
               modalOverlay.classList.add("open");
               document.body.style.overflow = "hidden";
             }};
@@ -916,7 +953,8 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                 const data = await api("GET", `/admin/api/home-snapshot?limit=1&selected_task_id=${{taskId}}`);
                 const ws = data.workspace;
                 if (!ws) {{
-                  modalBody.innerHTML = '<div style="color:var(--text-secondary)">无详情数据</div>';
+                  modalLeft.innerHTML = '<div style="color:var(--text-secondary)">无详情数据</div>';
+                  modalRight.innerHTML = '';
                   return;
                 }}
 
@@ -1024,10 +1062,12 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                   </div>`;
                 }}
 
-                modalBody.innerHTML = metaHtml + reviewHtml + previewHtml + draftHtml + actionsHtml;
+                modalLeft.innerHTML = metaHtml + reviewHtml + draftHtml + actionsHtml;
+                modalRight.innerHTML = previewHtml || '<div style="color:var(--text-secondary);padding:20px;text-align:center">暂无预览内容</div>';
 
               }} catch (e) {{
-                modalBody.innerHTML = `<div style="color:var(--danger)">${{escapeHtml(e.message)}}</div>`;
+                modalLeft.innerHTML = `<div style="color:var(--danger)">${{escapeHtml(e.message)}}</div>`;
+                modalRight.innerHTML = '';
               }}
             }};
 
@@ -1076,7 +1116,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             }});
 
             // 事件代理 - Modal 内操作按钮
-            modalBody.addEventListener("click", (e) => {{
+            modalLeft.addEventListener("click", (e) => {{
               const actionBtn = e.target.closest("[data-action]");
               if (actionBtn) handleAction(actionBtn);
             }});
