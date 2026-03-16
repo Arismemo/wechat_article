@@ -183,7 +183,7 @@ class SystemSettingService:
             description="AI 痕迹评分超过此值时触发人类化改写。范围 0-100。",
             category="phase4",
             value_type="float",
-            default_resolver=lambda _settings: 70.0,
+            default_resolver=lambda _settings: 10.0,
             normalizer=lambda value: SystemSettingService._normalize_float(
                 value, field_name="phase4.ai_trace_rewrite_threshold", min_val=0, max_val=100,
             ),
