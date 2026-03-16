@@ -61,7 +61,6 @@ class HumanizePassResult:
 class Phase4PipelineService:
     _MAX_STYLE_ASSETS = 6
     _MAX_STYLE_ASSETS_PER_TYPE = 2
-    _AI_TRACE_REWRITE_THRESHOLD = 70.0
     _MAX_HUMANIZE_TARGETS = 4
     _REVIEW_BLOCK_CONTEXT_MAX_CHARS = 7000
 
@@ -146,7 +145,7 @@ class Phase4PipelineService:
             return self._mark_needs_regenerate(task, generation, review, auto_revised=humanize_applied)
         if humanize_applied:
             return self._mark_needs_manual_review(task, generation, review, auto_revised=True)
-        if decision == "revise" and self.settings.phase4_max_auto_revisions > 0:
+        if decision == "revise" and self.system_settings.phase4_max_auto_revisions() > 0:
             return self._auto_revise_once(task, source, analysis, brief, related, generation, review)
         return self._mark_needs_manual_review(task, generation, review, auto_revised=False)
 
@@ -1002,11 +1001,11 @@ class Phase4PipelineService:
         factual_risk = float(review.factual_risk_score or 0)
         metadata = extract_review_metadata(review.issues, review.suggestions)
         return (
-            overall >= self.settings.phase4_review_pass_score
-            and similarity <= self.settings.phase4_similarity_max
-            and policy_risk <= self.settings.phase4_policy_risk_max
-            and factual_risk <= self.settings.phase4_factual_risk_max
-            and (metadata.ai_trace_score is None or metadata.ai_trace_score <= self._AI_TRACE_REWRITE_THRESHOLD)
+            overall >= self.system_settings.phase4_review_pass_score()
+            and similarity <= self.system_settings.phase4_similarity_max()
+            and policy_risk <= self.system_settings.phase4_policy_risk_max()
+            and factual_risk <= self.system_settings.phase4_factual_risk_max()
+            and (metadata.ai_trace_score is None or metadata.ai_trace_score <= self.system_settings.phase4_ai_trace_rewrite_threshold())
         )
 
     def _overall_score(self, review: ReviewReport) -> float:
@@ -1027,13 +1026,13 @@ class Phase4PipelineService:
 
     def _should_run_humanize(self, review: ReviewReport) -> bool:
         metadata = extract_review_metadata(review.issues, review.suggestions)
-        if metadata.ai_trace_score is None or metadata.ai_trace_score < self._AI_TRACE_REWRITE_THRESHOLD:
+        if metadata.ai_trace_score is None or metadata.ai_trace_score < self.system_settings.phase4_ai_trace_rewrite_threshold():
             return False
         if not metadata.rewrite_targets:
             return False
-        if float(review.policy_risk_score or 0) > self.settings.phase4_policy_risk_max:
+        if float(review.policy_risk_score or 0) > self.system_settings.phase4_policy_risk_max():
             return False
-        if float(review.factual_risk_score or 0) > self.settings.phase4_factual_risk_max:
+        if float(review.factual_risk_score or 0) > self.system_settings.phase4_factual_risk_max():
             return False
         return True
 

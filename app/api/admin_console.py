@@ -733,6 +733,12 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               </div>
 
             </div>
+
+              <div class="advanced-link">
+                <a href="/admin/pipeline">🔧 流程配置</a>
+                &nbsp;&nbsp;·&nbsp;&nbsp;
+                <a href="/admin/settings">⚙ 设置</a>
+              </div>
           </main>
 
           <!-- Modal 弹窗 -->
@@ -2888,6 +2894,674 @@ def unified_console() -> str:
         html.replace("__ADMIN_HERO__", hero_html).replace("__ADMIN_OVERVIEW__", overview_html),
         "monitor",
     )
+
+
+@router.get("/admin/pipeline", response_class=HTMLResponse, tags=["admin"], dependencies=[Depends(verify_admin_basic_auth)])
+def pipeline_console() -> str:
+    html = dedent(
+        """\
+        <!DOCTYPE html>
+        <html lang="zh-CN">
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <title>流程配置</title>
+          <style>
+            __ADMIN_SHARED_STYLES__
+
+            .pipe-container {
+              max-width: 900px;
+              margin: 0 auto;
+              padding: 32px 20px;
+            }
+            .pipe-header {
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              margin-bottom: 28px;
+            }
+            .pipe-header h1 {
+              font-size: 20px;
+              font-weight: 700;
+              color: var(--text-primary);
+              margin: 0;
+            }
+            .pipe-header a {
+              font-size: 13px;
+              color: var(--text-secondary);
+              text-decoration: none;
+            }
+            .pipe-header a:hover { color: var(--primary); }
+
+            /* 流程图 */
+            .pipeline-graph {
+              display: flex;
+              flex-wrap: wrap;
+              gap: 0;
+              margin-bottom: 32px;
+              position: relative;
+            }
+            .pipe-row {
+              display: flex;
+              align-items: center;
+              width: 100%;
+              margin-bottom: 8px;
+            }
+            .pipe-row.reverse { flex-direction: row-reverse; }
+            .pipe-row .pipe-bend {
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              width: 32px;
+              color: var(--text-tertiary);
+              font-size: 18px;
+              flex-shrink: 0;
+            }
+            .pipe-node {
+              display: flex;
+              align-items: center;
+              gap: 8px;
+              padding: 12px 18px;
+              border-radius: var(--radius-md);
+              background: var(--surface);
+              border: 2px solid var(--border-light);
+              cursor: pointer;
+              transition: all 0.2s ease;
+              font-size: 14px;
+              font-weight: 500;
+              color: var(--text-primary);
+              white-space: nowrap;
+              flex-shrink: 0;
+            }
+            .pipe-node:hover {
+              border-color: var(--primary);
+              box-shadow: 0 2px 8px rgba(99,102,241,.15);
+            }
+            .pipe-node.active {
+              border-color: var(--primary);
+              background: rgba(99,102,241,.08);
+              box-shadow: 0 2px 12px rgba(99,102,241,.2);
+            }
+            .pipe-node.readonly {
+              opacity: 0.7;
+              cursor: default;
+            }
+            .pipe-node.readonly:hover {
+              border-color: var(--border-light);
+              box-shadow: none;
+            }
+            .pipe-node .node-icon {
+              font-size: 16px;
+              flex-shrink: 0;
+            }
+            .pipe-node .node-label {
+              font-size: 13px;
+            }
+            .pipe-node .node-badge {
+              font-size: 10px;
+              padding: 1px 6px;
+              border-radius: 8px;
+              background: var(--primary);
+              color: #fff;
+              font-weight: 600;
+            }
+            .pipe-node .expand-icon {
+              font-size: 11px;
+              color: var(--text-tertiary);
+            }
+            .pipe-arrow {
+              display: flex;
+              align-items: center;
+              padding: 0 4px;
+              color: var(--text-tertiary);
+              font-size: 16px;
+              flex-shrink: 0;
+            }
+
+            /* 折线连接 */
+            .pipe-bend-down {
+              display: flex;
+              justify-content: flex-end;
+              padding: 0 40px;
+              margin: -4px 0;
+            }
+            .pipe-bend-down.left {
+              justify-content: flex-start;
+            }
+            .pipe-bend-down .bend-arrow {
+              color: var(--text-tertiary);
+              font-size: 16px;
+            }
+
+            /* 配置面板 */
+            .config-panel {
+              background: var(--surface);
+              border: 1px solid var(--border-light);
+              border-radius: var(--radius-md);
+              padding: 24px;
+              margin-top: 8px;
+              animation: fadeIn 0.2s ease;
+            }
+            @keyframes fadeIn {
+              from { opacity: 0; transform: translateY(-8px); }
+              to   { opacity: 1; transform: translateY(0); }
+            }
+            .config-panel h3 {
+              font-size: 16px;
+              font-weight: 600;
+              margin: 0 0 18px 0;
+              color: var(--text-primary);
+            }
+            .config-empty {
+              text-align: center;
+              padding: 24px;
+              color: var(--text-secondary);
+              font-size: 14px;
+            }
+            .config-field {
+              display: flex;
+              align-items: flex-start;
+              gap: 16px;
+              padding: 14px 0;
+              border-bottom: 1px solid var(--border-light);
+            }
+            .config-field:last-of-type { border-bottom: none; }
+            .config-field-info {
+              flex: 1;
+              min-width: 0;
+            }
+            .config-field-info .field-label {
+              font-size: 14px;
+              font-weight: 600;
+              color: var(--text-primary);
+              margin-bottom: 4px;
+            }
+            .config-field-info .field-desc {
+              font-size: 12px;
+              color: var(--text-secondary);
+              line-height: 1.5;
+            }
+            .config-field-info .field-default {
+              font-size: 11px;
+              color: var(--text-tertiary);
+              margin-top: 2px;
+            }
+            .config-field-control {
+              display: flex;
+              align-items: center;
+              gap: 8px;
+              flex-shrink: 0;
+            }
+            .config-field-control input[type="number"],
+            .config-field-control input[type="text"] {
+              width: 120px;
+              padding: 6px 10px;
+              border: 1px solid var(--border);
+              border-radius: var(--radius-sm);
+              font-size: 14px;
+              background: var(--bg);
+              color: var(--text-primary);
+              outline: none;
+              transition: border-color 0.2s;
+            }
+            .config-field-control input:focus {
+              border-color: var(--primary);
+            }
+            .config-field-control select {
+              padding: 6px 10px;
+              border: 1px solid var(--border);
+              border-radius: var(--radius-sm);
+              font-size: 14px;
+              background: var(--bg);
+              color: var(--text-primary);
+              outline: none;
+            }
+            .config-field-control .btn-save {
+              padding: 5px 14px;
+              border: none;
+              border-radius: var(--radius-sm);
+              background: var(--primary);
+              color: #fff;
+              font-size: 12px;
+              font-weight: 600;
+              cursor: pointer;
+              transition: background 0.2s;
+            }
+            .config-field-control .btn-save:hover { background: var(--primary-hover); }
+            .config-field-control .btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
+            .config-field-control .btn-reset {
+              padding: 5px 10px;
+              border: 1px solid var(--border);
+              border-radius: var(--radius-sm);
+              background: transparent;
+              color: var(--text-secondary);
+              font-size: 12px;
+              cursor: pointer;
+              transition: all 0.2s;
+            }
+            .config-field-control .btn-reset:hover {
+              border-color: var(--danger);
+              color: var(--danger);
+            }
+            .config-save-status {
+              font-size: 12px;
+              padding: 2px 8px;
+              border-radius: 4px;
+              animation: fadeIn 0.3s ease;
+            }
+            .config-save-status.ok { color: var(--success); }
+            .config-save-status.err { color: var(--danger); }
+
+            /* 子流程弹窗 */
+            .sub-modal-overlay {
+              position: fixed; inset: 0;
+              background: rgba(0,0,0,.45);
+              z-index: 1000;
+              display: none;
+              align-items: center;
+              justify-content: center;
+            }
+            .sub-modal-overlay.visible { display: flex; }
+            .sub-modal-content {
+              background: var(--bg);
+              border-radius: var(--radius-md);
+              padding: 28px;
+              max-width: 620px;
+              width: 90%;
+              max-height: 80vh;
+              overflow-y: auto;
+              box-shadow: 0 20px 60px rgba(0,0,0,.3);
+              animation: slideUp 0.25s ease;
+            }
+            @keyframes slideUp {
+              from { opacity: 0; transform: translateY(20px); }
+              to   { opacity: 1; transform: translateY(0); }
+            }
+            .sub-modal-header {
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              margin-bottom: 20px;
+            }
+            .sub-modal-header h3 {
+              margin: 0; font-size: 16px; font-weight: 700;
+              color: var(--text-primary);
+            }
+            .sub-modal-close {
+              background: none; border: none;
+              font-size: 20px; cursor: pointer;
+              color: var(--text-secondary);
+            }
+            .sub-modal-close:hover { color: var(--text-primary); }
+            .sub-flow {
+              display: flex;
+              flex-wrap: wrap;
+              align-items: center;
+              gap: 0;
+              margin-bottom: 16px;
+            }
+            .sub-node {
+              display: flex;
+              align-items: center;
+              gap: 6px;
+              padding: 10px 14px;
+              border-radius: var(--radius-sm);
+              background: var(--surface);
+              border: 1px solid var(--border-light);
+              font-size: 13px;
+              color: var(--text-primary);
+            }
+            .sub-arrow {
+              padding: 0 4px;
+              color: var(--text-tertiary);
+              font-size: 14px;
+            }
+
+            /* 切换开关 */
+            .toggle-switch {
+              position: relative;
+              width: 44px;
+              height: 24px;
+            }
+            .toggle-switch input {
+              opacity: 0;
+              width: 0;
+              height: 0;
+            }
+            .toggle-slider {
+              position: absolute;
+              inset: 0;
+              background: var(--border);
+              border-radius: 12px;
+              cursor: pointer;
+              transition: background 0.3s;
+            }
+            .toggle-slider::before {
+              content: "";
+              position: absolute;
+              width: 18px;
+              height: 18px;
+              left: 3px;
+              top: 3px;
+              background: #fff;
+              border-radius: 50%;
+              transition: transform 0.3s;
+            }
+            .toggle-switch input:checked + .toggle-slider {
+              background: var(--primary);
+            }
+            .toggle-switch input:checked + .toggle-slider::before {
+              transform: translateX(20px);
+            }
+          </style>
+        </head>
+        <body class="admin-app">
+          <script>__ADMIN_SHARED_SCRIPT_HELPERS__</script>
+          <div class="pipe-container">
+            <div class="pipe-header">
+              <h1>🔧 流程配置</h1>
+              <a href="/admin">← 返回工作台</a>
+            </div>
+
+            <div id="pipeline-graph"></div>
+            <div id="config-panel"></div>
+          </div>
+
+          <!-- 子流程弹窗 -->
+          <div class="sub-modal-overlay" id="sub-modal">
+            <div class="sub-modal-content">
+              <div class="sub-modal-header">
+                <h3 id="sub-modal-title">子流程</h3>
+                <button class="sub-modal-close" id="sub-modal-close">&times;</button>
+              </div>
+              <div id="sub-modal-body"></div>
+            </div>
+          </div>
+
+          <script>
+            const { escapeHtml } = AdminUiShared;
+
+            // ---- 数据驱动的流程节点 ----
+            const PIPELINE_NODES = [
+              {id:"fetch",    label:"抓取原文",    icon:"📥", phase:2, configurable:false},
+              {id:"analyze",  label:"深度分析",    icon:"🔍", phase:3, configurable:false},
+              {id:"search",   label:"搜索素材",    icon:"🌐", phase:3, configurable:false},
+              {id:"brief",    label:"生成 Brief",  icon:"📋", phase:3, configurable:false},
+              {id:"generate", label:"AI 写稿",     icon:"✍️", phase:4, configurable:true,
+               settings:["phase4.write_model"]},
+              {id:"review",   label:"AI 审核",     icon:"🔎", phase:4, configurable:true,
+               settings:["phase4.review_pass_score","phase4.similarity_max",
+                          "phase4.policy_risk_max","phase4.factual_risk_max",
+                          "phase4.ai_trace_rewrite_threshold","phase4.max_auto_revisions"]},
+              {id:"humanize", label:"人类化改写",  icon:"🧬", phase:4, configurable:false,
+               children:[
+                 {id:"humanize.detect",  label:"AI 痕迹检测", icon:"🔬"},
+                 {id:"humanize.rewrite", label:"段落改写",     icon:"✂️"},
+                 {id:"humanize.review",  label:"二次审核",     icon:"📝"}
+               ]},
+              {id:"push",     label:"推送草稿",    icon:"📤", phase:4, configurable:true,
+               settings:["phase4.auto_push_wechat_draft"]},
+            ];
+
+            const NODES_PER_ROW = 4;
+            let activeNodeId = null;
+            let settingsCache = {};
+
+            // ---- 渲染流程图（弓字形） ----
+            function renderGraph() {
+              const container = document.getElementById("pipeline-graph");
+              const rows = [];
+              for (let i = 0; i < PIPELINE_NODES.length; i += NODES_PER_ROW) {
+                rows.push(PIPELINE_NODES.slice(i, i + NODES_PER_ROW));
+              }
+
+              let html = "";
+              rows.forEach((row, ri) => {
+                const isReverse = ri % 2 === 1;
+                const displayRow = isReverse ? [...row].reverse() : row;
+
+                // 折线连接
+                if (ri > 0) {
+                  const bendSide = isReverse ? "" : "left";
+                  html += `<div class="pipe-bend-down ${bendSide}"><span class="bend-arrow">↓</span></div>`;
+                }
+
+                html += `<div class="pipe-row ${isReverse ? "reverse" : ""}">`;
+                displayRow.forEach((node, ni) => {
+                  if (ni > 0) {
+                    const arrow = isReverse ? "←" : "→";
+                    html += `<div class="pipe-arrow">${arrow}</div>`;
+                  }
+                  const cls = [
+                    "pipe-node",
+                    node.configurable ? "" : "readonly",
+                    activeNodeId === node.id ? "active" : ""
+                  ].filter(Boolean).join(" ");
+                  const badge = node.children ? `<span class="expand-icon">▶</span>` : "";
+                  const settingsBadge = node.configurable && node.settings
+                    ? `<span class="node-badge">${node.settings.length}</span>` : "";
+                  html += `<div class="${cls}" data-node="${node.id}" onclick="onNodeClick('${node.id}')">
+                    <span class="node-icon">${node.icon}</span>
+                    <span class="node-label">${escapeHtml(node.label)}</span>
+                    ${settingsBadge}${badge}
+                  </div>`;
+                });
+                html += `</div>`;
+              });
+
+              container.innerHTML = html;
+            }
+
+            // ---- 节点点击 ----
+            function onNodeClick(nodeId) {
+              const node = PIPELINE_NODES.find(n => n.id === nodeId);
+              if (!node) return;
+
+              // 复合节点 → 弹窗
+              if (node.children) {
+                openSubModal(node);
+                return;
+              }
+              // 非可配置节点
+              if (!node.configurable) return;
+
+              // 切换 active
+              activeNodeId = activeNodeId === nodeId ? null : nodeId;
+              renderGraph();
+              if (activeNodeId) {
+                renderConfigPanel(node);
+              } else {
+                document.getElementById("config-panel").innerHTML = "";
+              }
+            }
+
+            // ---- 配置面板 ----
+            async function renderConfigPanel(node) {
+              const panel = document.getElementById("config-panel");
+              if (!node.settings || !node.settings.length) {
+                panel.innerHTML = `<div class="config-panel"><div class="config-empty">此环节暂无可配置参数</div></div>`;
+                return;
+              }
+
+              panel.innerHTML = `<div class="config-panel"><div class="config-empty">加载中...</div></div>`;
+
+              // 加载设置数据
+              try {
+                const data = await request("/api/v1/admin/settings");
+                settingsCache = {};
+                (data.settings || []).forEach(s => { settingsCache[s.key] = s; });
+              } catch (e) {
+                panel.innerHTML = `<div class="config-panel"><div class="config-empty" style="color:var(--danger)">加载失败: ${escapeHtml(String(e))}</div></div>`;
+                return;
+              }
+
+              let fieldsHtml = "";
+              node.settings.forEach(key => {
+                const s = settingsCache[key];
+                if (!s) return;
+                fieldsHtml += renderField(s);
+              });
+
+              panel.innerHTML = `
+                <div class="config-panel">
+                  <h3>${escapeHtml(node.icon + " " + node.label)} 参数</h3>
+                  ${fieldsHtml || '<div class="config-empty">无参数</div>'}
+                </div>`;
+
+              // 绑定事件
+              panel.querySelectorAll("[data-action=save]").forEach(btn => {
+                btn.addEventListener("click", () => onSave(btn.dataset.key));
+              });
+              panel.querySelectorAll("[data-action=reset]").forEach(btn => {
+                btn.addEventListener("click", () => onReset(btn.dataset.key));
+              });
+            }
+
+            function renderField(s) {
+              const defaultVal = s.default_value;
+              const currentVal = s.effective_value;
+              const hasOverride = s.has_override;
+              let controlHtml = "";
+
+              if (s.value_type === "boolean") {
+                const checked = currentVal ? "checked" : "";
+                controlHtml = `
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="input-${s.key}" ${checked}
+                      onchange="onSave('${s.key}')">
+                    <span class="toggle-slider"></span>
+                  </label>`;
+              } else if (s.value_type === "enum" && s.options && s.options.length) {
+                const opts = s.options.map(o =>
+                  `<option value="${escapeHtml(o.value)}" ${o.value === currentVal ? "selected" : ""}>${escapeHtml(o.label)}</option>`
+                ).join("");
+                controlHtml = `
+                  <select id="input-${s.key}" onchange="onSave('${s.key}')">${opts}</select>`;
+              } else if (s.value_type === "float" || s.value_type === "integer") {
+                const step = s.value_type === "float" ? "0.01" : "1";
+                controlHtml = `
+                  <input type="number" step="${step}" id="input-${s.key}" value="${currentVal}">
+                  <button class="btn-save" data-action="save" data-key="${s.key}">保存</button>`;
+              } else {
+                controlHtml = `
+                  <input type="text" id="input-${s.key}" value="${escapeHtml(String(currentVal))}">
+                  <button class="btn-save" data-action="save" data-key="${s.key}">保存</button>`;
+              }
+
+              if (hasOverride) {
+                controlHtml += `<button class="btn-reset" data-action="reset" data-key="${s.key}" title="恢复默认值 ${escapeHtml(String(defaultVal))}">↺</button>`;
+              }
+
+              return `
+                <div class="config-field" id="field-${s.key}">
+                  <div class="config-field-info">
+                    <div class="field-label">${escapeHtml(s.label)}</div>
+                    <div class="field-desc">${escapeHtml(s.description)}</div>
+                    <div class="field-default">默认值: ${escapeHtml(String(defaultVal))}${hasOverride ? " (已覆盖)" : ""}</div>
+                  </div>
+                  <div class="config-field-control">
+                    ${controlHtml}
+                    <span class="config-save-status" id="status-${s.key}"></span>
+                  </div>
+                </div>`;
+            }
+
+            // ---- 保存 ----
+            async function onSave(key) {
+              const s = settingsCache[key];
+              if (!s) return;
+              const statusEl = document.getElementById("status-" + key);
+              let value;
+
+              if (s.value_type === "boolean") {
+                value = document.getElementById("input-" + key).checked;
+              } else {
+                value = document.getElementById("input-" + key).value;
+              }
+
+              try {
+                await request(`/api/v1/admin/settings/${encodeURIComponent(key)}`, {
+                  method: "PUT",
+                  headers: {"Content-Type": "application/json"},
+                  body: JSON.stringify({value}),
+                });
+                showStatus(statusEl, "ok", "✓ 已保存");
+                // 刷新面板
+                const node = PIPELINE_NODES.find(n => n.settings && n.settings.includes(key));
+                if (node) setTimeout(() => renderConfigPanel(node), 600);
+              } catch (e) {
+                showStatus(statusEl, "err", "✗ " + (e.message || String(e)));
+              }
+            }
+
+            // ---- 重置 ----
+            async function onReset(key) {
+              const statusEl = document.getElementById("status-" + key);
+              try {
+                await request(`/api/v1/admin/settings/${encodeURIComponent(key)}`, {
+                  method: "DELETE",
+                });
+                showStatus(statusEl, "ok", "✓ 已恢复默认");
+                const node = PIPELINE_NODES.find(n => n.settings && n.settings.includes(key));
+                if (node) setTimeout(() => renderConfigPanel(node), 600);
+              } catch (e) {
+                showStatus(statusEl, "err", "✗ " + (e.message || String(e)));
+              }
+            }
+
+            function showStatus(el, cls, text) {
+              if (!el) return;
+              el.className = "config-save-status " + cls;
+              el.textContent = text;
+              setTimeout(() => { el.textContent = ""; el.className = "config-save-status"; }, 3000);
+            }
+
+            // ---- 子流程弹窗 ----
+            function openSubModal(node) {
+              const modal = document.getElementById("sub-modal");
+              const title = document.getElementById("sub-modal-title");
+              const body  = document.getElementById("sub-modal-body");
+              title.textContent = node.icon + " " + node.label + " — 子流程";
+
+              let html = '<div class="sub-flow">';
+              (node.children || []).forEach((child, i) => {
+                if (i > 0) html += `<span class="sub-arrow">→</span>`;
+                html += `<div class="sub-node">
+                  <span>${child.icon || "•"}</span>
+                  <span>${escapeHtml(child.label)}</span>
+                </div>`;
+              });
+              html += "</div>";
+              html += `<p style="font-size:13px;color:var(--text-secondary);margin:0;">
+                该环节包含 ${(node.children||[]).length} 个内部步骤，均在 pipeline 执行时自动串联运行。
+              </p>`;
+
+              body.innerHTML = html;
+              modal.classList.add("visible");
+            }
+            document.getElementById("sub-modal-close").addEventListener("click", () => {
+              document.getElementById("sub-modal").classList.remove("visible");
+            });
+            document.getElementById("sub-modal").addEventListener("click", (e) => {
+              if (e.target === e.currentTarget) e.currentTarget.classList.remove("visible");
+            });
+
+            // ---- fetch 封装 ----
+            async function request(url, opts = {}) {
+              const resp = await fetch(url, {...opts, credentials: "same-origin"});
+              const data = await resp.json();
+              if (!resp.ok) throw new Error(data.detail || data.error || resp.statusText);
+              return data;
+            }
+
+            // 初始化
+            renderGraph();
+          </script>
+        </body>
+        </html>
+        """
+    )
+    return render_admin_page(html, "pipeline")
 
 
 @router.get("/admin/settings", response_class=HTMLResponse, tags=["admin"], dependencies=[Depends(verify_admin_basic_auth)])

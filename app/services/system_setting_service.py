@@ -54,8 +54,14 @@ class SystemSettingService:
         "phase4.write_model": 0,
         "phase4.review_model": 1,
         "phase4.auto_push_wechat_draft": 2,
-        "feedback.sync_provider": 3,
-        "feedback.sync_day_offsets": 4,
+        "phase4.review_pass_score": 3,
+        "phase4.similarity_max": 4,
+        "phase4.policy_risk_max": 5,
+        "phase4.factual_risk_max": 6,
+        "phase4.ai_trace_rewrite_threshold": 7,
+        "phase4.max_auto_revisions": 8,
+        "feedback.sync_provider": 10,
+        "feedback.sync_day_offsets": 11,
     }
     _SETTING_DEFINITIONS = (
         SystemSettingDefinition(
@@ -125,6 +131,72 @@ class SystemSettingService:
             normalizer=lambda value: SystemSettingService._normalize_integer_list(
                 value,
                 field_name="feedback.sync_day_offsets",
+            ),
+        ),
+        SystemSettingDefinition(
+            key="phase4.review_pass_score",
+            label="综合通过分",
+            description="AI 审核综合得分达到此阈值才判定为 pass。范围 0-100。",
+            category="phase4",
+            value_type="float",
+            default_resolver=lambda settings: settings.phase4_review_pass_score,
+            normalizer=lambda value: SystemSettingService._normalize_float(
+                value, field_name="phase4.review_pass_score", min_val=0, max_val=100,
+            ),
+        ),
+        SystemSettingDefinition(
+            key="phase4.similarity_max",
+            label="相似度上限",
+            description="生成稿与原文的相似度不得超过此值。范围 0-1。",
+            category="phase4",
+            value_type="float",
+            default_resolver=lambda settings: settings.phase4_similarity_max,
+            normalizer=lambda value: SystemSettingService._normalize_float(
+                value, field_name="phase4.similarity_max", min_val=0, max_val=1,
+            ),
+        ),
+        SystemSettingDefinition(
+            key="phase4.policy_risk_max",
+            label="政策风险上限",
+            description="政策风险评分不得超过此值。范围 0-1。",
+            category="phase4",
+            value_type="float",
+            default_resolver=lambda settings: settings.phase4_policy_risk_max,
+            normalizer=lambda value: SystemSettingService._normalize_float(
+                value, field_name="phase4.policy_risk_max", min_val=0, max_val=1,
+            ),
+        ),
+        SystemSettingDefinition(
+            key="phase4.factual_risk_max",
+            label="事实风险上限",
+            description="事实风险评分不得超过此值。范围 0-1。",
+            category="phase4",
+            value_type="float",
+            default_resolver=lambda settings: settings.phase4_factual_risk_max,
+            normalizer=lambda value: SystemSettingService._normalize_float(
+                value, field_name="phase4.factual_risk_max", min_val=0, max_val=1,
+            ),
+        ),
+        SystemSettingDefinition(
+            key="phase4.ai_trace_rewrite_threshold",
+            label="AI 痕迹改写阈值",
+            description="AI 痕迹评分超过此值时触发人类化改写。范围 0-100。",
+            category="phase4",
+            value_type="float",
+            default_resolver=lambda _settings: 70.0,
+            normalizer=lambda value: SystemSettingService._normalize_float(
+                value, field_name="phase4.ai_trace_rewrite_threshold", min_val=0, max_val=100,
+            ),
+        ),
+        SystemSettingDefinition(
+            key="phase4.max_auto_revisions",
+            label="最大自动修订次数",
+            description="审核未通过时允许自动修订的最大次数。",
+            category="phase4",
+            value_type="integer",
+            default_resolver=lambda settings: settings.phase4_max_auto_revisions,
+            normalizer=lambda value: SystemSettingService._normalize_positive_integer(
+                value, field_name="phase4.max_auto_revisions",
             ),
         ),
     )
@@ -227,6 +299,24 @@ class SystemSettingService:
         value = self.get_setting("feedback.sync_day_offsets").effective_value
         return [int(item) for item in value]
 
+    def phase4_review_pass_score(self) -> float:
+        return float(self.get_setting("phase4.review_pass_score").effective_value)
+
+    def phase4_similarity_max(self) -> float:
+        return float(self.get_setting("phase4.similarity_max").effective_value)
+
+    def phase4_policy_risk_max(self) -> float:
+        return float(self.get_setting("phase4.policy_risk_max").effective_value)
+
+    def phase4_factual_risk_max(self) -> float:
+        return float(self.get_setting("phase4.factual_risk_max").effective_value)
+
+    def phase4_ai_trace_rewrite_threshold(self) -> float:
+        return float(self.get_setting("phase4.ai_trace_rewrite_threshold").effective_value)
+
+    def phase4_max_auto_revisions(self) -> int:
+        return int(self.get_setting("phase4.max_auto_revisions").effective_value)
+
     def _build_view(self, definition: SystemSettingDefinition) -> SystemSettingView:
         stored_setting = self._stored_settings().get(definition.key)
         default_value = definition.default_resolver(self.settings)
@@ -310,6 +400,26 @@ class SystemSettingService:
         if not deduped:
             raise ValueError(f"{field_name} must contain at least one non-negative integer.")
         return deduped
+
+    @staticmethod
+    def _normalize_float(value: Any, *, field_name: str, min_val: float = 0, max_val: float = 100) -> float:
+        try:
+            parsed = float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{field_name} 必须是数字。") from exc
+        if parsed < min_val or parsed > max_val:
+            raise ValueError(f"{field_name} 必须在 {min_val} 到 {max_val} 之间。")
+        return round(parsed, 4)
+
+    @staticmethod
+    def _normalize_positive_integer(value: Any, *, field_name: str) -> int:
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{field_name} 必须是整数。") from exc
+        if parsed < 0:
+            raise ValueError(f"{field_name} 必须 >= 0。")
+        return parsed
 
     @staticmethod
     def _normalize_operator(operator: Optional[str]) -> str:

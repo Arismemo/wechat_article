@@ -35,6 +35,7 @@ from app.schemas.tasks import (
 )
 from app.services.phase4_pipeline_service import Phase4PipelineService
 from app.services.review_report_response_service import build_review_report_response
+from app.services.system_setting_service import SystemSettingService
 from app.services.task_generation_selection_service import TaskGenerationSelectionService
 from app.services.wechat_draft_metadata_service import build_wechat_draft_metadata
 from app.services.wechat_push_policy_service import WechatPushPolicyService
@@ -42,11 +43,11 @@ from app.settings import get_settings
 
 
 class TaskWorkspaceQueryService:
-    _AI_TRACE_THRESHOLD = Phase4PipelineService._AI_TRACE_REWRITE_THRESHOLD
 
     def __init__(self, session: Session) -> None:
         self.session = session
         self.settings = get_settings()
+        self.system_settings = SystemSettingService(session)
         self.tasks = TaskRepository(session)
         self.source_articles = SourceArticleRepository(session)
         self.analyses = ArticleAnalysisRepository(session)
@@ -285,16 +286,17 @@ class TaskWorkspaceQueryService:
             if metadata.ai_trace_score is None:
                 reason_codes.append("missing_ai_trace_score")
                 reasons.append("当前审稿结果没有提供 AI 痕迹分数。")
-            elif metadata.ai_trace_score < self._AI_TRACE_THRESHOLD:
+            elif metadata.ai_trace_score < self.system_settings.phase4_ai_trace_rewrite_threshold():
                 reason_codes.append("ai_trace_below_threshold")
-                reasons.append(f"AI 痕迹分数未达到 {int(self._AI_TRACE_THRESHOLD)} 分触发阈值。")
+                threshold = int(self.system_settings.phase4_ai_trace_rewrite_threshold())
+                reasons.append(f"AI 痕迹分数未达到 {threshold} 分触发阈值。")
             if not target_block_ids:
                 reason_codes.append("no_rewrite_targets")
                 reasons.append("审稿结果没有给出去痕需要改写的具体段落。")
-            if float(review.policy_risk_score or 0) > self.settings.phase4_policy_risk_max:
+            if float(review.policy_risk_score or 0) > self.system_settings.phase4_policy_risk_max():
                 reason_codes.append("policy_risk_too_high")
                 reasons.append("策略命中风险过高，本轮不允许自动去痕。")
-            if float(review.factual_risk_score or 0) > self.settings.phase4_factual_risk_max:
+            if float(review.factual_risk_score or 0) > self.system_settings.phase4_factual_risk_max():
                 reason_codes.append("factual_risk_too_high")
                 reasons.append("事实风险过高，本轮不允许自动去痕。")
 
@@ -302,14 +304,14 @@ class TaskWorkspaceQueryService:
             state=state,
             triggered=triggered,
             applied=applied,
-            threshold_score=self._AI_TRACE_THRESHOLD,
+            threshold_score=self.system_settings.phase4_ai_trace_rewrite_threshold(),
             ai_trace_score=metadata.ai_trace_score,
             rewrite_target_count=len(target_block_ids),
             rewrite_target_block_ids=target_block_ids,
             policy_risk_score=float(review.policy_risk_score) if review.policy_risk_score is not None else None,
-            policy_risk_max=float(self.settings.phase4_policy_risk_max),
+            policy_risk_max=float(self.system_settings.phase4_policy_risk_max()),
             factual_risk_score=float(review.factual_risk_score) if review.factual_risk_score is not None else None,
-            factual_risk_max=float(self.settings.phase4_factual_risk_max),
+            factual_risk_max=float(self.system_settings.phase4_factual_risk_max()),
             reason_codes=reason_codes,
             reasons=reasons,
             last_event_action=latest_event.action if latest_event is not None else None,
