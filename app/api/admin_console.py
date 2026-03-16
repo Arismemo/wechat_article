@@ -593,6 +593,13 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
               opacity: 0.5;
               cursor: not-allowed;
             }}
+            .badge {{
+              display: inline-block; padding: 2px 8px; border-radius: 10px;
+              font-size: 11px; font-weight: 600; line-height: 1.4;
+            }}
+            .badge.ok {{ background: #d4edda; color: #155724; }}
+            .badge.warn {{ background: #fff3cd; color: #856404; }}
+            .badge.error {{ background: #f8d7da; color: #721c24; }}
 
             /* 底部高级入口 */
             .advanced-link {{
@@ -877,32 +884,37 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
 
               try {{
                 const data = await api("GET", `/admin/api/home-snapshot?limit=1&selected_task_id=${{taskId}}`);
-                const detail = data.selected_detail;
-                if (!detail) {{
+                const ws = data.workspace;
+                if (!ws) {{
                   detailEl.innerHTML = `<div style="color:var(--text-secondary);font-size:13px;">无详情</div>`;
                   return;
                 }}
 
-                const task = detail.task || {{}};
-                const gen = detail.latest_generation;
-                const cat = statusCategory(task.status);
+                const cat = statusCategory(ws.status);
+                const gens = ws.generations || [];
+                const gen = gens[0]; // 最新版本
+                const review = gen?.review;
+                const srcArt = ws.source_article;
 
-                // 预览
-                let previewHtml = "";
-                if (gen?.html_content) {{
-                  previewHtml = `
-                    <div class="detail-section">
-                      <h4>文章预览</h4>
-                      <div class="detail-preview">${{gen.html_content}}</div>
-                    </div>`;
-                }}
+                // 计算耗时
+                const elapsed = (() => {{
+                  if (!ws.created_at) return null;
+                  const ms = new Date(ws.updated_at || Date.now()) - new Date(ws.created_at);
+                  const mins = Math.floor(ms / 60000);
+                  if (mins < 1) return "不到 1 分钟";
+                  if (mins < 60) return `${{mins}} 分钟`;
+                  const hrs = Math.floor(mins / 60);
+                  return `${{hrs}} 小时 ${{mins % 60}} 分`;
+                }})();
 
-                // 元信息
+                // 来源信息
                 const meta = [];
-                if (task.source_url) meta.push(["来源", `<a href="${{escapeHtml(task.source_url)}}" target="_blank" style="color:var(--primary);word-break:break-all;">${{escapeHtml(task.source_url.substring(0, 60))}}</a>`]);
-                if (task.created_at) meta.push(["创建", escapeHtml(new Date(task.created_at).toLocaleString("zh-CN"))]);
-                if (task.updated_at) meta.push(["更新", escapeHtml(new Date(task.updated_at).toLocaleString("zh-CN"))]);
-                if (task.error) meta.push(["错误", `<span style="color:var(--danger)">${{escapeHtml(task.error)}}</span>`]);
+                if (srcArt?.title) meta.push(["原文标题", escapeHtml(srcArt.title)]);
+                if (ws.source_url) meta.push(["来源", `<a href="${{escapeHtml(ws.source_url)}}" target="_blank" style="color:var(--primary);word-break:break-all;">${{escapeHtml(ws.source_url.substring(0, 60))}}</a>`]);
+                if (gen) meta.push(["版本", `第 ${{gen.version_no}} 版`]);
+                if (elapsed) meta.push(["耗时", elapsed]);
+                if (ws.created_at) meta.push(["创建", escapeHtml(new Date(ws.created_at).toLocaleString("zh-CN"))]);
+                if (ws.error) meta.push(["错误", `<span style="color:var(--danger)">${{escapeHtml(ws.error)}}</span>`]);
 
                 let metaHtml = "";
                 if (meta.length) {{
@@ -915,33 +927,73 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                     </div>`;
                 }}
 
+                // AI 审核意见
+                let reviewHtml = "";
+                if (review) {{
+                  const verdict = review.final_decision || "—";
+                  const verdictClass = verdict === "pass" ? "ok" : (verdict === "fail" ? "error" : "warn");
+                  const verdictLabel = verdict === "pass" ? "通过" : (verdict === "fail" ? "未通过" : verdict);
+                  const items = [];
+                  if (review.similarity_score != null) items.push(`相似度 ${{(review.similarity_score * 100).toFixed(0)}}%`);
+                  if (review.readability_score != null) items.push(`可读性 ${{(review.readability_score * 100).toFixed(0)}}%`);
+                  if (review.ai_trace_score != null) items.push(`AI 痕迹 ${{(review.ai_trace_score * 100).toFixed(0)}}%`);
+                  if (review.factual_risk_score != null) items.push(`事实风险 ${{(review.factual_risk_score * 100).toFixed(0)}}%`);
+                  const summaryText = review.voice_summary || (review.suggestions ? JSON.stringify(review.suggestions).slice(0, 120) : "");
+                  reviewHtml = `
+                    <div class="detail-section">
+                      <h4>AI 审核 <span class="badge ${{verdictClass}}" style="margin-left:6px;vertical-align:middle;">${{verdictLabel}}</span></h4>
+                      ${{items.length ? `<div style="font-size:12px;color:var(--text-secondary);margin-bottom:6px;">${{items.join(" · ")}}</div>` : ""}}
+                      ${{summaryText ? `<div style="font-size:13px;color:var(--text-secondary);line-height:1.5;">${{escapeHtml(summaryText.slice(0, 200))}}</div>` : ""}}
+                    </div>`;
+                }}
+
+                // 文章预览
+                let previewHtml = "";
+                if (gen?.html_content) {{
+                  previewHtml = `
+                    <div class="detail-section">
+                      <h4>文章预览</h4>
+                      <div class="detail-preview">${{gen.html_content}}</div>
+                    </div>`;
+                }}
+
+                // 微信草稿链接
+                let draftHtml = "";
+                if (ws.wechat_draft_url) {{
+                  draftHtml = `
+                    <div class="detail-section">
+                      <h4>微信草稿</h4>
+                      <a href="${{escapeHtml(ws.wechat_draft_url)}}" target="_blank" style="color:var(--primary);font-size:13px;">${{ws.wechat_draft_url_hint || "查看草稿 →"}}</a>
+                    </div>`;
+                }}
+
                 // 操作按钮
                 let actionsHtml = "";
                 if (cat === "pending") {{
-                  if (task.status === "review_passed") {{
+                  if (ws.status === "review_passed") {{
                     actionsHtml = `<div class="detail-actions">
-                      <button class="btn-push" data-action="push" data-id="${{task.id}}">推送到草稿箱</button>
-                      <button class="btn-delete" data-action="delete" data-id="${{task.id}}">删除</button>
+                      <button class="btn-push" data-action="push" data-id="${{ws.task_id}}">推送到草稿箱</button>
+                      <button class="btn-delete" data-action="delete" data-id="${{ws.task_id}}">删除</button>
                     </div>`;
                   }} else {{
                     actionsHtml = `<div class="detail-actions">
-                      <button class="btn-confirm" data-action="approve" data-id="${{task.id}}">确认通过</button>
-                      <button class="btn-retry" data-action="retry" data-id="${{task.id}}">重新生成</button>
-                      <button class="btn-delete" data-action="delete" data-id="${{task.id}}">删除</button>
+                      <button class="btn-confirm" data-action="approve" data-id="${{ws.task_id}}">确认通过</button>
+                      <button class="btn-retry" data-action="retry" data-id="${{ws.task_id}}">重新生成</button>
+                      <button class="btn-delete" data-action="delete" data-id="${{ws.task_id}}">删除</button>
                     </div>`;
                   }}
                 }} else if (cat === "failed") {{
                   actionsHtml = `<div class="detail-actions">
-                    <button class="btn-retry" data-action="retry" data-id="${{task.id}}">重试</button>
-                    <button class="btn-delete" data-action="delete" data-id="${{task.id}}">删除</button>
+                    <button class="btn-retry" data-action="retry" data-id="${{ws.task_id}}">重试</button>
+                    <button class="btn-delete" data-action="delete" data-id="${{ws.task_id}}">删除</button>
                   </div>`;
                 }} else if (cat === "done") {{
                   actionsHtml = `<div class="detail-actions">
-                    <button class="btn-delete" data-action="delete" data-id="${{task.id}}">删除</button>
+                    <button class="btn-delete" data-action="delete" data-id="${{ws.task_id}}">删除</button>
                   </div>`;
                 }}
 
-                detailEl.innerHTML = previewHtml + metaHtml + actionsHtml;
+                detailEl.innerHTML = metaHtml + reviewHtml + previewHtml + draftHtml + actionsHtml;
 
               }} catch (e) {{
                 detailEl.innerHTML = `<div style="color:var(--danger);font-size:13px;">${{escapeHtml(e.message)}}</div>`;
