@@ -3356,8 +3356,15 @@ def pipeline_console() -> str:
           <script>
           (function(){
             const API_BASE = '/api/v1';
+            // 优先使用 cookie 认证（admin 页面访问时自动设置），仅在有 token 时才发 header
             const BEARER = localStorage.getItem('admin_bearer') || '';
-            const headers = { 'Authorization': 'Bearer ' + BEARER, 'Content-Type': 'application/json' };
+            function buildFetchOpts(extra) {
+              const opts = { credentials: 'same-origin' };
+              const h = { 'Content-Type': 'application/json' };
+              if (BEARER) h['Authorization'] = 'Bearer ' + BEARER;
+              opts.headers = h;
+              return Object.assign(opts, extra || {});
+            }
 
             const PHASE_COLORS = {
               fetch:   { color: '#3b82f6', label: 'Phase 2 · 抓取' },
@@ -3370,7 +3377,7 @@ def pipeline_console() -> str:
             let activeStepId = null;
 
             async function api(url) {
-              const r = await fetch(API_BASE + url, { headers });
+              const r = await fetch(API_BASE + url, buildFetchOpts());
               if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
               return r.json();
             }
@@ -3488,10 +3495,10 @@ def pipeline_console() -> str:
               const input = row.querySelector('.config-input');
               btn.disabled = true;
               try {
-                const r = await fetch(API_BASE + '/admin/settings/' + key, {
-                  method: 'PUT', headers,
+                const r = await fetch(API_BASE + '/admin/settings/' + key, buildFetchOpts({
+                  method: 'PUT',
                   body: JSON.stringify({ value: input.value.trim() }),
-                });
+                }));
                 if (!r.ok) { const e = await r.json().catch(() => ({})); alert('失败: ' + (e.detail||r.statusText)); return; }
                 const u = await r.json();
                 settingsData[key] = u;
@@ -3504,10 +3511,10 @@ def pipeline_console() -> str:
               const row = btn.closest('.config-row');
               btn.disabled = true;
               try {
-                const r = await fetch(API_BASE + '/admin/settings/' + key, {
-                  method: 'PUT', headers,
+                const r = await fetch(API_BASE + '/admin/settings/' + key, buildFetchOpts({
+                  method: 'PUT',
                   body: JSON.stringify({ reset_to_default: true }),
-                });
+                }));
                 if (!r.ok) { const e = await r.json().catch(() => ({})); alert('失败: ' + (e.detail||r.statusText)); return; }
                 const u = await r.json();
                 settingsData[key] = u;
