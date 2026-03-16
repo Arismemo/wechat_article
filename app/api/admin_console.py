@@ -1235,7 +1235,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
                 if (action === "approve") {{
                   await api("POST", `/admin/api/tasks/${{id}}/approve`, {{ device_id: "admin-web" }});
                 }} else if (action === "push") {{
-                  await api("POST", `/admin/api/tasks/${{id}}/push`, {{ device_id: "admin-web" }});
+                  await api("POST", `/admin/api/tasks/${{id}}/push-draft`, {{ device_id: "admin-web" }});
                 }} else if (action === "retry") {{
                   await api("POST", `/admin/api/tasks/${{id}}/retry`);
                 }} else if (action === "delete") {{
