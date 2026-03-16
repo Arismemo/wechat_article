@@ -5,9 +5,10 @@ from datetime import datetime
 from typing import Optional
 from uuid import uuid4
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.core.enums import TaskStatus
+from app.core.enums import ACTIVE_TASK_STATUSES, TaskStatus
 from app.core.progress import get_progress
 from app.models.audit_log import AuditLog
 from app.models.task import Task
@@ -22,7 +23,9 @@ from app.repositories.review_report_repository import ReviewReportRepository
 from app.repositories.source_article_repository import SourceArticleRepository
 from app.repositories.style_asset_repository import StyleAssetRepository
 from app.repositories.task_repository import TaskRepository
+from app.repositories.task_dedupe_slot_repository import TaskDedupeSlotRepository
 from app.repositories.wechat_draft_repository import WechatDraftRepository
+from app.models.task_dedupe_slot import TaskDedupeSlot
 from app.schemas.ingest import IngestLinkRequest
 from app.services.url_service import detect_source_type, normalize_url
 from app.services.wechat_draft_metadata_service import build_wechat_draft_metadata
@@ -71,10 +74,11 @@ class TaskService:
         self.reviews = ReviewReportRepository(session)
         self.style_assets = StyleAssetRepository(session)
         self.wechat_drafts = WechatDraftRepository(session)
+        self.task_dedupe_slots = TaskDedupeSlotRepository(session)
 
     def ingest_link(self, payload: IngestLinkRequest) -> tuple[Task, bool]:
         normalized_url = normalize_url(str(payload.url))
-        existing_task = self.tasks.get_active_by_normalized_url(normalized_url)
+        existing_task = self._get_deduped_task(normalized_url)
         if existing_task:
             self._log_action(
                 task_id=existing_task.id,
@@ -84,26 +88,41 @@ class TaskService:
             self.session.commit()
             return existing_task, True
 
-        task = self.tasks.create(
-            Task(
-                task_code=self._generate_task_code(),
-                source_url=str(payload.url),
-                normalized_url=normalized_url,
-                source_type=detect_source_type(normalized_url),
-                status=TaskStatus.QUEUED.value,
+        try:
+            task = self.tasks.create(
+                Task(
+                    task_code=self._generate_task_code(),
+                    source_url=str(payload.url),
+                    normalized_url=normalized_url,
+                    source_type=detect_source_type(normalized_url),
+                    status=TaskStatus.QUEUED.value,
+                )
             )
-        )
-        self._log_action(
-            task_id=task.id,
-            action="task.created",
-            payload={
-                "source": payload.source,
-                "device_id": payload.device_id,
-                "trigger": payload.trigger,
-                "note": payload.note,
-            },
-        )
-        self.session.commit()
+            self.task_dedupe_slots.create(TaskDedupeSlot(task_id=task.id, normalized_url=normalized_url))
+            self._log_action(
+                task_id=task.id,
+                action="task.created",
+                payload={
+                    "source": payload.source,
+                    "device_id": payload.device_id,
+                    "trigger": payload.trigger,
+                    "note": payload.note,
+                },
+            )
+            self.session.commit()
+        except IntegrityError:
+            self.session.rollback()
+            existing_task = self._get_deduped_task(normalized_url)
+            if existing_task is None:
+                raise
+            self._log_action(
+                task_id=existing_task.id,
+                action="task.duplicate_detected",
+                payload={"normalized_url": normalized_url, "reason": "dedupe_slot_conflict"},
+            )
+            self.session.commit()
+            return existing_task, True
+
         self.session.refresh(task)
         return task, False
 
@@ -157,20 +176,28 @@ class TaskService:
         created_after: Optional[datetime] = None,
     ) -> list[TaskSummary]:
         items: list[TaskSummary] = []
-        for task in self.tasks.list_recent(
+        task_rows = self.tasks.list_recent(
             limit,
             active_only=active_only,
             status_filter=status_filter,
             source_type=source_type,
             query=query,
             created_after=created_after,
-        ):
-            source_article = self.source_articles.get_latest_by_task_id(task.id)
-            content_brief = self.content_briefs.get_latest_by_task_id(task.id)
-            generation = self.generations.get_latest_by_task_id(task.id)
-            wechat_draft = self.wechat_drafts.get_latest_by_task_id(task.id)
+        )
+        task_ids = [task.id for task in task_rows]
+        latest_sources = self.source_articles.get_latest_by_task_ids(task_ids)
+        latest_briefs = self.content_briefs.get_latest_by_task_ids(task_ids)
+        latest_generations = self.generations.get_latest_by_task_ids(task_ids)
+        latest_drafts = self.wechat_drafts.get_latest_by_task_ids(task_ids)
+        related_counts = self.related_articles.count_by_task_ids(task_ids, selected_only=True)
+
+        for task in task_rows:
+            source_article = latest_sources.get(task.id)
+            content_brief = latest_briefs.get(task.id)
+            generation = latest_generations.get(task.id)
+            wechat_draft = latest_drafts.get(task.id)
             draft_metadata = build_wechat_draft_metadata(wechat_draft)
-            related_count = self.related_articles.count_by_task_id(task.id, selected_only=True)
+            related_count = related_counts.get(task.id, 0)
             error = task.error_message or task.error_code
             items.append(
                 TaskSummary(
@@ -233,6 +260,15 @@ class TaskService:
 
     def _generate_task_code(self) -> str:
         return f"tsk_{uuid4().hex[:12]}"
+
+    def _get_deduped_task(self, normalized_url: str) -> Optional[Task]:
+        dedupe_slot = self.task_dedupe_slots.get_by_normalized_url(normalized_url)
+        if dedupe_slot is not None:
+            task = self.tasks.get_by_id(dedupe_slot.task_id)
+            if task is not None and task.status in {status.value for status in ACTIVE_TASK_STATUSES}:
+                return task
+            self.task_dedupe_slots.delete_by_task_id(dedupe_slot.task_id)
+        return self.tasks.get_active_by_normalized_url(normalized_url)
 
     def _log_action(self, task_id: str, action: str, payload: Optional[dict]) -> None:
         self.audit_logs.create(

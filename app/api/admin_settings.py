@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.core.security import verify_bearer_token
+from app.core.security import verify_admin_api_auth
 from app.db.session import get_db_session
 from app.schemas.admin_llm import (
     AdminLLMConfigResponse,
@@ -22,23 +22,23 @@ from app.services.system_setting_service import SystemSettingService
 router = APIRouter()
 
 
-@router.get("/admin/settings", response_model=list[SystemSettingResponse], dependencies=[Depends(verify_bearer_token)])
+@router.get("/admin/settings", response_model=list[SystemSettingResponse], dependencies=[Depends(verify_admin_api_auth)])
 def list_admin_settings(session: Session = Depends(get_db_session)) -> list[SystemSettingResponse]:
     service = SystemSettingService(session)
     return [_build_response(item) for item in service.list_settings()]
 
 
-@router.get("/admin/runtime-status", response_model=AdminRuntimeStatusResponse, dependencies=[Depends(verify_bearer_token)])
+@router.get("/admin/runtime-status", response_model=AdminRuntimeStatusResponse, dependencies=[Depends(verify_admin_api_auth)])
 def get_admin_runtime_status(session: Session = Depends(get_db_session)) -> AdminRuntimeStatusResponse:
     return AdminRuntimeService(session).build_runtime_status()
 
 
-@router.get("/admin/llm-config", response_model=AdminLLMConfigResponse, dependencies=[Depends(verify_bearer_token)])
+@router.get("/admin/llm-config", response_model=AdminLLMConfigResponse, dependencies=[Depends(verify_admin_api_auth)])
 def get_admin_llm_config(session: Session = Depends(get_db_session)) -> AdminLLMConfigResponse:
     return _build_llm_config_response(LLMRuntimeService(session).get_config_view())
 
 
-@router.get("/admin/settings/{key}", response_model=SystemSettingResponse, dependencies=[Depends(verify_bearer_token)])
+@router.get("/admin/settings/{key}", response_model=SystemSettingResponse, dependencies=[Depends(verify_admin_api_auth)])
 def get_admin_setting(key: str, session: Session = Depends(get_db_session)) -> SystemSettingResponse:
     service = SystemSettingService(session)
     try:
@@ -47,7 +47,7 @@ def get_admin_setting(key: str, session: Session = Depends(get_db_session)) -> S
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.args[0]) from exc
 
 
-@router.put("/admin/settings/{key}", response_model=SystemSettingResponse, dependencies=[Depends(verify_bearer_token)])
+@router.put("/admin/settings/{key}", response_model=SystemSettingResponse, dependencies=[Depends(verify_admin_api_auth)])
 def update_admin_setting(
     key: str,
     payload: SystemSettingUpdateRequest,
@@ -68,7 +68,7 @@ def update_admin_setting(
     return _build_response(setting)
 
 
-@router.put("/admin/llm-config", response_model=AdminLLMConfigResponse, dependencies=[Depends(verify_bearer_token)])
+@router.put("/admin/llm-config", response_model=AdminLLMConfigResponse, dependencies=[Depends(verify_admin_api_auth)])
 def update_admin_llm_config(
     payload: AdminLLMConfigUpdateRequest,
     session: Session = Depends(get_db_session),
@@ -89,7 +89,7 @@ def update_admin_llm_config(
     return _build_llm_config_response(result)
 
 
-@router.post("/admin/llm-test", response_model=AdminLLMTestResponse, dependencies=[Depends(verify_bearer_token)])
+@router.post("/admin/llm-test", response_model=AdminLLMTestResponse, dependencies=[Depends(verify_admin_api_auth)])
 def test_admin_llm_provider(
     payload: AdminLLMTestRequest,
     session: Session = Depends(get_db_session),
@@ -117,7 +117,7 @@ def test_admin_llm_provider(
     )
 
 
-@router.post("/admin/alerts/test", response_model=AdminAlertTestResponse, dependencies=[Depends(verify_bearer_token)])
+@router.post("/admin/alerts/test", response_model=AdminAlertTestResponse, dependencies=[Depends(verify_admin_api_auth)])
 def send_admin_test_alert(
     payload: AdminAlertTestRequest,
     session: Session = Depends(get_db_session),

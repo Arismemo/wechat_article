@@ -7,11 +7,14 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.orm import sessionmaker
 
 import app.models  # noqa: F401
+from app.core.enums import TaskStatus
 from app.db.base import Base
 from app.db.redis_client import get_redis_client
 from app.db.session import get_engine, get_session_factory
+from app.models.task import Task
 from app.settings import get_settings
 from app.services.phase4_queue_service import Phase4EnqueueResult
 
@@ -52,6 +55,7 @@ class IngestApiTests(unittest.TestCase):
 
         self.engine = create_engine(f"sqlite+pysqlite:///{self.db_path}", future=True)
         Base.metadata.create_all(self.engine)
+        self.Session = sessionmaker(bind=self.engine, autoflush=False, autocommit=False, expire_on_commit=False)
 
         from app.main import create_app
 
@@ -130,6 +134,37 @@ class IngestApiTests(unittest.TestCase):
         self.assertFalse(second.json()["enqueued"])
         self.assertIsNone(second.json()["queue_depth"])
         enqueue.assert_called_once()
+
+    def test_ingest_link_dedupes_to_active_task_when_slot_is_missing(self) -> None:
+        session = self.Session()
+        legacy_task = Task(
+            task_code="tsk_legacy_slot_missing",
+            source_url="https://mp.weixin.qq.com/s/legacy-slot-missing",
+            normalized_url="https://mp.weixin.qq.com/s/legacy-slot-missing",
+            source_type="wechat",
+            status=TaskStatus.REVIEWING.value,
+        )
+        session.add(legacy_task)
+        session.commit()
+        session.close()
+
+        with patch("app.api.ingest.Phase4QueueService.enqueue") as enqueue:
+            response = self.client.post(
+                "/api/v1/ingest/link",
+                headers={"Authorization": "Bearer test-token"},
+                json={"url": "https://mp.weixin.qq.com/s/legacy-slot-missing"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertTrue(body["deduped"])
+        self.assertEqual(body["task_id"], legacy_task.id)
+        self.assertFalse(body["enqueued"])
+        enqueue.assert_not_called()
+
+        verification_session = self.Session()
+        self.assertEqual(verification_session.query(Task).count(), 1)
+        verification_session.close()
 
     def test_ingest_shortcut_get_endpoint_accepts_query_key(self) -> None:
         with patch(

@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 from typing import Optional
 
@@ -36,6 +37,7 @@ from app.services.wechat_draft_metadata_service import build_wechat_draft_metada
 from app.services.wechat_push_policy_service import WechatPushPolicyService
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.get("/tasks", response_model=list[TaskSummaryResponse], dependencies=[Depends(verify_bearer_token)])
@@ -234,4 +236,8 @@ def get_task_workspace(task_id: str, session: Session = Depends(get_db_session))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+        logger.exception("Failed to build task workspace for task_id=%s", task_id, exc_info=exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Internal server error.",
+        ) from exc

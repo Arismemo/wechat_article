@@ -11,6 +11,7 @@ from app.models.source_article import SourceArticle
 from app.models.style_asset import StyleAsset
 from app.models.system_setting import SystemSetting
 from app.models.task import Task
+from app.models.task_dedupe_slot import TaskDedupeSlot
 from app.models.wechat_draft import WechatDraft
 
 __all__ = [
@@ -27,5 +28,6 @@ __all__ = [
     "StyleAsset",
     "SystemSetting",
     "Task",
+    "TaskDedupeSlot",
     "WechatDraft",
 ]

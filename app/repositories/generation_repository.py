@@ -24,6 +24,35 @@ class GenerationRepository:
         )
         return self.session.scalar(statement)
 
+    def get_latest_by_task_ids(self, task_ids: list[str]) -> dict[str, Generation]:
+        if not task_ids:
+            return {}
+
+        ranked_generations = (
+            select(
+                Generation.id.label("generation_id"),
+                Generation.task_id.label("task_id"),
+                func.row_number()
+                .over(
+                    partition_by=Generation.task_id,
+                    order_by=(
+                        Generation.version_no.desc(),
+                        Generation.created_at.desc(),
+                        Generation.id.desc(),
+                    ),
+                )
+                .label("row_no"),
+            )
+            .where(Generation.task_id.in_(task_ids))
+            .subquery()
+        )
+        statement = (
+            select(Generation)
+            .join(ranked_generations, Generation.id == ranked_generations.c.generation_id)
+            .where(ranked_generations.c.row_no == 1)
+        )
+        return {item.task_id: item for item in self.session.scalars(statement)}
+
     def get_latest_accepted_by_task_id(self, task_id: str) -> Optional[Generation]:
         statement = (
             select(Generation)

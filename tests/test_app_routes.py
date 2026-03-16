@@ -7,7 +7,9 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from app.core.security import ADMIN_SESSION_COOKIE_NAME, verify_bearer_token
+from fastapi import HTTPException
+
+from app.core.security import ADMIN_SESSION_COOKIE_NAME, verify_admin_api_auth, verify_bearer_token
 from app.db.redis_client import get_redis_client
 from app.settings import get_settings
 
@@ -241,13 +243,24 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn(f"{ADMIN_SESSION_COOKIE_NAME}=", response.headers.get("set-cookie", ""))
         session_cookie = client.cookies.get(ADMIN_SESSION_COOKIE_NAME)
         self.assertTrue(session_cookie)
-        verify_bearer_token(admin_session=session_cookie)
+        verify_admin_api_auth(admin_session=session_cookie)
+        with self.assertRaises(HTTPException) as exc_info:
+            verify_bearer_token(admin_session=session_cookie)
+        self.assertEqual(exc_info.exception.status_code, 401)
 
-    def test_verify_bearer_token_accepts_admin_basic_auth_when_configured(self) -> None:
+    def test_verify_admin_api_auth_accepts_admin_basic_auth_when_configured(self) -> None:
         with patch.dict(os.environ, {"ADMIN_USERNAME": "admin", "ADMIN_PASSWORD": "secret-pass"}, clear=False):
             get_settings.cache_clear()
             encoded = base64.b64encode(b"admin:secret-pass").decode("ascii")
-            verify_bearer_token(authorization=f"Basic {encoded}")
+            verify_admin_api_auth(authorization=f"Basic {encoded}")
+
+    def test_verify_bearer_token_rejects_admin_basic_auth_when_configured(self) -> None:
+        with patch.dict(os.environ, {"ADMIN_USERNAME": "admin", "ADMIN_PASSWORD": "secret-pass"}, clear=False):
+            get_settings.cache_clear()
+            encoded = base64.b64encode(b"admin:secret-pass").decode("ascii")
+            with self.assertRaises(HTTPException) as exc_info:
+                verify_bearer_token(authorization=f"Basic {encoded}")
+            self.assertEqual(exc_info.exception.status_code, 401)
 
     def test_admin_pages_require_basic_auth_when_configured(self) -> None:
         with patch.dict(os.environ, {"ADMIN_USERNAME": "admin", "ADMIN_PASSWORD": "secret-pass"}, clear=False):

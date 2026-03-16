@@ -3,11 +3,12 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Select, func, or_, select, update
+from sqlalchemy import Select, delete, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.core.enums import ACTIVE_TASK_STATUSES
 from app.models.task import Task
+from app.models.task_dedupe_slot import TaskDedupeSlot
 
 
 class TaskRepository:
@@ -26,6 +27,29 @@ class TaskRepository:
             .limit(1)
         )
         return self.session.scalar(statement)
+
+    def count_grouped_by_status(
+        self,
+        *,
+        active_only: bool = False,
+        status_filter: Optional[str] = None,
+        status_values: Optional[list[str]] = None,
+        source_type: Optional[str] = None,
+        query: Optional[str] = None,
+        created_after: Optional[datetime] = None,
+        updated_before: Optional[datetime] = None,
+    ) -> dict[str, int]:
+        statement = self._apply_filters(
+            select(Task.status, func.count()).group_by(Task.status),
+            active_only=active_only,
+            status_filter=status_filter,
+            status_values=status_values,
+            source_type=source_type,
+            query=query,
+            created_after=created_after,
+            updated_before=updated_before,
+        )
+        return {str(status): int(count) for status, count in self.session.execute(statement)}
 
     def list_recent(
         self,
@@ -115,6 +139,7 @@ class TaskRepository:
             )
         )
         self.session.refresh(task)
+        self._sync_dedupe_slot(task, status=status)
 
     def delete(self, task: Task) -> None:
         self.session.delete(task)
@@ -153,3 +178,29 @@ class TaskRepository:
         if updated_before:
             statement = statement.where(Task.updated_at <= updated_before)
         return statement
+
+    def _sync_dedupe_slot(self, task: Task, *, status: str) -> None:
+        active_status_values = {item.value for item in ACTIVE_TASK_STATUSES}
+        if status in active_status_values:
+            existing_slot = self.session.get(TaskDedupeSlot, task.id)
+            if existing_slot is not None:
+                if existing_slot.normalized_url != task.normalized_url:
+                    existing_slot.normalized_url = task.normalized_url
+                    self.session.flush()
+                return
+
+            conflicting_slot = self.session.scalar(
+                select(TaskDedupeSlot)
+                .where(TaskDedupeSlot.normalized_url == task.normalized_url)
+                .limit(1)
+            )
+            if conflicting_slot is not None and conflicting_slot.task_id != task.id:
+                # Keep pre-migration duplicate active tasks runnable. New ingest requests still
+                # dedupe via the slot owner first and fall back to the tasks table if needed.
+                return
+
+            self.session.add(TaskDedupeSlot(task_id=task.id, normalized_url=task.normalized_url))
+            self.session.flush()
+            return
+
+        self.session.execute(delete(TaskDedupeSlot).where(TaskDedupeSlot.task_id == task.id))

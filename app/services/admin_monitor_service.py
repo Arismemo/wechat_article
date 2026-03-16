@@ -101,85 +101,46 @@ class AdminMonitorService:
             TaskStatus.REVIEW_FAILED.value,
             TaskStatus.PUSH_FAILED.value,
         ]
-        today_submitted = self.tasks.count(created_after=today_start)
-        today_draft_saved = self.tasks.count(
-            status_values=[TaskStatus.DRAFT_SAVED.value],
-            created_after=today_start,
+        filtered_status_totals = self.tasks.count_grouped_by_status(
+            active_only=filters.active_only,
+            status_filter=filters.status_filter,
+            source_type=filters.source_type,
+            query=filters.query,
+            created_after=filters.created_after,
         )
-        today_failed = self.tasks.count(
-            status_values=failure_statuses,
-            created_after=today_start,
-        )
-        today_review_success = self.tasks.count(
-            status_values=review_success_statuses,
-            created_after=today_start,
-        )
-        today_review_outcomes = self.tasks.count(
-            status_values=review_outcome_statuses,
-            created_after=today_start,
-        )
-
-        return AdminMonitorSummaryResponse(
-            filtered_total=self.tasks.count(
-                active_only=filters.active_only,
-                status_filter=filters.status_filter,
-                source_type=filters.source_type,
-                query=filters.query,
-                created_after=filters.created_after,
-            ),
-            filtered_active=self.tasks.count(
-                status_values=active_statuses,
-                source_type=filters.source_type,
-                query=filters.query,
-                created_after=filters.created_after,
-                status_filter=filters.status_filter,
-            ),
-            filtered_manual=self.tasks.count(
-                status_values=manual_statuses,
-                source_type=filters.source_type,
-                query=filters.query,
-                created_after=filters.created_after,
-                status_filter=filters.status_filter,
-            ),
-            filtered_review_passed=self.tasks.count(
-                status_values=[TaskStatus.REVIEW_PASSED.value],
-                source_type=filters.source_type,
-                query=filters.query,
-                created_after=filters.created_after,
-                status_filter=filters.status_filter,
-            ),
-            filtered_draft_saved=self.tasks.count(
-                status_values=[TaskStatus.DRAFT_SAVED.value],
-                source_type=filters.source_type,
-                query=filters.query,
-                created_after=filters.created_after,
-                status_filter=filters.status_filter,
-            ),
-            filtered_failed=self.tasks.count(
-                status_values=failure_statuses,
-                source_type=filters.source_type,
-                query=filters.query,
-                created_after=filters.created_after,
-                status_filter=filters.status_filter,
-            ),
-            filtered_stuck=self.tasks.count(
+        today_status_totals = self.tasks.count_grouped_by_status(created_after=today_start)
+        filtered_stuck = sum(
+            self.tasks.count_grouped_by_status(
                 status_values=active_statuses,
                 source_type=filters.source_type,
                 query=filters.query,
                 created_after=filters.created_after,
                 status_filter=filters.status_filter,
                 updated_before=stuck_before,
-            ),
+            ).values()
+        )
+
+        today_submitted = sum(today_status_totals.values())
+        today_draft_saved = sum(today_status_totals.get(status, 0) for status in [TaskStatus.DRAFT_SAVED.value])
+        today_failed = sum(today_status_totals.get(status, 0) for status in failure_statuses)
+        today_review_success = sum(today_status_totals.get(status, 0) for status in review_success_statuses)
+        today_review_outcomes = sum(today_status_totals.get(status, 0) for status in review_outcome_statuses)
+
+        return AdminMonitorSummaryResponse(
+            filtered_total=sum(filtered_status_totals.values()),
+            filtered_active=sum(filtered_status_totals.get(status, 0) for status in active_statuses),
+            filtered_manual=sum(filtered_status_totals.get(status, 0) for status in manual_statuses),
+            filtered_review_passed=filtered_status_totals.get(TaskStatus.REVIEW_PASSED.value, 0),
+            filtered_draft_saved=filtered_status_totals.get(TaskStatus.DRAFT_SAVED.value, 0),
+            filtered_failed=sum(filtered_status_totals.get(status, 0) for status in failure_statuses),
+            filtered_stuck=filtered_stuck,
             today_submitted=today_submitted,
             today_draft_saved=today_draft_saved,
             today_failed=today_failed,
             today_review_success_rate=self._percentage(today_review_success, today_review_outcomes),
             today_auto_push_success_rate=self._percentage(
                 today_draft_saved,
-                self.tasks.count(
-                    status_values=[TaskStatus.REVIEW_PASSED.value, TaskStatus.DRAFT_SAVED.value],
-                    created_after=today_start,
-                ),
+                sum(today_status_totals.get(status, 0) for status in [TaskStatus.REVIEW_PASSED.value, TaskStatus.DRAFT_SAVED.value]),
             ),
             stuck_threshold_minutes=self._STUCK_THRESHOLD_MINUTES,
             status_counts=status_counts,

@@ -562,3 +562,72 @@ Phase 7 当前已具备：
 - 共享后台脚本 helper 已在线启用
 - `Phase 5` 首屏决策摘要已在线可见
 - 当前线上基线已经从 `v1.1.2` 发布基线继续推进到 `cc22580`
+
+## 2026-03-16 任务去重槽位与管理员鉴权收口
+
+更新时间：2026-03-16
+
+本次上线聚焦三件事：
+
+- 管理后台 API 鉴权边界收口
+  - `/api/v1/admin/*` 改为使用管理员鉴权
+  - Bearer token 不再自动兜底通过后台页面 session cookie
+- 任务列表与监控接口降查询开销
+  - `TaskService.list_recent()` 改为批量查询最新 source/brief/generation/draft
+  - admin monitor summary 改为按状态聚合统计
+- 任务去重槽位上线
+  - 新增 `task_dedupe_slots`
+  - ingest 走 DB 级 URL 去重
+  - 兼容迁移前遗留的重复 active task，避免状态流转时直接报错
+
+本次部署方式：
+
+1. 本地验证：
+   - `pytest -q`
+   - 结果：`102 passed`
+2. 远端热更新：
+   - 只同步本次涉及的 `app/` 与 `migrations/` 文件
+   - 不覆盖远端已有的 `app/api/admin_console.py` 未提交改动
+3. 远端执行：
+   - `docker compose exec -T api alembic upgrade head`
+   - `docker compose restart api phase2_worker phase3_worker phase4_worker feedback_worker`
+4. 清理远端 AppleDouble 残留：
+   - 删除 `app/`、`migrations/`、`scripts/` 下的 `._*`
+
+本次服务器结果：
+
+- migration 已升级到：
+  - `20260316_0007 (head)`
+- `api`
+  - 已重启并恢复 `healthy`
+- `phase2_worker / phase3_worker / phase4_worker / feedback_worker`
+  - 已全部重启成功
+- 远端备份目录：
+  - `.deploy-backup/20260316_213341`
+
+本次线上验证：
+
+- `GET https://auto.709970.xyz/healthz`
+  - 返回：`{"status":"ok"}`
+- 带管理员 Basic Auth 的 `GET https://auto.709970.xyz/admin`
+  - 返回：`200`
+  - 页面包含：`微信文章工厂`
+- 带管理员 Basic Auth 的 `GET https://auto.709970.xyz/api/v1/admin/monitor/snapshot?limit=2`
+  - 返回：`200`
+  - 响应包含：
+    - `summary`
+    - `operations`
+    - `tasks_count=2`
+- 带管理员 Basic Auth 的 `GET https://auto.709970.xyz/api/v1/admin/settings/phase4.ai_trace_rewrite_threshold`
+  - 返回：`200`
+  - 当前值：
+    - `default_value=10.0`
+    - `effective_value=10.0`
+    - `has_override=false`
+
+结论：
+
+- `task_dedupe_slots` migration 已在线生效
+- 历史重复 active task 的兼容修复已上线
+- 管理员 API 鉴权收口已上线
+- `phase4.ai_trace_rewrite_threshold` 默认值按线上要求保持 `10.0`

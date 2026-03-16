@@ -5,14 +5,14 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 
 from app.core.pipeline_registry import ARTICLE_PIPELINE, serialize_pipeline
-from app.core.security import verify_bearer_token
+from app.core.security import verify_admin_api_auth
 
 router = APIRouter()
 
 
 @router.get(
     "/admin/pipeline/registry",
-    dependencies=[Depends(verify_bearer_token)],
+    dependencies=[Depends(verify_admin_api_auth)],
     tags=["admin-pipeline"],
 )
 def get_pipeline_registry() -> dict:

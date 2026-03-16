@@ -19,6 +19,21 @@ def verify_bearer_token(
     authorization: Optional[str] = Header(default=None),
     admin_session: Optional[str] = Cookie(default=None, alias=ADMIN_SESSION_COOKIE_NAME),
 ) -> None:
+    del admin_session
+    settings = get_settings()
+    if authorization == f"Bearer {settings.api_bearer_token}":
+        return
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid authorization token.",
+    )
+
+
+def verify_admin_api_auth(
+    authorization: Optional[str] = Header(default=None),
+    admin_session: Optional[str] = Cookie(default=None, alias=ADMIN_SESSION_COOKIE_NAME),
+) -> None:
     settings = get_settings()
     if authorization == f"Bearer {settings.api_bearer_token}":
         return

@@ -35,6 +35,16 @@ class RelatedArticleRepository:
             statement = statement.where(RelatedArticle.selected.is_(True))
         return int(self.session.scalar(statement) or 0)
 
+    def count_by_task_ids(self, task_ids: list[str], *, selected_only: bool = False) -> dict[str, int]:
+        if not task_ids:
+            return {}
+
+        statement = select(RelatedArticle.task_id, func.count()).where(RelatedArticle.task_id.in_(task_ids))
+        if selected_only:
+            statement = statement.where(RelatedArticle.selected.is_(True))
+        statement = statement.group_by(RelatedArticle.task_id)
+        return {str(task_id): int(count) for task_id, count in self.session.execute(statement)}
+
     def get_latest_selected_by_url(self, task_id: str, url: str) -> Optional[RelatedArticle]:
         statement = (
             select(RelatedArticle)

@@ -71,6 +71,7 @@ class Phase4PipelineServiceTests(unittest.TestCase):
         session = self.Session()
         task = self._seed_phase4_ready_task(session, "tsk_phase4_pass")
         self._seed_style_assets(session, task.id)
+        self._set_ai_trace_rewrite_threshold(session, 70.0)
 
         service = Phase4PipelineService(session)
         service.llm = MagicMock()
@@ -139,6 +140,7 @@ class Phase4PipelineServiceTests(unittest.TestCase):
     def test_phase4_pipeline_runs_targeted_humanize_pass_for_high_ai_trace(self) -> None:
         session = self.Session()
         task = self._seed_phase4_ready_task(session, "tsk_phase4_humanize")
+        self._set_ai_trace_rewrite_threshold(session, 70.0)
 
         service = Phase4PipelineService(session)
         service.llm = MagicMock()
@@ -243,6 +245,7 @@ class Phase4PipelineServiceTests(unittest.TestCase):
     def test_phase4_pipeline_auto_revises_once_after_revise_decision(self) -> None:
         session = self.Session()
         task = self._seed_phase4_ready_task(session, "tsk_phase4_revise")
+        self._set_ai_trace_rewrite_threshold(session, 70.0)
 
         service = Phase4PipelineService(session)
         service.llm = MagicMock()
@@ -327,7 +330,7 @@ class Phase4PipelineServiceTests(unittest.TestCase):
         session = self.Session()
         task = self._seed_phase4_ready_task(session, "tsk_phase4_autopush")
         session.add(SystemSetting(key="phase4.auto_push_wechat_draft", value=True))
-        session.commit()
+        self._set_ai_trace_rewrite_threshold(session, 70.0)
 
         with patch.dict(os.environ, {"WECHAT_ENABLE_DRAFT_PUSH": "true"}, clear=False):
             get_settings.cache_clear()
@@ -390,7 +393,7 @@ class Phase4PipelineServiceTests(unittest.TestCase):
         task = self._seed_phase4_ready_task(session, "tsk_phase4_models")
         session.add(SystemSetting(key="phase4.write_model", value="glm-5-write-override"))
         session.add(SystemSetting(key="phase4.review_model", value="glm-5-review-override"))
-        session.commit()
+        self._set_ai_trace_rewrite_threshold(session, 70.0)
 
         service = Phase4PipelineService(session)
         service.llm = MagicMock()
@@ -427,6 +430,7 @@ class Phase4PipelineServiceTests(unittest.TestCase):
     def test_phase4_pipeline_normalizes_markdown_noise_before_storage(self) -> None:
         session = self.Session()
         task = self._seed_phase4_ready_task(session, "tsk_phase4_markdown_cleanup")
+        self._set_ai_trace_rewrite_threshold(session, 70.0)
 
         service = Phase4PipelineService(session)
         service.llm = MagicMock()
@@ -478,7 +482,7 @@ class Phase4PipelineServiceTests(unittest.TestCase):
         session = self.Session()
         task = self._seed_phase4_ready_task(session, "tsk_phase4_no_related")
         session.query(RelatedArticle).where(RelatedArticle.task_id == task.id).delete()
-        session.commit()
+        self._set_ai_trace_rewrite_threshold(session, 70.0)
 
         service = Phase4PipelineService(session)
         service.llm = MagicMock()
@@ -600,6 +604,10 @@ class Phase4PipelineServiceTests(unittest.TestCase):
         )
         session.commit()
         return task
+
+    def _set_ai_trace_rewrite_threshold(self, session, value: float) -> None:
+        session.add(SystemSetting(key="phase4.ai_trace_rewrite_threshold", value=value))
+        session.commit()
 
     def _seed_style_assets(self, session, task_id: str) -> None:
         session.add(

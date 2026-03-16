@@ -1,3 +1,4 @@
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -45,12 +46,21 @@ from app.schemas.internal import (
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def _raise_value_error_for_internal(exc: ValueError) -> None:
     detail = str(exc)
     status_code = status.HTTP_404_NOT_FOUND if detail == "Task not found." else status.HTTP_400_BAD_REQUEST
     raise HTTPException(status_code=status_code, detail=detail) from exc
+
+
+def _raise_internal_server_error(action: str, exc: Exception) -> None:
+    logger.exception("Internal API action failed: %s", action, exc_info=exc)
+    raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail="Internal server error.",
+    ) from exc
 
 
 @router.post("/tasks/{task_id}/run-phase2", response_model=Phase2RunResponse, dependencies=[Depends(verify_bearer_token)])
@@ -60,7 +70,7 @@ def run_phase2(task_id: str, session: Session = Depends(get_db_session)) -> Phas
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+        _raise_internal_server_error("run_phase2", exc)
 
     return Phase2RunResponse(
         task_id=result.task_id,
@@ -95,7 +105,7 @@ def ingest_and_run_phase2(payload: IngestLinkRequest, session: Session = Depends
     try:
         result = Phase2PipelineService(session).run(task.id)
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+        _raise_internal_server_error("ingest_and_run_phase2", exc)
 
     return Phase2RunResponse(
         task_id=result.task_id,
@@ -128,7 +138,7 @@ def run_phase3(task_id: str, session: Session = Depends(get_db_session)) -> Phas
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+        _raise_internal_server_error("run_phase3", exc)
 
     return Phase3RunResponse(
         task_id=result.task_id,
@@ -162,7 +172,7 @@ def ingest_and_run_phase3(payload: IngestLinkRequest, session: Session = Depends
     try:
         result = Phase3PipelineService(session).run(task.id)
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+        _raise_internal_server_error("ingest_and_run_phase3", exc)
 
     return Phase3RunResponse(
         task_id=result.task_id,
@@ -194,7 +204,7 @@ def run_phase4(task_id: str, session: Session = Depends(get_db_session)) -> Phas
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+        _raise_internal_server_error("run_phase4", exc)
 
     return Phase4RunResponse(
         task_id=result.task_id,
@@ -229,7 +239,7 @@ def ingest_and_run_phase4(payload: IngestLinkRequest, session: Session = Depends
     try:
         result = Phase4PipelineService(session).run(task.id)
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+        _raise_internal_server_error("ingest_and_run_phase4", exc)
 
     return Phase4RunResponse(
         task_id=result.task_id,
@@ -288,7 +298,7 @@ def import_feedback(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+        _raise_internal_server_error("import_feedback", exc)
 
     return FeedbackImportResponse(
         task_id=result.task_id,
@@ -322,7 +332,7 @@ def import_feedback_csv(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+        _raise_internal_server_error("import_feedback_csv", exc)
 
     return FeedbackCsvImportResponse(
         imported_count=result.imported_count,
@@ -364,7 +374,7 @@ def run_feedback_sync(
     except FeedbackSyncProviderError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+        _raise_internal_server_error("run_feedback_sync", exc)
 
     return FeedbackSyncResponse(
         task_id=result.task_id,
@@ -399,7 +409,7 @@ def enqueue_feedback_sync(
     except ValueError as exc:
         _raise_value_error_for_internal(exc)
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+        _raise_internal_server_error("enqueue_feedback_sync", exc)
 
     return FeedbackSyncEnqueueResponse(
         task_id=result.task_id,
@@ -427,7 +437,7 @@ def enqueue_recent_feedback_sync(
     except ValueError as exc:
         _raise_value_error_for_internal(exc)
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+        _raise_internal_server_error("enqueue_recent_feedback_sync", exc)
 
     return FeedbackSyncRecentEnqueueResponse(
         requested_count=result.requested_count,
@@ -459,7 +469,7 @@ def create_style_asset(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+        _raise_internal_server_error("create_style_asset", exc)
 
     return StyleAssetCreateResponse(
         style_asset_id=result.style_asset_id,
@@ -495,7 +505,7 @@ def select_generation(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+        _raise_internal_server_error("select_generation", exc)
 
     return ManualReviewActionResponse(
         task_id=result.task_id,
@@ -526,7 +536,7 @@ def approve_latest_generation(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+        _raise_internal_server_error("approve_latest_generation", exc)
 
     return ManualReviewActionResponse(
         task_id=result.task_id,
@@ -557,7 +567,7 @@ def reject_latest_generation(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+        _raise_internal_server_error("reject_latest_generation", exc)
 
     return ManualReviewActionResponse(
         task_id=result.task_id,
@@ -586,7 +596,7 @@ def allow_wechat_draft_push(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+        _raise_internal_server_error("allow_wechat_draft_push", exc)
 
     return WechatPushPolicyActionResponse(
         task_id=result.task_id,
@@ -616,7 +626,7 @@ def block_wechat_draft_push(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+        _raise_internal_server_error("block_wechat_draft_push", exc)
 
     return WechatPushPolicyActionResponse(
         task_id=result.task_id,
@@ -636,7 +646,7 @@ def push_wechat_draft(task_id: str, session: Session = Depends(get_db_session)) 
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+        _raise_internal_server_error("push_wechat_draft", exc)
 
     return WechatPushResponse(
         task_id=result.task_id,

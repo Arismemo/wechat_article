@@ -21,6 +21,35 @@ class ContentBriefRepository:
         )
         return self.session.scalar(statement)
 
+    def get_latest_by_task_ids(self, task_ids: list[str]) -> dict[str, ContentBrief]:
+        if not task_ids:
+            return {}
+
+        ranked_briefs = (
+            select(
+                ContentBrief.id.label("brief_id"),
+                ContentBrief.task_id.label("task_id"),
+                func.row_number()
+                .over(
+                    partition_by=ContentBrief.task_id,
+                    order_by=(
+                        ContentBrief.brief_version.desc(),
+                        ContentBrief.created_at.desc(),
+                        ContentBrief.id.desc(),
+                    ),
+                )
+                .label("row_no"),
+            )
+            .where(ContentBrief.task_id.in_(task_ids))
+            .subquery()
+        )
+        statement = (
+            select(ContentBrief)
+            .join(ranked_briefs, ContentBrief.id == ranked_briefs.c.brief_id)
+            .where(ranked_briefs.c.row_no == 1)
+        )
+        return {item.task_id: item for item in self.session.scalars(statement)}
+
     def get_next_brief_version(self, task_id: str) -> int:
         statement = select(func.coalesce(func.max(ContentBrief.brief_version), 0)).where(ContentBrief.task_id == task_id)
         return int(self.session.scalar(statement) or 0) + 1

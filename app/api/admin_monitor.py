@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query, status
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.core.security import verify_bearer_token
+from app.core.security import verify_admin_api_auth
 from app.db.session import get_db_session
 from app.schemas.admin_monitor import AdminMonitorSnapshotResponse
 from app.services.admin_monitor_service import AdminMonitorFilters, AdminMonitorService
@@ -19,7 +19,7 @@ router = APIRouter()
 @router.get(
     "/admin/monitor/snapshot",
     response_model=AdminMonitorSnapshotResponse,
-    dependencies=[Depends(verify_bearer_token)],
+    dependencies=[Depends(verify_admin_api_auth)],
 )
 def get_admin_monitor_snapshot(
     limit: int = Query(default=36, ge=1, le=100),
