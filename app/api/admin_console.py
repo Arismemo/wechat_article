@@ -419,6 +419,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
             }}
             .task-title {{
               flex: 1;
+              min-width: 0;
               font-size: 14px;
               font-weight: 500;
               color: var(--text);
