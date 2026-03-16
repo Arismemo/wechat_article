@@ -2898,6 +2898,9 @@ def unified_console() -> str:
 
 @router.get("/admin/pipeline", response_class=HTMLResponse, tags=["admin"], dependencies=[Depends(verify_admin_basic_auth)])
 def pipeline_console() -> str:
+    import json as _json
+    from app.core.pipeline_registry import ARTICLE_PIPELINE, serialize_pipeline
+    _registry_json = _json.dumps(serialize_pipeline(ARTICLE_PIPELINE), ensure_ascii=False)
     html = dedent(
         """\
         <!DOCTYPE html>
@@ -3356,12 +3359,9 @@ def pipeline_console() -> str:
           <script>
           (function(){
             const API_BASE = '/api/v1';
-            // 优先使用 cookie 认证（admin 页面访问时自动设置），仅在有 token 时才发 header
-            const BEARER = localStorage.getItem('admin_bearer') || '';
             function buildFetchOpts(extra) {
               const opts = { credentials: 'same-origin' };
               const h = { 'Content-Type': 'application/json' };
-              if (BEARER) h['Authorization'] = 'Bearer ' + BEARER;
               opts.headers = h;
               return Object.assign(opts, extra || {});
             }
@@ -3372,24 +3372,22 @@ def pipeline_console() -> str:
               produce: { color: '#8b5cf6', label: 'Phase 4 · 生产' },
             };
 
+            // pipeline 定义内嵌在 HTML 中，无需 API 调用
+            const EMBEDDED_REGISTRY = __PIPELINE_REGISTRY_JSON__;
+
             let pipelineData = null;
             let settingsData = {};
             let activeStepId = null;
 
-            async function api(url) {
-              const r = await fetch(API_BASE + url, buildFetchOpts());
-              if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
-              return r.json();
-            }
-
             async function init() {
               try {
-                const [registry, settings] = await Promise.all([
-                  api('/admin/pipeline/registry'),
-                  api('/admin/settings').catch(() => []),
-                ]);
+                const registry = EMBEDDED_REGISTRY;
                 pipelineData = registry;
-                for (const s of settings) settingsData[s.key] = s;
+                // settings 仍从 API 获取（error-tolerant）
+                try {
+                  const r = await fetch(API_BASE + '/admin/settings', buildFetchOpts());
+                  if (r.ok) { const arr = await r.json(); for (const s of arr) settingsData[s.key] = s; }
+                } catch(_) {}
                 document.getElementById('pipeDesc').textContent = registry.description || '';
                 renderPipeline(registry);
               } catch(e) {
@@ -3549,6 +3547,7 @@ def pipeline_console() -> str:
         </html>
         """
     )
+    html = html.replace("__PIPELINE_REGISTRY_JSON__", _registry_json)
     return render_admin_page(html, "pipeline")
 
 
