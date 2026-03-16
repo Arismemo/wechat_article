@@ -666,6 +666,7 @@ def unified_admin_portal(task_id: Optional[str] = Query(default=None)) -> str:
           </main>
 
           <script>
+            const {{ escapeHtml }} = AdminUiShared;
             // 状态映射
             const PROCESSING = new Set(["queued", "building_brief", "generating", "reviewing"]);
             const PENDING = new Set(["needs_manual_review", "needs_regenerate", "review_passed", "needs_manual_source"]);
