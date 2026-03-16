@@ -3483,8 +3483,8 @@ def pipeline_console(response: Response) -> str:
                 html += '<span class="config-label">' + s.label + '</span>';
                 html += '<span class="config-default">默认 ' + def + '</span>';
                 html += '<input class="config-input" type="text" value="' + val + '" />';
-                html += '<button class="config-btn save" onclick="window._save(\'' + key + '\',this)">保存</button>';
-                if (s.has_override) html += '<button class="config-btn reset" onclick="window._reset(\'' + key + '\',this)">恢复</button>';
+                html += '<button class="config-btn save" onclick="window._save(\\'' + key + '\\',this)">保存</button>';
+                if (s.has_override) html += '<button class="config-btn reset" onclick="window._reset(\\'' + key + '\\',this)">恢复</button>';
                 html += '<span class="config-saved">✓ 已保存</span>';
                 html += '</div>';
               });
