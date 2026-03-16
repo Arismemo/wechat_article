@@ -3367,6 +3367,13 @@ def pipeline_console(response: Response) -> str:
               return Object.assign(opts, extra || {});
             }
 
+            // XSS 防护：HTML 实体转义
+            function esc(s) {
+              const d = document.createElement('div');
+              d.textContent = String(s == null ? '' : s);
+              return d.innerHTML;
+            }
+
             const PHASE_COLORS = {
               fetch:   { color: '#3b82f6', label: 'Phase 2 · 抓取' },
               prepare: { color: '#10b981', label: 'Phase 3 · 准备' },
@@ -3378,6 +3385,7 @@ def pipeline_console(response: Response) -> str:
 
             let pipelineData = null;
             let settingsData = {};
+            let settingsStatus = 'loading'; // 'loading' | 'loaded' | 'auth_error' | 'error'
             let activeStepId = null;
 
             async function init() {
@@ -3390,15 +3398,32 @@ def pipeline_console(response: Response) -> str:
                 loadSettings();
               } catch(e) {
                 document.getElementById('pipeGraph').innerHTML =
-                  '<div class="pipe-loading">' + e.message + '</div>';
+                  '<div class="pipe-loading">' + esc(e.message) + '</div>';
               }
             }
 
             async function loadSettings() {
               try {
                 const r = await fetch(API_BASE + '/admin/settings', buildFetchOpts());
-                if (r.ok) { const arr = await r.json(); for (const s of arr) settingsData[s.key] = s; }
-              } catch(_) {}
+                if (r.ok) {
+                  const arr = await r.json();
+                  for (const s of arr) settingsData[s.key] = s;
+                  settingsStatus = 'loaded';
+                } else if (r.status === 401 || r.status === 403) {
+                  settingsStatus = 'auth_error';
+                } else {
+                  settingsStatus = 'error';
+                }
+              } catch(_) {
+                settingsStatus = 'error';
+              }
+              // 如果用户已打开某个配置面板，自动刷新
+              if (activeStepId) {
+                const step = pipelineData.all_steps.find(s => s.id === activeStepId);
+                if (step && step.configurable && step.settings && step.settings.length > 0) {
+                  toggleConfig(step, true);
+                }
+              }
             }
 
             function connectorSVG(color) {
@@ -3416,7 +3441,7 @@ def pipeline_console(response: Response) -> str:
                 html += '<div class="phase-section">';
                 html += '<div class="phase-header">';
                 html += '<span class="phase-dot" style="background:' + pc.color + '"></span>';
-                html += '<span class="phase-title" style="color:' + pc.color + '">' + pc.label + '</span>';
+                html += '<span class="phase-title" style="color:' + pc.color + '">' + esc(pc.label) + '</span>';
                 html += '<span class="phase-line"></span>';
                 html += '</div>';
                 html += '<div class="phase-steps">';
@@ -3430,10 +3455,10 @@ def pipeline_console(response: Response) -> str:
                   if (hasBadge) hint = step.settings.length + ' 项可配置';
                   else if (hasKids) hint = step.children.length + ' 个子步骤';
 
-                  html += '<div class="step-card" data-step-id="' + step.id + '" data-phase="' + phase.id + '">';
-                  html += '<span class="step-icon">' + step.icon + '</span>';
-                  html += '<div class="step-info"><span class="step-name">' + step.label + '</span>';
-                  if (hint) html += '<span class="step-hint">' + hint + '</span>';
+                  html += '<div class="step-card" data-step-id="' + esc(step.id) + '" data-phase="' + esc(phase.id) + '">';
+                  html += '<span class="step-icon">' + esc(step.icon) + '</span>';
+                  html += '<div class="step-info"><span class="step-name">' + esc(step.label) + '</span>';
+                  if (hint) html += '<span class="step-hint">' + esc(hint) + '</span>';
                   html += '</div>';
                   if (hasBadge) html += '<span class="step-badge">' + step.settings.length + '</span>';
                   html += '</div>';
@@ -3456,38 +3481,47 @@ def pipeline_console(response: Response) -> str:
               if (step.configurable && step.settings && step.settings.length > 0) { toggleConfig(step); return; }
             }
 
-            function toggleConfig(step) {
+            function toggleConfig(step, forceRefresh) {
               const panel = document.getElementById('configPanel');
               document.querySelectorAll('.step-card.active').forEach(n => n.classList.remove('active'));
 
-              if (activeStepId === step.id) { panel.innerHTML = ''; activeStepId = null; return; }
+              if (activeStepId === step.id && !forceRefresh) { panel.innerHTML = ''; activeStepId = null; return; }
               activeStepId = step.id;
 
               const nodeEl = document.querySelector('[data-step-id="' + step.id + '"]');
               if (nodeEl) nodeEl.classList.add('active');
 
               let html = '<div class="config-panel">';
-              html += '<div class="config-header"><span class="cfg-icon">' + step.icon + '</span>';
-              html += '<span class="cfg-title">' + step.label + ' 参数配置</span></div>';
+              html += '<div class="config-header"><span class="cfg-icon">' + esc(step.icon) + '</span>';
+              html += '<span class="cfg-title">' + esc(step.label) + ' 参数配置</span></div>';
               html += '<div class="config-body">';
 
-              step.settings.forEach(key => {
-                const s = settingsData[key];
-                if (!s) {
-                  html += '<div class="config-row"><span class="config-label">' + key + '</span><span class="config-default">未注册</span></div>';
-                  return;
-                }
-                const val = s.effective_value || s.default_value || '';
-                const def = s.default_value || '';
-                html += '<div class="config-row" data-key="' + key + '">';
-                html += '<span class="config-label">' + s.label + '</span>';
-                html += '<span class="config-default">默认 ' + def + '</span>';
-                html += '<input class="config-input" type="text" value="' + val + '" />';
-                html += '<button class="config-btn save" onclick="window._save(\\'' + key + '\\',this)">保存</button>';
-                if (s.has_override) html += '<button class="config-btn reset" onclick="window._reset(\\'' + key + '\\',this)">恢复</button>';
-                html += '<span class="config-saved">✓ 已保存</span>';
-                html += '</div>';
-              });
+              // 根据 settings 加载状态显示不同内容
+              if (settingsStatus === 'loading') {
+                html += '<div class="config-row"><span class="config-label" style="color:var(--pipe-text-muted)">⏳ 正在加载配置数据…</span></div>';
+              } else if (settingsStatus === 'auth_error') {
+                html += '<div class="config-row"><span class="config-label" style="color:#ef4444">🔒 登录已过期，请刷新页面重新认证</span></div>';
+              } else if (settingsStatus === 'error') {
+                html += '<div class="config-row"><span class="config-label" style="color:#ef4444">⚠️ 加载配置失败，请检查网络后刷新页面</span></div>';
+              } else {
+                step.settings.forEach(key => {
+                  const s = settingsData[key];
+                  if (!s) {
+                    html += '<div class="config-row"><span class="config-label">' + esc(key) + '</span><span class="config-default" style="color:#ef4444">未注册</span></div>';
+                    return;
+                  }
+                  const val = s.effective_value != null ? s.effective_value : (s.default_value != null ? s.default_value : '');
+                  const def = s.default_value != null ? s.default_value : '';
+                  html += '<div class="config-row" data-key="' + esc(key) + '">';
+                  html += '<span class="config-label">' + esc(s.label) + '</span>';
+                  html += '<span class="config-default">默认 ' + esc(def) + '</span>';
+                  html += '<input class="config-input" type="text" value="' + esc(val) + '" />';
+                  html += '<button class="config-btn save" onclick="window._save(\\'' + key + '\\',this)">保存</button>';
+                  if (s.has_override) html += '<button class="config-btn reset" onclick="window._reset(\\'' + key + '\\',this)">恢复</button>';
+                  html += '<span class="config-saved">✓ 已保存</span>';
+                  html += '</div>';
+                });
+              }
 
               html += '</div></div>';
               panel.innerHTML = html;
@@ -3534,7 +3568,7 @@ def pipeline_console(response: Response) -> str:
               let html = '';
               step.children.forEach((c, i) => {
                 if (i > 0) html += '<div class="sub-arrow">↓</div>';
-                html += '<div class="sub-step"><span class="sub-icon">' + c.icon + '</span>' + c.label + '</div>';
+                html += '<div class="sub-step"><span class="sub-icon">' + esc(c.icon) + '</span>' + esc(c.label) + '</div>';
               });
               document.getElementById('modalBody').innerHTML = html;
               document.getElementById('modal').classList.add('open');

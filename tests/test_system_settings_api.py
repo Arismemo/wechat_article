@@ -76,7 +76,7 @@ class SystemSettingsApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         body = response.json()
-        self.assertEqual(len(body), 5)
+        self.assertEqual(len(body), 11)
         items = {item["key"]: item for item in body}
         self.assertEqual(items["phase4.write_model"]["effective_value"], "glm-5")
         self.assertEqual(items["phase4.review_model"]["default_value"], "glm-5-air")
