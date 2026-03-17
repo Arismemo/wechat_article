@@ -25,6 +25,7 @@ from app.services.phase3_queue_service import Phase3QueueService
 from app.services.phase4_queue_service import Phase4QueueService
 from app.services.task_service import TaskService
 from app.services.task_workspace_query_service import TaskWorkspaceQueryService
+from app.services.topic_fetch_queue_service import TopicFetchQueueService
 from app.settings import get_settings
 
 
@@ -177,6 +178,7 @@ class AdminMonitorService:
                 Phase3QueueService(redis_client).runtime_snapshot(),
                 Phase4QueueService(redis_client).runtime_snapshot(),
                 FeedbackQueueService(redis_client).runtime_snapshot(),
+                TopicFetchQueueService(redis_client).runtime_snapshot(),
             ]
             return AdminMonitorOperationsResponse(
                 available=True,

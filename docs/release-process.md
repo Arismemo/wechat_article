@@ -78,19 +78,19 @@ git push origin main
 git push origin v1.1.1
 ```
 
-6. 使用标准部署路径发布：
+6. 使用当前标准部署路径发布：
 
 ```bash
-BASE_IMAGE=wechat_artical:v1.1.1-amd64 \
-SERVICES="api phase2_worker phase3_worker phase4_worker feedback_worker" \
-bash scripts/deploy_prebuilt_from_local.sh
+bash scripts/deploy_local_from_git.sh
 ```
 
-如果服务器已具备完整构建条件，也可以使用：
+如果只是纯代码更新，且不需要重新同步依赖：
 
 ```bash
-bash scripts/deploy_from_git.sh
+SKIP_SETUP=1 bash scripts/deploy_local_from_git.sh
 ```
+
+基础设施容器只通过 `scripts/docker_infra.sh` 管理，不再把应用层发布到 Docker。
 
 ## 5. 发布后验收
 
@@ -104,7 +104,7 @@ bash scripts/deploy_from_git.sh
 
 如果本次涉及 worker 观测或队列逻辑，还要确认：
 
-- 4 个 worker 都处于 `healthy`
+- 5 个 worker 都处于 `healthy`
 - `queue_depth / processing_depth / pending_count` 字段正常返回
 
 ## 6. 发布留档

@@ -1,6 +1,6 @@
 # 项目文档索引
 
-更新时间：2026-03-10
+更新时间：2026-03-17
 
 ## 文档留存原则
 
@@ -12,6 +12,10 @@
 
 ## 当前文档
 
+- `docs/operations/host-deployment.md`
+  - 宿主机本地部署说明，覆盖依赖安装、`systemd`、日常发布和从 Docker 切换到宿主机的迁移步骤
+- `docs/plans/2026-03-16-topic-intelligence-blueprint.md`
+  - “长期选题情报层”蓝图，定义持续获取选题的业务目标、架构分层、数据模型、评分策略、后台入口与演进路线
 - `docs/post-v1.1.0-roadmap.md`
   - `v1.1.0` 之后的单人运营路线图，包含 P0 / P1 / P2 优先级、前端交互优化和明确不纳入项
 - `docs/post-v1.1.0-frontend-redesign-plan.md`
@@ -81,7 +85,9 @@
 - `docs/web-console-plan.md`
   - 网页端控制台历史规划文档与下一阶段建议
 - `docs/adr/0001-git-based-deploy.md`
-  - 从文件拷贝切换到 Git 部署的技术决策
+  - 从文件拷贝切换到 Git 部署的技术决策；其中保留了历史 Docker 发布演进记录，当前有效部署路径以 `docs/operations/host-deployment.md` 为准
+- `docs/adr/0002-topic-intelligence-layer.md`
+  - 在 Phase 3 前引入长期选题情报层，并通过 `canonical_seed_url` 先桥接现有任务模型的技术决策
 
 ## 后续建议文档
 

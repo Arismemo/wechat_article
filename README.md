@@ -37,9 +37,10 @@
 
 - `app/`：FastAPI 后端、数据模型、服务逻辑、后台页
 - `migrations/`：Alembic 迁移
-- `scripts/`：worker 和部署脚本
+- `scripts/`：worker、宿主机部署脚本和兼容脚本
 - `docs/`：需求、阶段文档、部署记录、MVP 收口结论
-- `docker-compose.yml`：本地与服务器运行编排
+- `deploy/systemd/`：宿主机常驻服务模板
+- `docker-compose.yml`：只保留 `postgres/redis` 两个官方基础设施容器
 
 ## 核心入口
 
@@ -90,7 +91,7 @@ https://auto.709970.xyz/api/v1/ingest/shortcut?key=<INGEST_SHORTCUT_SHARED_KEY>&
 
 - `docs/phase-0/ios-shortcuts.md`
 
-## 本地运行
+## 本地部署（推荐）
 
 1. 复制环境变量模板：
 
@@ -98,44 +99,151 @@ https://auto.709970.xyz/api/v1/ingest/shortcut?key=<INGEST_SHORTCUT_SHARED_KEY>&
 cp .env.example .env
 ```
 
-2. 填好至少这些变量：
+2. 准备运行依赖：
+
+- Python `3.9+`
+- 建议直接安装系统浏览器 `google-chrome` 或 `chromium`
+
+应用代码和 worker 走宿主机进程；`PostgreSQL / Redis` 可以二选一：
+
+- 方案 A：直接装在宿主机
+- 方案 B：继续使用官方 Docker 镜像，仅运行基础设施容器
+
+如果这台机器已经有宿主机 `PostgreSQL / Redis` 占用了 `5432/6379`，不要再执行 `bash scripts/docker_infra.sh up`。
+
+如果你要继续用官方 Docker 容器承载 `PostgreSQL / Redis`，并且 `5432/6379` 当前没有被宿主机服务占用，才执行：
+
+```bash
+bash scripts/docker_infra.sh up
+```
+
+如果你要把数据库和 Redis 直接装在宿主机，Ubuntu 常用依赖示例：
+
+```bash
+sudo apt-get update
+sudo apt-get install -y python3 python3-venv python3-pip postgresql redis-server
+```
+
+或者直接执行仓库内的一次性安装脚本：
+
+```bash
+bash scripts/install_host_runtime_ubuntu.sh
+```
+
+3. 初始化宿主机运行时：
+
+```bash
+bash scripts/setup_local_host.sh
+```
+
+这个脚本会：
+
+- 创建 `.venv`
+- 安装项目运行依赖
+- 检查宿主机是否已有 `chrome/chromium`
+- 如果没有宿主机浏览器，则只在本机安装一次 Playwright Chromium
+
+4. 填好至少这些变量：
 
 - `API_BEARER_TOKEN`
 - `INGEST_SHORTCUT_SHARED_KEY`
-- `DATABASE_URL` 或 `POSTGRES_*`
+- `DATABASE_URL`
 - `REDIS_URL`
-- `ZHIPUAI_API_KEY`
+- `LLM_API_KEY`
 - `WECHAT_APP_ID`
 - `WECHAT_APP_SECRET`
-- `WECHAT_AUTHOR_NAME`
 
-3. 启动服务：
+如果宿主机已经安装了 Chrome，建议把 `.env` 里的这一项改成：
 
 ```bash
-docker compose up -d postgres redis api phase2_worker phase3_worker phase4_worker feedback_worker
-docker compose run --rm api alembic upgrade head
+PLAYWRIGHT_BROWSER_CHANNELS=chrome,chromium
 ```
 
-4. 查看健康检查：
+5. 执行迁移并启动 API + worker：
+
+```bash
+bash scripts/local_runtime.sh start-all
+```
+
+如果只想先迁移数据库：
+
+```bash
+bash scripts/local_runtime.sh migrate
+```
+
+常用管理命令：
+
+```bash
+bash scripts/local_runtime.sh status
+bash scripts/local_runtime.sh restart api
+bash scripts/local_runtime.sh stop-all
+```
+
+运行日志默认落在：
+
+- `run/logs/api.log`
+- `run/logs/phase2_worker.log`
+- `run/logs/phase3_worker.log`
+- `run/logs/phase4_worker.log`
+- `run/logs/feedback_worker.log`
+- `run/logs/topic_fetch_worker.log`
+
+PID 文件默认落在：
+
+- `run/pids/`
+
+6. 如果这台机器是长期运行的服务器，建议继续安装 systemd 单元：
+
+```bash
+START_SERVICES=1 bash scripts/install_local_systemd.sh
+```
+
+安装完成后，服务会变成宿主机常驻进程，机器重启后也会自动拉起。
+
+更完整的宿主机部署和迁移步骤见：
+
+- `docs/operations/host-deployment.md`
+
+7. 查看健康检查：
 
 ```bash
 curl http://127.0.0.1:8000/healthz
 ```
 
-## 服务器部署
+## Docker 运行
 
-### 标准 Git 部署
+只有成熟的官方基础设施服务建议继续用 Docker，项目自己的 `api / worker` 已从仓库默认发布路径中移除。
 
-适用于服务器能正常拉依赖和 Playwright 的场景：
+如果你只是想快速拉起 `PostgreSQL / Redis` 官方容器，并且宿主机没有已经运行的 `5432/6379` 服务：
 
 ```bash
-bash scripts/deploy_from_git.sh
+bash scripts/docker_infra.sh up
 ```
 
-可选参数：
+## 服务器部署
 
-- `SERVICES="api phase4_worker feedback_worker"`
-- `SKIP_BUILD=1`
+当前建议优先采用“宿主机 Python venv + 宿主机 Chrome/Chromium + 外部或官方 Docker 基础设施服务”的方式，避免每次发布都重新构建镜像和下载浏览器。
+
+### 首次部署
+
+```bash
+cp .env.example .env
+bash scripts/setup_local_host.sh
+bash scripts/local_runtime.sh migrate
+START_SERVICES=1 bash scripts/install_local_systemd.sh
+```
+
+如果 `PostgreSQL / Redis` 仍然走官方 Docker，并且宿主机没有占用 `5432/6379`，再单独执行：
+
+```bash
+bash scripts/docker_infra.sh up
+```
+
+### 日常发布
+
+```bash
+bash scripts/deploy_local_from_git.sh
+```
 
 如果服务器 `.git` 工作树损坏，先执行：
 
@@ -143,37 +251,17 @@ bash scripts/deploy_from_git.sh
 bash scripts/repair_server_git_checkout.sh
 ```
 
-### 正式镜像发布路径
-
-当前推荐的正式发布路径是：
-
-1. 本地构建 `linux/amd64` 镜像
-2. 通过 `docker save | ssh ... docker load` 推到服务器
-3. 服务器 `git pull --ff-only`
-4. 执行 migration
-5. `docker compose up -d --no-build --force-recreate`
-
-执行方式：
+如果宿主机没有系统浏览器，首次安装依赖时可以带上：
 
 ```bash
-BASE_IMAGE=wechat_artical:v1.1.2-amd64 \
-SERVICES="api phase2_worker phase3_worker phase4_worker feedback_worker" \
-bash scripts/deploy_prebuilt_from_local.sh
+PLAYWRIGHT_INSTALL_DEPS=1 bash scripts/setup_local_host.sh
 ```
 
-如果本地已经有同版本镜像，可复用：
+如果你要顺手清理已经停掉的旧应用层 Docker 容器和镜像：
 
 ```bash
-SKIP_LOCAL_BUILD=1 \
-BASE_IMAGE=wechat_artical:v1.1.2-amd64 \
-SERVICES="api phase2_worker phase3_worker phase4_worker feedback_worker" \
-bash scripts/deploy_prebuilt_from_local.sh
+bash scripts/cleanup_legacy_app_docker.sh
 ```
-
-### 为什么默认用预构建镜像
-
-服务器当前外网下载 Chromium 仍然慢，而 Dockerfile 又需要 Playwright 浏览器层。  
-所以当前正式发布默认采用“本地预构建 amd64 镜像 + 远端只做 Git 拉取和容器重建”的方式。
 
 ## 使用方式
 
@@ -201,7 +289,7 @@ bash scripts/deploy_prebuilt_from_local.sh
   - 监控详情页
   - 优先通过 SSE 实时推送任务快照，失败时回退轮询
   - 展示当前筛选、运行中、待人工、待推草稿、已入草稿、失败任务、异常堆积、今日提交、今日入草稿、今日失败、今日审稿通过率、今日自动推稿成功率等统计卡片
-  - 展示 Phase 2 / 3 / 4 / feedback 的队列深度、处理中任务、待确认数量和 worker 心跳
+  - 展示 Phase 2 / 3 / 4 / feedback / topic_fetch 的队列深度、处理中任务、待确认数量和 worker 心跳
   - 支持按状态、来源、关键词、起始时间筛选历史任务
   - 适合排障和深入看运行态
 - `/admin/settings`

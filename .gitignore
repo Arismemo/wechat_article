@@ -7,6 +7,8 @@ __pycache__/
 .pytest_cache/
 *.pyc
 data/
+local_data/
+run/
 dist/
 build/
 output/

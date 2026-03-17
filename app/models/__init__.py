@@ -12,6 +12,13 @@ from app.models.style_asset import StyleAsset
 from app.models.system_setting import SystemSetting
 from app.models.task import Task
 from app.models.task_dedupe_slot import TaskDedupeSlot
+from app.models.topic_candidate import TopicCandidate
+from app.models.topic_candidate_signal import TopicCandidateSignal
+from app.models.topic_fetch_run import TopicFetchRun
+from app.models.topic_plan import TopicPlan
+from app.models.topic_plan_task_link import TopicPlanTaskLink
+from app.models.topic_signal import TopicSignal
+from app.models.topic_source import TopicSource
 from app.models.wechat_draft import WechatDraft
 
 __all__ = [
@@ -29,5 +36,12 @@ __all__ = [
     "SystemSetting",
     "Task",
     "TaskDedupeSlot",
+    "TopicCandidate",
+    "TopicCandidateSignal",
+    "TopicFetchRun",
+    "TopicPlan",
+    "TopicPlanTaskLink",
+    "TopicSignal",
+    "TopicSource",
     "WechatDraft",
 ]

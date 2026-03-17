@@ -28,6 +28,34 @@ class TaskStatus(str, Enum):
     NEEDS_REGENERATE = "needs_regenerate"
 
 
+class TopicSourceType(str, Enum):
+    SEARCH_WATCHLIST = "search_watchlist"
+    PAGE_MONITOR = "page_monitor"
+    MANUAL_SEED = "manual_seed"
+
+
+class TopicSignalType(str, Enum):
+    SEARCH_RESULT = "search_result"
+    REPORT_UPDATE = "report_update"
+    OFFICIAL_NEWS = "official_news"
+    MANUAL_SEED = "manual_seed"
+
+
+class TopicFetchRunStatus(str, Enum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+
+class TopicCandidateStatus(str, Enum):
+    NEW = "new"
+    WATCHING = "watching"
+    PLANNED = "planned"
+    PROMOTED = "promoted"
+    IGNORED = "ignored"
+
+
 FINAL_FAILURE_STATUSES = {
     TaskStatus.FETCH_FAILED,
     TaskStatus.ANALYZE_FAILED,

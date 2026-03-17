@@ -161,10 +161,17 @@ class AdminMonitorApiTests(unittest.TestCase):
 
         class FakeRedis:
             def llen(self, key):
-                return {"phase2:queue": 1, "phase2:processing": 0, "phase3:queue": 0, "phase3:processing": 1}.get(key, 0)
+                return {
+                    "phase2:queue": 1,
+                    "phase2:processing": 0,
+                    "phase3:queue": 0,
+                    "phase3:processing": 1,
+                    "topics:fetch:queue": 2,
+                    "topics:fetch:processing": 0,
+                }.get(key, 0)
 
             def scard(self, key):
-                return {"phase2:pending": 1, "phase3:pending": 1}.get(key, 0)
+                return {"phase2:pending": 1, "phase3:pending": 1, "topics:fetch:pending": 2}.get(key, 0)
 
             def hgetall(self, key):
                 if key == "phase2:worker:heartbeat":
@@ -176,6 +183,11 @@ class AdminMonitorApiTests(unittest.TestCase):
                     return {
                         "last_seen_at": datetime.now(timezone.utc).isoformat(),
                         "current_task_id": draft_task_id,
+                    }
+                if key == "topics:fetch:worker:heartbeat":
+                    return {
+                        "last_seen_at": datetime.now(timezone.utc).isoformat(),
+                        "current_task_id": "topic-source-1",
                     }
                 return {}
 
@@ -197,8 +209,9 @@ class AdminMonitorApiTests(unittest.TestCase):
         self.assertEqual(body["summary"]["today_review_success_rate"], 50.0)
         self.assertEqual(len(body["tasks"]), 3)
         self.assertTrue(body["operations"]["available"])
-        self.assertEqual(len(body["operations"]["workers"]), 4)
+        self.assertEqual(len(body["operations"]["workers"]), 5)
         self.assertEqual(body["operations"]["workers"][0]["name"], "phase2")
+        self.assertEqual(body["operations"]["workers"][-1]["name"], "topic_fetch")
         self.assertGreaterEqual(len(body["alerts"]), 2)
         self.assertEqual(body["alerts"][0]["dedupe_key"], body["alerts"][0]["key"])
         self.assertIn(body["alerts"][0]["level"], {"warn", "critical"})

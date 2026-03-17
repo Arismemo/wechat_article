@@ -1,0 +1,18 @@
+[Unit]
+Description=wechat_artical %i worker
+After=network-online.target postgresql.service redis-server.service redis.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__RUN_USER__
+WorkingDirectory=__PROJECT_DIR__
+ExecStart=__PROJECT_DIR__/scripts/run_local_worker.sh %i
+Restart=always
+RestartSec=3
+TimeoutStopSec=20
+KillSignal=SIGINT
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

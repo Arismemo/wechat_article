@@ -1,5 +1,7 @@
 # ADR-0001：从文件拷贝切换到 Git 部署
 
+注意：本文保留了 2026-03-08 到 2026-03-09 的历史部署演进记录，其中包含应用层 Docker 的过渡方案。自 2026-03-17 起，当前正式路径已切换为“宿主机 Python venv + systemd”，Docker 只保留官方基础设施服务，具体以 `docs/operations/host-deployment.md` 为准。
+
 更新时间：2026-03-08
 状态：Accepted
 
