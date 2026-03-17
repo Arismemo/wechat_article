@@ -57,11 +57,15 @@
 - `GET /api/v1/admin/monitor/snapshot`
 - `GET /api/v1/admin/runtime-status`
 - `GET /api/v1/admin/settings`
+- `GET /api/v1/admin/topics/snapshot`
+- `GET /api/v1/admin/topics/sources`
+- `GET /api/v1/admin/topics/candidates`
 - `POST /api/v1/admin/alerts/test`
 
 后台页：
 
 - `GET /admin`
+- `GET /admin/topics`
 - `GET /admin/phase2`
 - `GET /admin/console`
 - `GET /admin/console/stream`
@@ -285,6 +289,9 @@ bash scripts/cleanup_legacy_app_docker.sh
 - `/admin`
   - 主入口
   - 默认面向日常使用：贴链接、看进度、做动作
+- `/admin/topics`
+  - 长期选题情报台
+  - 查看来源运行状态、候选池、计划工作区，并把计划直接推进到任务链路
 - `/admin/console`
   - 监控详情页
   - 优先通过 SSE 实时推送任务快照，失败时回退轮询

@@ -98,13 +98,27 @@ class AppRouteTests(unittest.TestCase):
         self.assertIn("/api/v1/admin/alerts/test", routes)
         self.assertIn("/api/v1/admin/settings", routes)
         self.assertIn("/api/v1/admin/settings/{key}", routes)
+        self.assertIn("/api/v1/admin/topics/snapshot", routes)
+        self.assertIn("/api/v1/admin/topics/sources", routes)
+        self.assertIn("/api/v1/admin/topics/candidates", routes)
+        self.assertIn("/api/v1/admin/topics/plans/{plan_id}", routes)
+        self.assertIn("/api/v1/admin/topics/plans/{plan_id}/promote", routes)
         self.assertIn("/admin/api/home-snapshot", routes)
         self.assertIn("/admin/api/ingest", routes)
         self.assertIn("/admin/api/tasks/{task_id}/retry", routes)
         self.assertIn("/admin/api/tasks/{task_id}/approve", routes)
         self.assertIn("/admin/api/tasks/{task_id}/reject", routes)
         self.assertIn("/admin/api/tasks/{task_id}/push-draft", routes)
+        self.assertIn("/admin/api/topics/sources/{source_id}/run", routes)
+        self.assertIn("/admin/api/topics/sources/{source_id}/enqueue", routes)
+        self.assertIn("/admin/api/topics/refresh-candidates", routes)
+        self.assertIn("/admin/api/topics/plans/{plan_id}/promote", routes)
+        self.assertIn("/internal/v1/topic-sources/{source_id}/run", routes)
+        self.assertIn("/internal/v1/topic-sources/{source_id}/enqueue", routes)
+        self.assertIn("/internal/v1/topics/refresh-candidates", routes)
+        self.assertIn("/internal/v1/topics/plans/{plan_id}/promote", routes)
         self.assertIn("/admin", routes)
+        self.assertIn("/admin/topics", routes)
         self.assertIn("/admin/phase2", routes)
         self.assertIn("/admin/console", routes)
         self.assertIn("/admin/console/stream", routes)
@@ -175,6 +189,23 @@ class AppRouteTests(unittest.TestCase):
         self.assert_admin_shell(response.text)
         self.assertNotIn("Bearer Token", response.text)
         self.assertNotIn("API_BEARER_TOKEN", response.text)
+
+    def test_admin_topics_page_renders(self) -> None:
+        app_module = reload(import_module("app.main"))
+        client = TestClient(app_module.create_app())
+
+        response = client.get("/admin/topics")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("长期选题情报台", response.text)
+        self.assertIn("来源监控", response.text)
+        self.assertIn("候选池", response.text)
+        self.assertIn("选题工作区", response.text)
+        self.assertIn('class="admin-main"', response.text)
+        self.assertIn("refresh-candidates", response.text)
+        self.assertIn("/api/v1/admin/topics/snapshot", response.text)
+        self.assertIn("/api/v1/admin/topics/sources", response.text)
+        self.assert_admin_shell(response.text)
 
     def test_admin_settings_page_renders(self) -> None:
         app_module = reload(import_module("app.main"))
@@ -288,6 +319,13 @@ class AppRouteTests(unittest.TestCase):
 
             settings_authorized = client.get("/admin/settings", headers={"Authorization": f"Basic {encoded}"})
             self.assertEqual(settings_authorized.status_code, 200)
+
+            topics_unauthorized = client.get("/admin/topics")
+            self.assertEqual(topics_unauthorized.status_code, 401)
+
+            topics_authorized = client.get("/admin/topics", headers={"Authorization": f"Basic {encoded}"})
+            self.assertEqual(topics_authorized.status_code, 200)
+            self.assertIn("长期选题情报台", topics_authorized.text)
 
             portal_unauthorized = client.get("/admin")
             self.assertEqual(portal_unauthorized.status_code, 401)
