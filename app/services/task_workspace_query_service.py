@@ -192,6 +192,7 @@ class TaskWorkspaceQueryService:
                     difference_matrix=brief.difference_matrix,
                     outline=brief.outline,
                     title_directions=brief.title_directions,
+                    writing_factors=brief.writing_factors,
                 )
                 if brief
                 else None

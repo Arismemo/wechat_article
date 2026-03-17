@@ -12,6 +12,9 @@ class ContentBriefRepository:
     def __init__(self, session: Session) -> None:
         self.session = session
 
+    def get_by_id(self, brief_id: str) -> Optional[ContentBrief]:
+        return self.session.get(ContentBrief, brief_id)
+
     def get_latest_by_task_id(self, task_id: str) -> Optional[ContentBrief]:
         statement = (
             select(ContentBrief)

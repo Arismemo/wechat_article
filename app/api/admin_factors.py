@@ -300,3 +300,49 @@ def extract_factors(payload: FactorExtractRequest, session: Session = Depends(ge
         "article_url": payload.url,
     }
 
+
+# ── 因子绑定到 Brief ──
+
+
+class FactorBindRequest(BaseModel):
+    brief_id: str
+    factor_ids: list[str]
+
+
+@router.patch("/admin/factors/bind-to-brief", dependencies=[Depends(verify_admin_api_auth)])
+def bind_factors_to_brief(payload: FactorBindRequest, session: Session = Depends(get_db_session)):
+    """将指定因子绑定到 ContentBrief 的 writing_factors 中。"""
+    from app.repositories.content_brief_repository import ContentBriefRepository
+
+    brief_repo = ContentBriefRepository(session)
+    brief = brief_repo.get_by_id(payload.brief_id)
+    if brief is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Brief not found")
+
+    factor_repo = FactorRepository(session)
+    factors_data = []
+    for fid in payload.factor_ids:
+        f = factor_repo.get_by_id(fid)
+        if f is None or f.status != "active":
+            continue
+        factors_data.append({
+            "id": f.id,
+            "name": f.name,
+            "dimension": f.dimension,
+            "technique": f.technique,
+            "example_text": f.example_text or "",
+        })
+
+    brief.writing_factors = {
+        "factors": factors_data,
+        "selection_mode": "manual",
+    }
+    session.commit()
+
+    return {
+        "ok": True,
+        "brief_id": brief.id,
+        "factor_count": len(factors_data),
+        "writing_factors": brief.writing_factors,
+    }
+

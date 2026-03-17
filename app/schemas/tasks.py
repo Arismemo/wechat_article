@@ -86,6 +86,7 @@ class ContentBriefResponse(APIModel):
     difference_matrix: Optional[dict] = None
     outline: Optional[dict] = None
     title_directions: Optional[dict] = None
+    writing_factors: Optional[dict] = None
 
 
 class TaskBriefResponse(APIModel):

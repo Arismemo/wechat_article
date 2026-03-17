@@ -2824,6 +2824,31 @@ def unified_console() -> str:
                       <div><strong>新角度</strong> ${escapeHtml(workspace.brief?.new_angle || "暂无")}</div>
                       <div><strong>定位</strong> ${escapeHtml(workspace.brief?.positioning || "暂无")}</div>
                     </div>
+                    ${workspace.brief ? `
+                    <div style="margin-top:10px; padding-top:10px; border-top:1px solid #e2e8f0;">
+                      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+                        <strong style="font-size:13px;">📌 写作因子</strong>
+                        <button data-action="manage-factors" data-brief-id="${escapeHtml(workspace.brief.brief_id)}"
+                          style="font-size:12px; padding:3px 10px; border:1px solid #d1d5db; border-radius:6px; background:#fff; cursor:pointer;">
+                          管理因子
+                        </button>
+                      </div>
+                      ${(() => {
+                        const wf = workspace.brief.writing_factors;
+                        const factors = wf && wf.factors ? wf.factors : [];
+                        if (!factors.length) return '<div class="hint" style="font-size:12px;">暂未绑定因子，点击「管理因子」添加。</div>';
+                        return factors.map(f => `
+                          <div style="display:flex; align-items:center; gap:6px; padding:4px 0; font-size:12px;">
+                            <span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:${
+                              {opening:'#ef4444', structure:'#3b82f6', rhetoric:'#8b5cf6', rhythm:'#f59e0b', layout:'#10b981', closing:'#6366f1'}[f.dimension] || '#94a3b8'
+                            }; flex-shrink:0;"></span>
+                            <span style="font-weight:600;">${escapeHtml(f.name)}</span>
+                            <span style="color:#64748b;">${escapeHtml(f.dimension)}</span>
+                          </div>
+                        `).join('');
+                      })()}
+                    </div>
+                    ` : ''}
                   </div>
 
                   <div class="detail-card">
@@ -3013,6 +3038,88 @@ def unified_console() -> str:
                 setStatus("失败", "danger", "加载任务详情失败，详见输出区域。");
                 renderOutput(error.message || String(error));
               }
+            });
+
+            // ── 管理因子弹窗 ──
+            workspaceEl.addEventListener("click", async (event) => {
+              const btn = event.target.closest("button[data-action='manage-factors']");
+              if (!btn) return;
+              const briefId = btn.getAttribute("data-brief-id");
+              if (!briefId) return;
+
+              // 加载因子库中所有 active 因子
+              let allFactors = [];
+              try {
+                const res = await fetch(apiUrl("/api/v1/admin/factors/list?status=active&limit=200"), {credentials:"same-origin"});
+                allFactors = await res.json();
+              } catch(e) {
+                renderOutput("加载因子库失败: " + e.message);
+                return;
+              }
+
+              // 已绑定因子 ID 集合
+              const wf = lastSnapshot?.workspace?.brief?.writing_factors;
+              const boundIds = new Set((wf?.factors || []).map(f => f.id));
+
+              // 构建弹窗
+              const overlay = document.createElement("div");
+              overlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.4);z-index:9999;display:flex;align-items:center;justify-content:center;";
+              const modal = document.createElement("div");
+              modal.style.cssText = "background:#fff;border-radius:12px;padding:24px;width:520px;max-height:70vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);";
+              modal.innerHTML = `
+                <h3 style="margin:0 0 12px;font-size:16px;">管理写作因子</h3>
+                <p style="font-size:12px;color:#64748b;margin:0 0 12px;">勾选要绑定到此任务 Brief 的因子，保存后下次写稿将自动注入。</p>
+                <div id="factor-pick-list" style="max-height:400px;overflow:auto;"></div>
+                <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
+                  <button id="fp-cancel" style="padding:6px 16px;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;">取消</button>
+                  <button id="fp-save" style="padding:6px 16px;border:none;border-radius:6px;background:#6366f1;color:#fff;cursor:pointer;">保存</button>
+                </div>
+              `;
+              overlay.appendChild(modal);
+              document.body.appendChild(overlay);
+
+              const dimColors = {opening:'#ef4444', structure:'#3b82f6', rhetoric:'#8b5cf6', rhythm:'#f59e0b', layout:'#10b981', closing:'#6366f1'};
+              const listEl = modal.querySelector("#factor-pick-list");
+              if (!allFactors.length) {
+                listEl.innerHTML = '<div style="color:#94a3b8;font-size:13px;padding:20px 0;text-align:center;">因子库中暂无 active 因子。请先到因子库页面添加并激活因子。</div>';
+              } else {
+                listEl.innerHTML = allFactors.map(f => `
+                  <label style="display:flex;align-items:flex-start;gap:8px;padding:8px;border-radius:8px;cursor:pointer;transition:background .15s;"
+                    onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
+                    <input type="checkbox" value="${escapeHtml(f.id)}" ${boundIds.has(f.id)?'checked':''} style="margin-top:3px;" />
+                    <div>
+                      <div style="display:flex;align-items:center;gap:6px;">
+                        <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${dimColors[f.dimension]||'#94a3b8'};"></span>
+                        <strong style="font-size:13px;">${escapeHtml(f.name)}</strong>
+                        <span style="font-size:11px;color:#94a3b8;">${escapeHtml(f.dimension)}</span>
+                      </div>
+                      <div style="font-size:12px;color:#64748b;margin-top:2px;">${escapeHtml(f.technique)}</div>
+                    </div>
+                  </label>
+                `).join('');
+              }
+
+              modal.querySelector("#fp-cancel").addEventListener("click", () => overlay.remove());
+              overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
+
+              modal.querySelector("#fp-save").addEventListener("click", async () => {
+                const checked = [...listEl.querySelectorAll("input[type=checkbox]:checked")].map(c => c.value);
+                try {
+                  const res = await fetch(apiUrl("/api/v1/admin/factors/bind-to-brief"), {
+                    method: "PATCH",
+                    credentials: "same-origin",
+                    headers: {"Content-Type":"application/json"},
+                    body: JSON.stringify({brief_id: briefId, factor_ids: checked}),
+                  });
+                  if (!res.ok) throw new Error(await res.text());
+                  overlay.remove();
+                  setStatus("因子已绑定", "", `已保存 ${checked.length} 个因子到 Brief。`);
+                  await refreshAll();
+                } catch(e) {
+                  setStatus("保存失败", "danger", e.message);
+                  renderOutput(e.message);
+                }
+              });
             });
 
             loadDraft();
