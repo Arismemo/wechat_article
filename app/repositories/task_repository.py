@@ -3,10 +3,11 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Select, delete, func, or_, select, update
+from sqlalchemy import Select, delete, distinct, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.core.enums import ACTIVE_TASK_STATUSES
+from app.models.source_article import SourceArticle
 from app.models.task import Task
 from app.models.task_dedupe_slot import TaskDedupeSlot
 
@@ -69,6 +70,9 @@ class TaskRepository:
             query=query,
             created_after=created_after,
         )
+        # 当 query 触发了 outerjoin SourceArticle，需要 distinct 防止重复
+        if query:
+            statement = statement.distinct()
         statement = statement.order_by(Task.created_at.desc()).limit(limit)
         return list(self.session.scalars(statement))
 
@@ -166,11 +170,17 @@ class TaskRepository:
             statement = statement.where(Task.source_type == source_type)
         if query:
             pattern = f"%{query.strip()}%"
-            statement = statement.where(
+            # outerjoin SourceArticle 以支持按标题搜索（无源文的任务也保留）
+            # 多条 source_article 命中时，由上层调用者负责 .distinct() 去重
+            statement = statement.select_from(Task).outerjoin(
+                SourceArticle,
+                SourceArticle.task_id == Task.id,
+            ).where(
                 or_(
                     Task.task_code.ilike(pattern),
                     Task.source_url.ilike(pattern),
                     Task.normalized_url.ilike(pattern),
+                    SourceArticle.title.ilike(pattern),
                 )
             )
         if created_after:

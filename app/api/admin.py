@@ -1192,6 +1192,10 @@ def phase5_console() -> str:
                   <h2>看板</h2>
                   <div class="filter-grid">
                     <div>
+                      <label for="recent-search">搜索</label>
+                      <input id="recent-search" type="search" placeholder="标题 / 链接 / task_code" autocomplete="off" />
+                    </div>
+                    <div>
                       <label for="recent-status-filter">状态筛选</label>
                       <select id="recent-status-filter">
                         <option value="">全部状态</option>
@@ -1202,6 +1206,13 @@ def phase5_console() -> str:
                         <option value="draft_saved">draft_saved</option>
                         <option value="review_failed">review_failed</option>
                         <option value="push_failed">push_failed</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label for="recent-sort">排序方式</label>
+                      <select id="recent-sort">
+                        <option value="time">按时间（新→旧）</option>
+                        <option value="status">按状态分组</option>
                       </select>
                     </div>
                     <div>
@@ -1254,7 +1265,9 @@ def phase5_console() -> str:
             const heroFocusEl = document.getElementById("hero-focus");
             const recentListEl = document.getElementById("recent-list");
             const recentSummaryEl = document.getElementById("recent-summary");
+            const recentSearchEl = document.getElementById("recent-search");
             const recentStatusEl = document.getElementById("recent-status-filter");
+            const recentSortEl = document.getElementById("recent-sort");
             const recentLimitEl = document.getElementById("recent-limit");
             const recentActiveEl = document.getElementById("recent-active-only");
             const workspaceEl = document.getElementById("workspace");
@@ -1342,7 +1355,9 @@ def phase5_console() -> str:
               urlEl.value = storageGet("phase5_console_url", "");
               taskEl.value = storageGet("phase5_console_task", "");
               reviewNoteEl.value = storageGet("phase5_console_review_note", "");
+              recentSearchEl.value = storageGet("phase5_console_recent_search", "");
               recentStatusEl.value = storageGet("phase5_console_recent_status", "");
+              recentSortEl.value = storageGet("phase5_console_recent_sort", "time");
               recentLimitEl.value = storageGet("phase5_console_recent_limit", "18");
               recentActiveEl.checked = storageGet("phase5_console_recent_active_only", "true") !== "false";
             };
@@ -1351,7 +1366,9 @@ def phase5_console() -> str:
               storageSet("phase5_console_url", urlEl.value.trim());
               storageSet("phase5_console_task", taskEl.value.trim());
               storageSet("phase5_console_review_note", reviewNoteEl.value.trim());
+              storageSet("phase5_console_recent_search", recentSearchEl.value.trim());
               storageSet("phase5_console_recent_status", recentStatusEl.value);
+              storageSet("phase5_console_recent_sort", recentSortEl.value);
               storageSet("phase5_console_recent_limit", recentLimitEl.value);
               storageSet("phase5_console_recent_active_only", recentActiveEl.checked ? "true" : "false");
             };
@@ -2133,6 +2150,38 @@ def phase5_console() -> str:
               syncRecentSelection();
             };
 
+            const renderTaskCard = (task, selectedTaskId) => `
+              <div
+                class="task-card ${selectedTaskId === task.task_id ? "selected" : ""}"
+                data-task-card="true"
+                data-task-id="${escapeHtml(task.task_id)}"
+                role="button"
+                tabindex="0"
+                aria-pressed="${selectedTaskId === task.task_id ? "true" : "false"}"
+              >
+                <h3>${escapeHtml(task.title || "未命名任务")}</h3>
+                <div class="hint">${escapeHtml(nextStepText(task))}</div>
+                <div class="meta">
+                  <div><strong>task_id</strong> ${escapeHtml(task.task_id)}</div>
+                  <div><strong>状态</strong> <span class="pill">${escapeHtml(statusLabel(task.status))}</span> ${escapeHtml(task.progress)}%</div>
+                  <div><strong>草稿</strong> ${escapeHtml(task.wechat_media_id || "暂无")}</div>
+                  <div><strong>创建时间</strong> ${escapeHtml(formatDate(task.created_at))}</div>
+                  <div><strong>更新时间</strong> ${escapeHtml(formatDate(task.updated_at))}</div>
+                  <div><strong>链接</strong> ${escapeHtml(truncate(task.source_url, 88))}</div>
+                </div>
+                <div class="task-actions">
+                  <button data-action="workspace" data-task-id="${escapeHtml(task.task_id)}">查看工作台</button>
+                  <button data-action="phase3" data-task-id="${escapeHtml(task.task_id)}" class="secondary">入队 P3</button>
+                  <button data-action="phase4" data-task-id="${escapeHtml(task.task_id)}" class="secondary">执行 P4</button>
+                  <button data-action="approve" data-task-id="${escapeHtml(task.task_id)}" class="secondary">人工通过</button>
+                  <button data-action="reject" data-task-id="${escapeHtml(task.task_id)}" class="danger">驳回重写</button>
+                  <button data-action="allow-push" data-task-id="${escapeHtml(task.task_id)}" class="secondary">允许推稿</button>
+                  <button data-action="block-push" data-task-id="${escapeHtml(task.task_id)}" class="danger">禁止推稿</button>
+                  <button data-action="push" data-task-id="${escapeHtml(task.task_id)}" class="warn">推草稿</button>
+                </div>
+              </div>
+            `;
+
             const renderRecentBoard = (tasks) => {
               renderOverview(Array.isArray(tasks) ? tasks : []);
               if (!Array.isArray(tasks) || tasks.length === 0) {
@@ -2164,51 +2213,34 @@ def phase5_console() -> str:
                 .join("");
 
               const selectedTaskId = taskEl.value.trim();
-              recentListEl.innerHTML = orderedStatuses
-                .map((groupStatus) => `
-                  <section class="group-block">
-                    <div class="group-title">
-                      <h3>${escapeHtml(statusLabel(groupStatus))}</h3>
-                      <span>${escapeHtml(counts[groupStatus])} 个任务</span>
-                    </div>
-                    <div class="board">
-                      ${tasks
-                        .filter((task) => task.status === groupStatus)
-                        .map((task) => `
-                          <div
-                            class="task-card ${selectedTaskId === task.task_id ? "selected" : ""}"
-                            data-task-card="true"
-                            data-task-id="${escapeHtml(task.task_id)}"
-                            role="button"
-                            tabindex="0"
-                            aria-pressed="${selectedTaskId === task.task_id ? "true" : "false"}"
-                          >
-                            <h3>${escapeHtml(task.title || "未命名任务")}</h3>
-                            <div class="hint">${escapeHtml(nextStepText(task))}</div>
-                            <div class="meta">
-                              <div><strong>task_id</strong> ${escapeHtml(task.task_id)}</div>
-                              <div><strong>状态</strong> ${escapeHtml(task.status)} · ${escapeHtml(task.progress)}%</div>
-                              <div><strong>草稿</strong> ${escapeHtml(task.wechat_media_id || "暂无")}</div>
-                              <div><strong>更新时间</strong> ${escapeHtml(formatDate(task.updated_at))}</div>
-                              <div><strong>链接</strong> ${escapeHtml(truncate(task.source_url, 88))}</div>
-                            </div>
-                            <div class="task-actions">
-                              <button data-action="workspace" data-task-id="${escapeHtml(task.task_id)}">查看工作台</button>
-                              <button data-action="phase3" data-task-id="${escapeHtml(task.task_id)}" class="secondary">入队 P3</button>
-                              <button data-action="phase4" data-task-id="${escapeHtml(task.task_id)}" class="secondary">执行 P4</button>
-                              <button data-action="approve" data-task-id="${escapeHtml(task.task_id)}" class="secondary">人工通过</button>
-                              <button data-action="reject" data-task-id="${escapeHtml(task.task_id)}" class="danger">驳回重写</button>
-                              <button data-action="allow-push" data-task-id="${escapeHtml(task.task_id)}" class="secondary">允许推稿</button>
-                              <button data-action="block-push" data-task-id="${escapeHtml(task.task_id)}" class="danger">禁止推稿</button>
-                              <button data-action="push" data-task-id="${escapeHtml(task.task_id)}" class="warn">推草稿</button>
-                            </div>
-                          </div>
-                        `)
-                        .join("")}
-                    </div>
-                  </section>
-                `)
-                .join("");
+              const sortMode = recentSortEl.value || "time";
+
+              if (sortMode === "time") {
+                // 按时间倒序平铺（后端已保证 created_at DESC）
+                recentListEl.innerHTML = `
+                  <div class="board">
+                    ${tasks.map((task) => renderTaskCard(task, selectedTaskId)).join("")}
+                  </div>
+                `;
+              } else {
+                // 按状态分组
+                recentListEl.innerHTML = orderedStatuses
+                  .map((groupStatus) => `
+                    <section class="group-block">
+                      <div class="group-title">
+                        <h3>${escapeHtml(statusLabel(groupStatus))}</h3>
+                        <span>${escapeHtml(counts[groupStatus])} 个任务</span>
+                      </div>
+                      <div class="board">
+                        ${tasks
+                          .filter((task) => task.status === groupStatus)
+                          .map((task) => renderTaskCard(task, selectedTaskId))
+                          .join("")}
+                      </div>
+                    </section>
+                  `)
+                  .join("");
+              }
             };
 
             const refreshRecent = async () => {
@@ -2222,12 +2254,32 @@ def phase5_console() -> str:
                 if (recentStatusEl.value) {
                   params.set("status", recentStatusEl.value);
                 }
+                const searchQuery = recentSearchEl.value.trim();
+                if (searchQuery) {
+                  params.set("query", searchQuery);
+                }
                 const tasks = await request("GET", `/api/v1/tasks?${params.toString()}`);
                 renderRecentBoard(tasks);
               } finally {
                 setPanelsBusy(false);
               }
             };
+
+            // 搜索框防抖：输入停止 300ms 后自动刷新
+            let _searchDebounceTimer = null;
+            recentSearchEl.addEventListener("input", () => {
+              clearTimeout(_searchDebounceTimer);
+              _searchDebounceTimer = setTimeout(async () => {
+                try {
+                  setStatus("搜索中");
+                  await refreshRecent();
+                  setStatus("空闲");
+                } catch (error) {
+                  setStatus("失败");
+                  renderOutput(error.message || String(error));
+                }
+              }, 300);
+            });
 
             const buildIngestPayload = () => {
               const url = urlEl.value.trim();
@@ -2399,7 +2451,7 @@ def phase5_console() -> str:
               }
             });
 
-            [recentStatusEl, recentLimitEl, recentActiveEl].forEach((element) => {
+            [recentStatusEl, recentSortEl, recentLimitEl, recentActiveEl].forEach((element) => {
               element.addEventListener("change", async () => {
                 try {
                   setStatus("刷新列表中");
