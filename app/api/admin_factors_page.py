@@ -843,26 +843,31 @@ def _page_js() -> str:
     if (!url) { showToast('请先粘贴文章链接', 'error'); return; }
     const btn = document.getElementById('btn-extract');
     AdminUiShared.setButtonBusy(btn, true, '提取中...');
-    exStatusEl.style.display=''; exStatusEl.textContent='⏳ AI 正在分析文章...';
+    exStatusEl.style.display=''; exStatusEl.textContent='⏳ AI 正在抓取并分析文章...';
     exResultsEl.style.display='none'; exActionsEl.style.display='none';
-    await new Promise(r=>setTimeout(r,2000));
-    const mock = [
-      {name:'反直觉数据钩子', dimension:'opening', technique:'开篇用一个违背常识的数据或事实作为钩子，制造读者的认知冲突。', confidence:92},
-      {name:'日常类比降维', dimension:'rhetoric', technique:'将专业概念用日常生活场景类比，让非专业读者秒懂复杂概念。', confidence:88},
-      {name:'短句爆破节奏', dimension:'rhythm', technique:'在情绪转折处连续使用3-5个短句，制造节奏的突然变化。', confidence:75},
-    ];
-    exStatusEl.textContent=`✅ 提取完成，发现 ${mock.length} 个因子`;
-    exResultsEl.style.display=''; exActionsEl.style.display='';
-    // #19 可编辑的提取结果
-    exResultsEl.innerHTML = mock.map((r,i)=>`
-      <div class="fl-extract-card"><input type="checkbox" checked data-idx="${i}" />
-      <div class="fl-extract-info">
-        <div class="fl-extract-head">${dimBadge(r.dimension)}<span class="fl-confidence">置信度 ${r.confidence}%</span></div>
-        <input class="fl-ex-name" data-idx="${i}" data-field="name" value="${esc(r.name)}" />
-        <textarea class="fl-ex-desc" data-idx="${i}" data-field="technique" rows="2">${esc(r.technique)}</textarea>
-      </div></div>
-    `).join('');
-    window._exFactors=mock; window._exUrl=url; updExCount();
+    try {
+      const result = await api('/api/v1/admin/factors/extract', {method:'POST', body:{url, max_factors:5}});
+      const factors = result.factors || [];
+      if (!factors.length) {
+        exStatusEl.textContent='⚠️ 未提取到因子，请尝试其他文章';
+        AdminUiShared.setButtonBusy(btn, false);
+        return;
+      }
+      exStatusEl.textContent=`✅ 提取完成，发现 ${factors.length} 个因子（来源：${esc(result.article_title||'')}）`;
+      exResultsEl.style.display=''; exActionsEl.style.display='';
+      exResultsEl.innerHTML = factors.map((r,i)=>`
+        <div class="fl-extract-card"><input type="checkbox" checked data-idx="${i}" />
+        <div class="fl-extract-info">
+          <div class="fl-extract-head">${dimBadge(r.dimension)}<span class="fl-confidence">置信度 ${r.confidence}%</span></div>
+          <input class="fl-ex-name" data-idx="${i}" data-field="name" value="${esc(r.name)}" />
+          <textarea class="fl-ex-desc" data-idx="${i}" data-field="technique" rows="2">${esc(r.technique)}</textarea>
+        </div></div>
+      `).join('');
+      window._exFactors=factors; window._exUrl=url; updExCount();
+    } catch(err) {
+      exStatusEl.textContent=`❌ 提取失败：${err.message}`;
+      showToast('因子提取失败：'+err.message, 'error');
+    }
     AdminUiShared.setButtonBusy(btn, false);
   });
 

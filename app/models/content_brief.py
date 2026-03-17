@@ -22,3 +22,4 @@ class ContentBrief(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     difference_matrix: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     outline: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     title_directions: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    writing_factors: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)

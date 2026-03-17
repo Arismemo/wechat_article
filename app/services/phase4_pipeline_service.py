@@ -679,6 +679,25 @@ class Phase4PipelineService:
             f"已验证风格资产：{self._style_asset_context(style_assets)}\n"
             f"同题素材：{self._related_context(related)}\n"
         )
+        # ── 因子注入（双轨模式）──
+        factors_data = brief.writing_factors or {}
+        factor_list = factors_data.get("factors") if isinstance(factors_data, dict) else []
+        if factor_list:
+            instructions = []
+            for f in factor_list:
+                dim = f.get("dimension", "")
+                name = f.get("name", "")
+                technique = f.get("technique", "")
+                instructions.append(f"- [{dim}] {name}：{technique}")
+            user_prompt += (
+                "\n## 写作因子（必须在文章中体现以下技法）\n"
+                + "\n".join(instructions) + "\n"
+            )
+            examples = [f for f in factor_list if f.get("example_text")]
+            if examples:
+                user_prompt += "\n### 因子参考示例\n"
+                for f in examples:
+                    user_prompt += f"> 「{f['name']}」示例：{f['example_text']}\n\n"
         if prior_generation is not None and prior_review is not None:
             user_prompt += (
                 f"\n上一版标题：{prior_generation.title or '无'}\n"

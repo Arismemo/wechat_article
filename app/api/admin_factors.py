@@ -185,3 +185,118 @@ def delete_factor(factor_id: str, session: Session = Depends(get_db_session)):
     session.delete(factor)
     session.commit()
     return {"ok": True}
+
+
+# ── 因子提取 API ──
+
+
+class FactorExtractRequest(BaseModel):
+    url: str
+    max_factors: int = 5
+
+
+@router.post("/admin/factors/extract", dependencies=[Depends(verify_admin_api_auth)])
+def extract_factors(payload: FactorExtractRequest, session: Session = Depends(get_db_session)):
+    """调用 LLM 分析文章内容，提取写作因子。"""
+    import logging
+
+    from app.services.llm_runtime_service import LLMRuntimeService
+    from app.services.source_fetch_service import SourceFetchService
+
+    log = logging.getLogger(__name__)
+
+    # 1. 抓取文章内容
+    try:
+        fetcher = SourceFetchService()
+        source_type = "wechat" if "mp.weixin.qq.com" in payload.url else "generic"
+        fetched = fetcher.fetch(
+            task_id="factor-extract-temp",
+            url=payload.url,
+            source_type=source_type,
+        )
+    except Exception as exc:
+        log.warning("因子提取：文章抓取失败 url=%s err=%s", payload.url, exc)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"文章抓取失败：{exc}",
+        )
+
+    # 2. 截取文章内容（避免 token 过长）
+    article_text = fetched.cleaned_text[:6000]
+    article_title = fetched.title or "未知标题"
+
+    # 3. 构造提取 Prompt
+    system_prompt = (
+        "你是写作技巧分析专家。"
+        "请从文章中提取通用的、和话题无关的写作技巧因子。"
+        "每个因子代表一个可迁移到其他主题文章中的写作技法。"
+        "只返回严格 JSON，不要输出 Markdown 或解释。"
+    )
+    user_prompt = (
+        f"请分析以下文章，提取最多 {payload.max_factors} 个写作因子。\n\n"
+        "每个因子必须：\n"
+        "1. 和话题无关，是通用的写作技巧\n"
+        "2. 粒度尽可能小，只描述一个具体技法\n"
+        "3. 可迁移到其他主题的文章中\n\n"
+        '返回 JSON：{"factors": [{"name": "因子名称（4-15字）", '
+        '"dimension": "opening|structure|rhetoric|rhythm|layout|closing", '
+        '"technique": "给 AI 的写作指令（20-100字）", '
+        '"confidence": 0到100的置信度}]}\n\n'
+        "dimension 取值说明：\n"
+        "- opening: 开头技巧（钩子、数据、场景带入等）\n"
+        "- structure: 结构技巧（论证框架、总分总、递进等）\n"
+        "- rhetoric: 修辞技巧（类比、隐喻、对比、拟人等）\n"
+        "- rhythm: 节奏技巧（长短句、变速、停顿等）\n"
+        "- layout: 排版技巧（段落节奏、留白、视觉层次等）\n"
+        "- closing: 结尾技巧（回环、升华、开放式结尾等）\n\n"
+        f"文章标题：{article_title}\n\n"
+        f"文章正文：\n{article_text}\n"
+    )
+
+    # 4. 调用 LLM
+    try:
+        llm_runtime = LLMRuntimeService(session)
+        llm = llm_runtime.build_llm_service()
+        analyze_model = llm_runtime.analyze_model()
+        result = llm.complete_json(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            model=analyze_model,
+            temperature=0.3,
+            json_mode=True,
+            timeout_seconds=60,
+        )
+    except Exception as exc:
+        log.warning("因子提取：LLM 调用失败 err=%s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"AI 提取失败：{exc}",
+        )
+
+    # 5. 解析并规范化结果
+    raw_factors = result.get("factors", []) if isinstance(result, dict) else []
+    valid_dims = {"opening", "structure", "rhetoric", "rhythm", "layout", "closing"}
+    factors = []
+    for f in raw_factors[:payload.max_factors]:
+        if not isinstance(f, dict):
+            continue
+        name = str(f.get("name", "")).strip()
+        dim = str(f.get("dimension", "")).strip()
+        technique = str(f.get("technique", "")).strip()
+        if not name or not technique:
+            continue
+        if dim not in valid_dims:
+            dim = "rhetoric"
+        factors.append({
+            "name": name,
+            "dimension": dim,
+            "technique": technique,
+            "confidence": min(100, max(0, int(f.get("confidence", 70)))),
+        })
+
+    return {
+        "factors": factors,
+        "article_title": article_title,
+        "article_url": payload.url,
+    }
+
