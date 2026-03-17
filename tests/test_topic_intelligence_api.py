@@ -273,6 +273,85 @@ class TopicIntelligenceApiTests(unittest.TestCase):
         body = response.json()
         self.assertGreaterEqual(len(body), 1)
 
+    def test_watch_ignore_and_restore_candidate_routes_update_status(self) -> None:
+        watch_response = self.client.post(
+            f"/api/v1/admin/topics/candidates/{self.candidate_id}/watch",
+            headers=self._auth_headers(),
+            json={"operator": "reviewer", "note": "继续观察"},
+        )
+
+        self.assertEqual(watch_response.status_code, 200)
+        self.assertEqual(
+            watch_response.json(),
+            {
+                "candidate_id": self.candidate_id,
+                "previous_status": TopicCandidateStatus.PLANNED.value,
+                "status": TopicCandidateStatus.WATCHING.value,
+                "changed": True,
+            },
+        )
+
+        ignore_response = self.client.post(
+            f"/internal/v1/topics/candidates/{self.candidate_id}/ignore",
+            headers=self._auth_headers(),
+            json={"operator": "reviewer", "note": "暂不处理"},
+        )
+
+        self.assertEqual(ignore_response.status_code, 200)
+        self.assertEqual(ignore_response.json()["previous_status"], TopicCandidateStatus.WATCHING.value)
+        self.assertEqual(ignore_response.json()["status"], TopicCandidateStatus.IGNORED.value)
+        self.assertTrue(ignore_response.json()["changed"])
+
+        plan_response = self.client.post(
+            f"/api/v1/admin/topics/candidates/{self.candidate_id}/plan",
+            headers=self._auth_headers(),
+            json={"operator": "reviewer", "note": "恢复为计划"},
+        )
+
+        self.assertEqual(plan_response.status_code, 200)
+        self.assertEqual(plan_response.json()["previous_status"], TopicCandidateStatus.IGNORED.value)
+        self.assertEqual(plan_response.json()["status"], TopicCandidateStatus.PLANNED.value)
+        self.assertTrue(plan_response.json()["changed"])
+
+        session = self.Session()
+        candidate = session.get(TopicCandidate, self.candidate_id)
+        self.assertIsNotNone(candidate)
+        self.assertEqual(candidate.status, TopicCandidateStatus.PLANNED.value)
+        audit_logs = session.execute(
+            select(AuditLog).where(AuditLog.action == "topics.candidate.status_updated")
+        ).scalars().all()
+        self.assertEqual(len(audit_logs), 3)
+        transitions = {
+            (item.payload["from_status"], item.payload["to_status"])
+            for item in audit_logs
+        }
+        self.assertEqual(
+            transitions,
+            {
+                (TopicCandidateStatus.PLANNED.value, TopicCandidateStatus.WATCHING.value),
+                (TopicCandidateStatus.WATCHING.value, TopicCandidateStatus.IGNORED.value),
+                (TopicCandidateStatus.IGNORED.value, TopicCandidateStatus.PLANNED.value),
+            },
+        )
+        session.close()
+
+    def test_watch_candidate_rejects_reverting_promoted_candidate_with_400(self) -> None:
+        session = self.Session()
+        candidate = session.get(TopicCandidate, self.candidate_id)
+        assert candidate is not None
+        candidate.status = TopicCandidateStatus.PROMOTED.value
+        session.commit()
+        session.close()
+
+        response = self.client.post(
+            f"/api/v1/admin/topics/candidates/{self.candidate_id}/watch",
+            headers=self._auth_headers(),
+            json={"operator": "reviewer", "note": "误操作回退"},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["detail"], "Promoted topic candidate cannot be manually reverted.")
+
     def test_promote_topic_plan_creates_task_and_plan_link(self) -> None:
         response = self.client.post(
             f"/api/v1/admin/topics/plans/{self.plan_id}/promote",

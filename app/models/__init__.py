@@ -1,6 +1,7 @@
 from app.models.article_analysis import ArticleAnalysis
 from app.models.audit_log import AuditLog
 from app.models.content_brief import ContentBrief
+from app.models.factor import Factor
 from app.models.generation import Generation
 from app.models.prompt_experiment import PromptExperiment
 from app.models.prompt_version import PromptVersion
@@ -12,6 +13,7 @@ from app.models.style_asset import StyleAsset
 from app.models.system_setting import SystemSetting
 from app.models.task import Task
 from app.models.task_dedupe_slot import TaskDedupeSlot
+from app.models.task_factor_usage import TaskFactorUsage
 from app.models.topic_candidate import TopicCandidate
 from app.models.topic_candidate_signal import TopicCandidateSignal
 from app.models.topic_fetch_run import TopicFetchRun
@@ -25,6 +27,7 @@ __all__ = [
     "ArticleAnalysis",
     "AuditLog",
     "ContentBrief",
+    "Factor",
     "Generation",
     "PromptExperiment",
     "PromptVersion",
@@ -36,6 +39,7 @@ __all__ = [
     "SystemSetting",
     "Task",
     "TaskDedupeSlot",
+    "TaskFactorUsage",
     "TopicCandidate",
     "TopicCandidateSignal",
     "TopicFetchRun",

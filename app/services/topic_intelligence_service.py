@@ -70,6 +70,14 @@ class TopicPromoteResult:
     queue_depth: Optional[int]
 
 
+@dataclass(frozen=True)
+class TopicCandidateStatusUpdateResult:
+    candidate_id: str
+    previous_status: str
+    status: str
+    changed: bool
+
+
 class TopicIntelligenceService:
     _PILLAR_READER_MAP = {
         "wechat_ecosystem": "关注微信生态与内容分发变化的公众号操盘者",
@@ -407,6 +415,62 @@ class TopicIntelligenceService:
             status=task.status,
             enqueued=enqueued,
             queue_depth=queue_depth,
+        )
+
+    def update_candidate_status(
+        self,
+        candidate_id: str,
+        *,
+        status: str,
+        operator: Optional[str] = None,
+        note: Optional[str] = None,
+    ) -> TopicCandidateStatusUpdateResult:
+        candidate = self.candidates.get_by_id(candidate_id)
+        if candidate is None:
+            raise ValueError("Topic candidate not found.")
+
+        allowed_targets = {
+            TopicCandidateStatus.PLANNED.value,
+            TopicCandidateStatus.WATCHING.value,
+            TopicCandidateStatus.IGNORED.value,
+        }
+        target_status = (status or "").strip().lower()
+        if target_status not in allowed_targets:
+            raise ValueError("Unsupported topic candidate status target.")
+
+        previous_status = (candidate.status or "").strip().lower()
+        if previous_status == TopicCandidateStatus.PROMOTED.value and target_status != previous_status:
+            raise ValueError("Promoted topic candidate cannot be manually reverted.")
+        if previous_status == target_status:
+            return TopicCandidateStatusUpdateResult(
+                candidate_id=candidate.id,
+                previous_status=previous_status,
+                status=target_status,
+                changed=False,
+            )
+
+        normalized_operator = (operator or "system").strip() or "system"
+        normalized_note = (note or "").strip() or None
+        candidate.status = target_status
+        self.audit_logs.create(
+            AuditLog(
+                task_id=None,
+                action="topics.candidate.status_updated",
+                operator=normalized_operator,
+                payload={
+                    "candidate_id": candidate.id,
+                    "from_status": previous_status,
+                    "to_status": target_status,
+                    "note": normalized_note,
+                },
+            )
+        )
+        self.session.commit()
+        return TopicCandidateStatusUpdateResult(
+            candidate_id=candidate.id,
+            previous_status=previous_status,
+            status=target_status,
+            changed=True,
         )
 
     def _fetch_source_results(self, source) -> list[SearchResult]:

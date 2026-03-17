@@ -6,6 +6,8 @@ from sqlalchemy.orm import Session
 from app.core.security import verify_bearer_token
 from app.db.session import get_db_session
 from app.schemas.topic_intelligence import (
+    TopicCandidateStatusUpdateRequest,
+    TopicCandidateStatusUpdateResponse,
     TopicPlanPromoteRequest,
     TopicPlanPromoteResponse,
     TopicSourceEnqueueResponse,
@@ -23,6 +25,15 @@ def _raise_internal_server_error(exc: Exception) -> None:
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail="Internal server error.",
     ) from exc
+
+
+def _build_candidate_status_update_response(result) -> TopicCandidateStatusUpdateResponse:
+    return TopicCandidateStatusUpdateResponse(
+        candidate_id=result.candidate_id,
+        previous_status=result.previous_status,
+        status=result.status,
+        changed=result.changed,
+    )
 
 
 @router.post(
@@ -83,6 +94,84 @@ def refresh_topic_candidates(session: Session = Depends(get_db_session)) -> list
         session.rollback()
         _raise_internal_server_error(exc)
     return plan_ids
+
+
+@router.post(
+    "/topics/candidates/{candidate_id}/watch",
+    response_model=TopicCandidateStatusUpdateResponse,
+    dependencies=[Depends(verify_bearer_token)],
+)
+def watch_topic_candidate_internal(
+    candidate_id: str,
+    payload: TopicCandidateStatusUpdateRequest,
+    session: Session = Depends(get_db_session),
+) -> TopicCandidateStatusUpdateResponse:
+    try:
+        result = TopicIntelligenceService(session).update_candidate_status(
+            candidate_id,
+            status="watching",
+            operator=payload.operator,
+            note=payload.note,
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        status_code = status.HTTP_404_NOT_FOUND if "not found" in detail.lower() else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+    except Exception as exc:
+        _raise_internal_server_error(exc)
+    return _build_candidate_status_update_response(result)
+
+
+@router.post(
+    "/topics/candidates/{candidate_id}/ignore",
+    response_model=TopicCandidateStatusUpdateResponse,
+    dependencies=[Depends(verify_bearer_token)],
+)
+def ignore_topic_candidate_internal(
+    candidate_id: str,
+    payload: TopicCandidateStatusUpdateRequest,
+    session: Session = Depends(get_db_session),
+) -> TopicCandidateStatusUpdateResponse:
+    try:
+        result = TopicIntelligenceService(session).update_candidate_status(
+            candidate_id,
+            status="ignored",
+            operator=payload.operator,
+            note=payload.note,
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        status_code = status.HTTP_404_NOT_FOUND if "not found" in detail.lower() else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+    except Exception as exc:
+        _raise_internal_server_error(exc)
+    return _build_candidate_status_update_response(result)
+
+
+@router.post(
+    "/topics/candidates/{candidate_id}/plan",
+    response_model=TopicCandidateStatusUpdateResponse,
+    dependencies=[Depends(verify_bearer_token)],
+)
+def restore_topic_candidate_to_plan_internal(
+    candidate_id: str,
+    payload: TopicCandidateStatusUpdateRequest,
+    session: Session = Depends(get_db_session),
+) -> TopicCandidateStatusUpdateResponse:
+    try:
+        result = TopicIntelligenceService(session).update_candidate_status(
+            candidate_id,
+            status="planned",
+            operator=payload.operator,
+            note=payload.note,
+        )
+    except ValueError as exc:
+        detail = str(exc)
+        status_code = status.HTTP_404_NOT_FOUND if "not found" in detail.lower() else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+    except Exception as exc:
+        _raise_internal_server_error(exc)
+    return _build_candidate_status_update_response(result)
 
 
 @router.post(

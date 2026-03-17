@@ -156,6 +156,73 @@ class AdminTopicsApiTests(unittest.TestCase):
         self.assertEqual(promote_response.json()["task_code"], "tsk_topic_1")
         self.assertTrue(promote_response.json()["enqueued"])
 
+    def test_admin_candidate_status_routes_return_payloads(self) -> None:
+        with patch(
+            "app.api.admin_topics.TopicIntelligenceService.update_candidate_status",
+            return_value=SimpleNamespace(
+                candidate_id="candidate-1",
+                previous_status="planned",
+                status="watching",
+                changed=True,
+            ),
+        ):
+            watch_response = self.client.post(
+                "/admin/api/topics/candidates/candidate-1/watch",
+                headers=self.auth_headers,
+                json={"operator": "admin-topics", "note": "继续观察"},
+            )
+
+        with patch(
+            "app.api.admin_topics.TopicIntelligenceService.update_candidate_status",
+            return_value=SimpleNamespace(
+                candidate_id="candidate-1",
+                previous_status="watching",
+                status="ignored",
+                changed=True,
+            ),
+        ):
+            ignore_response = self.client.post(
+                "/admin/api/topics/candidates/candidate-1/ignore",
+                headers=self.auth_headers,
+                json={"operator": "admin-topics", "note": "先忽略"},
+            )
+
+        with patch(
+            "app.api.admin_topics.TopicIntelligenceService.update_candidate_status",
+            return_value=SimpleNamespace(
+                candidate_id="candidate-1",
+                previous_status="ignored",
+                status="planned",
+                changed=True,
+            ),
+        ):
+            plan_response = self.client.post(
+                "/admin/api/topics/candidates/candidate-1/plan",
+                headers=self.auth_headers,
+                json={"operator": "admin-topics", "note": "恢复计划"},
+            )
+
+        self.assertEqual(watch_response.status_code, 200)
+        self.assertEqual(watch_response.json()["status"], "watching")
+        self.assertEqual(ignore_response.status_code, 200)
+        self.assertEqual(ignore_response.json()["status"], "ignored")
+        self.assertEqual(plan_response.status_code, 200)
+        self.assertEqual(plan_response.json()["status"], "planned")
+
+    def test_admin_candidate_status_route_maps_not_found_to_404(self) -> None:
+        with patch(
+            "app.api.admin_topics.TopicIntelligenceService.update_candidate_status",
+            side_effect=ValueError("Topic candidate not found."),
+        ):
+            response = self.client.post(
+                "/admin/api/topics/candidates/missing/watch",
+                headers=self.auth_headers,
+                json={"operator": "admin-topics"},
+            )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["detail"], "Topic candidate not found.")
+
 
 if __name__ == "__main__":
     unittest.main()

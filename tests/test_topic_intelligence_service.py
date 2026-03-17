@@ -10,10 +10,11 @@ from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import sessionmaker
 
 import app.models  # noqa: F401
-from app.core.enums import TopicFetchRunStatus, TopicSourceType
+from app.core.enums import TopicCandidateStatus, TopicFetchRunStatus, TopicSourceType
 from app.db.base import Base
 from app.db.redis_client import get_redis_client
 from app.db.session import get_engine, get_session_factory
+from app.models.audit_log import AuditLog
 from app.models.topic_candidate import TopicCandidate
 from app.models.topic_plan import TopicPlan
 from app.repositories.topic_source_repository import TopicSourceRepository
@@ -138,6 +139,66 @@ class TopicIntelligenceServiceTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "invalid canonical seed URL"):
             service.promote_plan(plan.id, enqueue_phase3=False)
+
+        session.close()
+
+    def test_update_candidate_status_writes_audit_log(self) -> None:
+        session = self.Session()
+        service = TopicIntelligenceService(session)
+        service.list_sources()
+
+        candidate = TopicCandidate(
+            cluster_key="url:watch-target",
+            topic_title="观察目标",
+            canonical_seed_url="https://example.com/watch-target",
+            status=TopicCandidateStatus.PLANNED.value,
+            signal_count=1,
+        )
+        session.add(candidate)
+        session.commit()
+
+        result = service.update_candidate_status(
+            candidate.id,
+            status=TopicCandidateStatus.WATCHING.value,
+            operator="reviewer",
+            note="继续跟踪",
+        )
+
+        self.assertEqual(result.previous_status, TopicCandidateStatus.PLANNED.value)
+        self.assertEqual(result.status, TopicCandidateStatus.WATCHING.value)
+        self.assertTrue(result.changed)
+
+        verification = self.Session()
+        updated_candidate = verification.get(TopicCandidate, candidate.id)
+        self.assertIsNotNone(updated_candidate)
+        self.assertEqual(updated_candidate.status, TopicCandidateStatus.WATCHING.value)
+        audit_logs = verification.execute(
+            select(AuditLog).where(AuditLog.action == "topics.candidate.status_updated")
+        ).scalars().all()
+        self.assertEqual(len(audit_logs), 1)
+        self.assertEqual(audit_logs[0].operator, "reviewer")
+        self.assertEqual(audit_logs[0].payload["from_status"], TopicCandidateStatus.PLANNED.value)
+        self.assertEqual(audit_logs[0].payload["to_status"], TopicCandidateStatus.WATCHING.value)
+        verification.close()
+        session.close()
+
+    def test_update_candidate_status_rejects_promoted_candidate_revert(self) -> None:
+        session = self.Session()
+        service = TopicIntelligenceService(session)
+        service.list_sources()
+
+        candidate = TopicCandidate(
+            cluster_key="url:promoted-target",
+            topic_title="已推进选题",
+            canonical_seed_url="https://example.com/promoted-target",
+            status=TopicCandidateStatus.PROMOTED.value,
+            signal_count=1,
+        )
+        session.add(candidate)
+        session.commit()
+
+        with self.assertRaisesRegex(ValueError, "cannot be manually reverted"):
+            service.update_candidate_status(candidate.id, status=TopicCandidateStatus.PLANNED.value)
 
         session.close()
 

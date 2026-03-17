@@ -47,12 +47,19 @@ PAGE_META = {
         "icon": "settings",
         "context": "运行参数、LLM 配置和环境状态。",
     },
+    "factors": {
+        "label": "因子库",
+        "group": "",
+        "icon": "factors",
+        "context": "提取、管理和注入写作因子。",
+    },
 }
 
 NAV_ITEMS = [
     ("portal", "/admin", "工作台"),
     ("topics", "/admin/topics", "选题"),
     ("pipeline", "/admin/pipeline", "流程配置"),
+    ("factors", "/admin/factors", "因子库"),
     ("review", "/admin/phase5", "审核"),
     ("feedback", "/admin/phase6", "反馈"),
     ("monitor", "/admin/console", "监控"),
@@ -61,7 +68,7 @@ NAV_ITEMS = [
 
 # 侧边栏只显示工作台，其他页面通过 URL 直接访问
 NAV_GROUPS = [
-    ("", ["portal", "topics", "pipeline"]),
+    ("", ["portal", "topics", "pipeline", "factors"]),
 ]
 
 _ICONS = {
@@ -73,6 +80,7 @@ _ICONS = {
     "radar": '<svg viewBox="0 0 24 24"><path d="M12 12 21 3"/><path d="M3.05 11A9 9 0 0 1 11 3.05"/><path d="M12 21a9 9 0 0 0 9-9"/><path d="M3 12a9 9 0 0 0 9 9"/><circle cx="12" cy="12" r="2"/></svg>',
     "settings": '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
     "menu": '<svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>',
+    "factors": '<svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>',
 }
 
 

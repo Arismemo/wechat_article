@@ -10,6 +10,8 @@ from app.api.admin_ui import admin_overview_card, admin_overview_strip, render_a
 from app.core.security import verify_admin_basic_auth
 from app.db.session import get_db_session
 from app.schemas.topic_intelligence import (
+    TopicCandidateStatusUpdateRequest,
+    TopicCandidateStatusUpdateResponse,
     TopicPlanPromoteRequest,
     TopicPlanPromoteResponse,
     TopicSourceEnqueueResponse,
@@ -26,6 +28,15 @@ def _topic_error(exc: ValueError) -> HTTPException:
     detail = str(exc)
     status_code = status.HTTP_404_NOT_FOUND if "not found" in detail.lower() else status.HTTP_400_BAD_REQUEST
     return HTTPException(status_code=status_code, detail=detail)
+
+
+def _build_candidate_status_update_response(result) -> TopicCandidateStatusUpdateResponse:
+    return TopicCandidateStatusUpdateResponse(
+        candidate_id=result.candidate_id,
+        previous_status=result.previous_status,
+        status=result.status,
+        changed=result.changed,
+    )
 
 
 @router.post(
@@ -71,6 +82,81 @@ def admin_enqueue_topic_source(source_id: str, session: Session = Depends(get_db
         enqueued=result.enqueued,
         queue_depth=result.queue_depth,
     )
+
+
+@router.post(
+    "/admin/api/topics/candidates/{candidate_id}/watch",
+    response_model=TopicCandidateStatusUpdateResponse,
+    tags=["admin-topics"],
+    dependencies=[Depends(verify_admin_basic_auth)],
+)
+def admin_watch_topic_candidate(
+    candidate_id: str,
+    payload: TopicCandidateStatusUpdateRequest,
+    session: Session = Depends(get_db_session),
+) -> TopicCandidateStatusUpdateResponse:
+    try:
+        result = TopicIntelligenceService(session).update_candidate_status(
+            candidate_id,
+            status="watching",
+            operator=payload.operator,
+            note=payload.note,
+        )
+    except ValueError as exc:
+        raise _topic_error(exc) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error.") from exc
+    return _build_candidate_status_update_response(result)
+
+
+@router.post(
+    "/admin/api/topics/candidates/{candidate_id}/ignore",
+    response_model=TopicCandidateStatusUpdateResponse,
+    tags=["admin-topics"],
+    dependencies=[Depends(verify_admin_basic_auth)],
+)
+def admin_ignore_topic_candidate(
+    candidate_id: str,
+    payload: TopicCandidateStatusUpdateRequest,
+    session: Session = Depends(get_db_session),
+) -> TopicCandidateStatusUpdateResponse:
+    try:
+        result = TopicIntelligenceService(session).update_candidate_status(
+            candidate_id,
+            status="ignored",
+            operator=payload.operator,
+            note=payload.note,
+        )
+    except ValueError as exc:
+        raise _topic_error(exc) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error.") from exc
+    return _build_candidate_status_update_response(result)
+
+
+@router.post(
+    "/admin/api/topics/candidates/{candidate_id}/plan",
+    response_model=TopicCandidateStatusUpdateResponse,
+    tags=["admin-topics"],
+    dependencies=[Depends(verify_admin_basic_auth)],
+)
+def admin_restore_topic_candidate_to_plan(
+    candidate_id: str,
+    payload: TopicCandidateStatusUpdateRequest,
+    session: Session = Depends(get_db_session),
+) -> TopicCandidateStatusUpdateResponse:
+    try:
+        result = TopicIntelligenceService(session).update_candidate_status(
+            candidate_id,
+            status="planned",
+            operator=payload.operator,
+            note=payload.note,
+        )
+    except ValueError as exc:
+        raise _topic_error(exc) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error.") from exc
+    return _build_candidate_status_update_response(result)
 
 
 @router.post(
@@ -683,6 +769,65 @@ def admin_topics_console() -> str:
                 `).join("");
               };
 
+              const statusActionConfigs = (status) => {
+                const normalized = String(status || "").trim().toLowerCase();
+                if (normalized === "promoted") {
+                  return [];
+                }
+                if (normalized === "watching") {
+                  return [
+                    { action: "plan", label: "恢复 planned", className: "secondary tiny-button" },
+                    { action: "ignore", label: "忽略", className: "danger tiny-button" }
+                  ];
+                }
+                if (normalized === "ignored") {
+                  return [
+                    { action: "plan", label: "恢复 planned", className: "secondary tiny-button" },
+                    { action: "watch", label: "转 watching", className: "tiny-button" }
+                  ];
+                }
+                if (normalized === "new") {
+                  return [
+                    { action: "plan", label: "标记 planned", className: "secondary tiny-button" },
+                    { action: "watch", label: "转 watching", className: "tiny-button" },
+                    { action: "ignore", label: "忽略", className: "danger tiny-button" }
+                  ];
+                }
+                return [
+                  { action: "watch", label: "转 watching", className: "tiny-button" },
+                  { action: "ignore", label: "忽略", className: "danger tiny-button" }
+                ];
+              };
+
+              const renderCandidateActionButtons = (candidate, { includeSelect = false } = {}) => {
+                const candidateId = AdminUiShared.escapeHtml(candidate.candidate_id || "");
+                const selectButton = includeSelect
+                  ? `<button type="button" class="secondary tiny-button" data-select-candidate="${candidateId}">查看工作区</button>`
+                  : "";
+                const statusButtons = statusActionConfigs(candidate.status).map((item) => `
+                  <button
+                    type="button"
+                    class="${item.className}"
+                    data-candidate-status-action="${item.action}"
+                    data-candidate-id="${candidateId}"
+                  >${item.label}</button>
+                `).join("");
+                return `${selectButton}${statusButtons}`;
+              };
+
+              const buildCandidateStatusPath = (candidateId, action) =>
+                `/admin/api/topics/candidates/${encodeURIComponent(candidateId)}/${encodeURIComponent(action)}`;
+
+              const candidateStatusSuccessMessage = (payload) => {
+                if (!payload || !payload.status) {
+                  return "候选状态已更新。";
+                }
+                if (!payload.changed) {
+                  return `候选状态未变化，仍为 ${payload.status}。`;
+                }
+                return `候选状态已从 ${payload.previous_status} 更新为 ${payload.status}。`;
+              };
+
               const renderCandidates = (candidates) => {
                 if (!Array.isArray(candidates) || candidates.length === 0) {
                   candidateListEl.innerHTML = '<div class="topic-workspace-empty">当前筛选条件下没有候选。</div>';
@@ -705,9 +850,7 @@ def admin_topics_console() -> str:
                       <span>信号数：${AdminUiShared.escapeHtml(String(candidate.signal_count ?? 0))}</span>
                       <span>最近信号：${AdminUiShared.escapeHtml(formatDate(candidate.latest_signal_at))}</span>
                     </div>
-                    <div class="topic-card-actions">
-                      <button type="button" class="secondary tiny-button" data-select-candidate="${AdminUiShared.escapeHtml(candidate.candidate_id)}">查看工作区</button>
-                    </div>
+                    <div class="topic-card-actions">${renderCandidateActionButtons(candidate, { includeSelect: true })}</div>
                   </article>
                 `).join("");
               };
@@ -727,6 +870,16 @@ def admin_topics_console() -> str:
                 const recommendedQueries = toList(plan.recommended_queries);
                 const taskLinks = Array.isArray(workspace.task_links) ? workspace.task_links : [];
                 const signals = Array.isArray(workspace.signals) ? workspace.signals : [];
+                const statusActions = statusActionConfigs(candidate.status);
+                const statusActionButtons = statusActions.map((item) => `
+                  <button
+                    type="button"
+                    class="${item.className}"
+                    data-candidate-status-action="${item.action}"
+                    data-candidate-id="${AdminUiShared.escapeHtml(candidate.candidate_id || "")}"
+                  >${item.label}</button>
+                `).join("");
+                const statusLocked = String(candidate.status || "").trim().toLowerCase() === "promoted";
 
                 workspaceEl.className = "topic-workspace";
                 workspaceEl.innerHTML = `
@@ -786,6 +939,11 @@ def admin_topics_console() -> str:
                   <section class="topic-section">
                     <h3>推进动作</h3>
                     <div class="topic-form-grid">
+                      ${statusLocked
+                        ? '<p class="topic-card-copy">当前候选已推进到任务链路，watch / ignore 已锁定。</p>'
+                        : statusActionButtons
+                          ? `<div class="topic-card-actions">${statusActionButtons}</div>`
+                          : ""}
                       <div class="field">
                         <label for="topic-promote-operator">operator</label>
                         <input id="topic-promote-operator" type="text" value="${AdminUiShared.escapeHtml(state.operator)}" />
@@ -840,6 +998,23 @@ def admin_topics_console() -> str:
                 `;
               };
 
+              const captureActionContext = () => {
+                const operatorInput = document.getElementById("topic-promote-operator");
+                const noteInput = document.getElementById("topic-promote-note");
+                const enqueueCheckbox = document.getElementById("topic-promote-enqueue-phase3");
+                state.operator = operatorInput ? (operatorInput.value.trim() || "admin-topics") : (state.operator || "admin-topics");
+                state.note = noteInput ? noteInput.value.trim() : (state.note || "");
+                if (enqueueCheckbox) {
+                  state.enqueuePhase3 = Boolean(enqueueCheckbox.checked);
+                }
+                persist();
+                return {
+                  operator: state.operator || "admin-topics",
+                  note: state.note || null,
+                  enqueuePhase3: state.enqueuePhase3
+                };
+              };
+
               const loadPageData = async ({ autoSelect = false } = {}) => {
                 try {
                   setStatus("正在刷新选题快照...");
@@ -850,9 +1025,18 @@ def admin_topics_console() -> str:
                   state.snapshot = snapshotPayload;
                   state.sources = Array.isArray(sourcePayload) ? sourcePayload : [];
                   const candidates = Array.isArray(snapshotPayload?.candidates) ? snapshotPayload.candidates : [];
-                  if (state.selectedCandidateId && !candidates.some((item) => item.candidate_id === state.selectedCandidateId)) {
+                  let workspacePayload = snapshotPayload?.workspace || null;
+                  const staleSelectedCandidateId = state.selectedCandidateId && !candidates.some(
+                    (item) => item.candidate_id === state.selectedCandidateId
+                  )
+                    ? state.selectedCandidateId
+                    : "";
+                  if (staleSelectedCandidateId) {
                     state.selectedCandidateId = "";
                     persist();
+                    if (workspacePayload?.candidate?.candidate_id === staleSelectedCandidateId) {
+                      workspacePayload = null;
+                    }
                   }
                   if (autoSelect && !state.selectedCandidateId && Array.isArray(snapshotPayload?.candidates) && snapshotPayload.candidates.length) {
                     state.selectedCandidateId = snapshotPayload.candidates[0].candidate_id;
@@ -862,19 +1046,19 @@ def admin_topics_console() -> str:
                   renderSummary(snapshotPayload?.summary || {});
                   renderSources(state.sources);
                   renderCandidates(candidates);
-                  renderWorkspace(snapshotPayload?.workspace || null);
+                  renderWorkspace(workspacePayload);
                   setStatus(`快照已刷新：${snapshotPayload?.summary?.candidate_total ?? 0} 个候选，${snapshotPayload?.summary?.source_enabled ?? 0} 个启用来源。`, "success");
                 } catch (error) {
                   setStatus(`刷新失败：${error.message}`, "error");
                 }
               };
 
-              const runAction = async (button, path, body, successMessage) => {
+              const runAction = async (button, path, body, successMessage, { autoSelect = false } = {}) => {
                 try {
                   AdminUiShared.setButtonBusy(button, true);
                   const payload = await requestJson(path, { method: "POST", body });
                   setStatus(typeof successMessage === "function" ? successMessage(payload) : successMessage, "success");
-                  await loadPageData();
+                  await loadPageData({ autoSelect });
                   return payload;
                 } catch (error) {
                   setStatus(`操作失败：${error.message}`, "error");
@@ -953,6 +1137,28 @@ def admin_topics_console() -> str:
                     return;
                   }
 
+                  const candidateStatusBtn = event.target.closest("[data-candidate-status-action]");
+                  if (candidateStatusBtn) {
+                    const candidateId = candidateStatusBtn.getAttribute("data-candidate-id");
+                    const action = candidateStatusBtn.getAttribute("data-candidate-status-action");
+                    if (!candidateId || !action) {
+                      setStatus("当前按钮缺少候选信息。", "warn");
+                      return;
+                    }
+                    const context = captureActionContext();
+                    runAction(
+                      candidateStatusBtn,
+                      buildCandidateStatusPath(candidateId, action),
+                      {
+                        operator: context.operator,
+                        note: context.note
+                      },
+                      candidateStatusSuccessMessage,
+                      { autoSelect: true }
+                    );
+                    return;
+                  }
+
                   const promoteBtn = event.target.closest("#topic-promote-action");
                   if (promoteBtn) {
                     const planId = promoteBtn.getAttribute("data-plan-id");
@@ -960,28 +1166,18 @@ def admin_topics_console() -> str:
                       setStatus("当前没有可推进的计划。", "warn");
                       return;
                     }
-                    const operatorInput = document.getElementById("topic-promote-operator");
-                    const noteInput = document.getElementById("topic-promote-note");
-                    const enqueueCheckbox = document.getElementById("topic-promote-enqueue-phase3");
-                    state.operator = operatorInput?.value.trim() || "admin-topics";
-                    state.note = noteInput?.value.trim() || "";
-                    state.enqueuePhase3 = Boolean(enqueueCheckbox?.checked);
-                    persist();
+                    const context = captureActionContext();
                     runAction(
                       promoteBtn,
                       `/admin/api/topics/plans/${encodeURIComponent(planId)}/promote`,
                       {
-                        operator: state.operator,
-                        note: state.note || null,
-                        enqueue_phase3: state.enqueuePhase3
+                        operator: context.operator,
+                        note: context.note,
+                        enqueue_phase3: context.enqueuePhase3
                       },
-                      (payload) => `计划已推进到任务 ${payload.task_code}，状态 ${payload.status}。`
-                    ).then(() => {
-                      if (state.status === "planned") {
-                        state.selectedCandidateId = "";
-                        persist();
-                      }
-                    });
+                      (payload) => `计划已推进到任务 ${payload.task_code}，状态 ${payload.status}。`,
+                      { autoSelect: true }
+                    );
                   }
                 });
 

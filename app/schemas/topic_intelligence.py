@@ -151,3 +151,15 @@ class TopicPlanPromoteResponse(APIModel):
     status: str
     enqueued: bool
     queue_depth: Optional[int] = None
+
+
+class TopicCandidateStatusUpdateRequest(APIModel):
+    operator: Optional[str] = None
+    note: Optional[str] = None
+
+
+class TopicCandidateStatusUpdateResponse(APIModel):
+    candidate_id: str
+    previous_status: str
+    status: str
+    changed: bool
