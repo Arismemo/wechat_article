@@ -814,6 +814,106 @@ class Phase4PipelineServiceTests(unittest.TestCase):
         self.assertEqual(service.llm.complete_json.call_count, 5)
         session.close()
 
+    # ── Similarity hard-gate characterization tests ────────────────────────
+
+    def test_high_similarity_blocks_auto_push_routes_to_manual_review(self) -> None:
+        """When similarity_score exceeds phase4_similarity_max the pipeline must NOT
+        auto-push to WeChat and must route the task to NEEDS_MANUAL_REVIEW."""
+        session = self.Session()
+        task = self._seed_phase4_ready_task(session, "tsk_phase4_sim_high")
+        # Enable auto-push + env flag so the only thing blocking push is similarity.
+        session.add(SystemSetting(key="phase4.auto_push_wechat_draft", value=True))
+        # similarity_max defaults to 0.45; set explicitly for clarity.
+        session.add(SystemSetting(key="phase4.similarity_max", value=0.45))
+        self._set_ai_trace_rewrite_threshold(session, 70.0)
+
+        with patch.dict(os.environ, {"WECHAT_ENABLE_DRAFT_PUSH": "true"}, clear=False):
+            get_settings.cache_clear()
+            service = Phase4PipelineService(session)
+            service.llm = MagicMock()
+            # High similarity (0.9) but otherwise-passing scores and final_decision="pass".
+            service.llm.complete_json.side_effect = [
+                {
+                    "title": "高相似度测试标题",
+                    "subtitle": "副标题",
+                    "digest": "摘要",
+                    "markdown_content": (
+                        "# 高相似度测试标题\n\n"
+                        "## 背景\n近义词替换版内容。\n\n"
+                        "## 分析\n语序调整后的段落。\n\n"
+                        "## 结论\n段落顺序微调的收尾。\n"
+                    ),
+                },
+                {
+                    "final_decision": "pass",
+                    "similarity_score": 0.90,  # ABOVE phase4_similarity_max=0.45
+                    "factual_risk_score": 0.10,
+                    "policy_risk_score": 0.05,
+                    "readability_score": 85,
+                    "title_score": 83,
+                    "novelty_score": 40,
+                    "issues": ["与原文高度相似，涉嫌洗稿。"],
+                    "suggestions": ["需要实质性重构信息架构。"],
+                },
+            ]
+            service.wechat_publisher = MagicMock()
+
+            result = service.run(task.id)
+
+            # Must NOT auto-push to WeChat.
+            service.wechat_publisher.push_generation.assert_not_called()
+            # Must route to manual review.
+            self.assertEqual(result.status, TaskStatus.NEEDS_MANUAL_REVIEW.value)
+            refreshed_task = session.get(Task, task.id)
+            self.assertEqual(refreshed_task.status, TaskStatus.NEEDS_MANUAL_REVIEW.value)
+            get_settings.cache_clear()
+        session.close()
+
+    def test_low_similarity_with_passing_scores_reaches_review_passed(self) -> None:
+        """When similarity_score is well below phase4_similarity_max and other scores pass,
+        the pipeline reaches REVIEW_PASSED (auto-push path accessible)."""
+        session = self.Session()
+        task = self._seed_phase4_ready_task(session, "tsk_phase4_sim_low")
+        session.add(SystemSetting(key="phase4.similarity_max", value=0.45))
+        self._set_ai_trace_rewrite_threshold(session, 70.0)
+
+        service = Phase4PipelineService(session)
+        service.llm = MagicMock()
+        service.llm.complete_json.side_effect = [
+            {
+                "title": "低相似度测试标题",
+                "subtitle": "副标题",
+                "digest": "摘要",
+                "markdown_content": (
+                    "# 低相似度测试标题\n\n"
+                    "## 新视角切入\n完全不同的信息架构。\n\n"
+                    "## 实质性增量分析\n原文未覆盖的判断框架。\n\n"
+                    "## 读者收益\n具体可操作的结论。\n"
+                ),
+            },
+            {
+                "final_decision": "pass",
+                "similarity_score": 0.15,  # BELOW phase4_similarity_max=0.45
+                "factual_risk_score": 0.12,
+                "policy_risk_score": 0.05,
+                "readability_score": 87,
+                "title_score": 85,
+                "novelty_score": 84,
+                "issues": ["通过。"],
+                "suggestions": ["可以进入下一阶段。"],
+            },
+        ]
+
+        result = service.run(task.id)
+
+        # Must reach REVIEW_PASSED (the gate to auto-push).
+        self.assertEqual(result.status, TaskStatus.REVIEW_PASSED.value)
+        refreshed_task = session.get(Task, task.id)
+        self.assertEqual(refreshed_task.status, TaskStatus.REVIEW_PASSED.value)
+        session.close()
+
+    # ── end similarity hard-gate tests ─────────────────────────────────────
+
     def _seed_phase4_ready_task(self, session, task_code: str) -> Task:
         task = Task(
             task_code=task_code,

@@ -675,6 +675,8 @@ class Phase4PipelineService:
             "如果提供了风格资产，只吸收其中已验证的结构、节奏和写法优势，不要逐句照抄。"
             "避免写成套路化的 AI 讲解稿。"
             "不要输出 Markdown 解释，不要输出代码块。"
+            "严禁依赖近义词替换、语序调整或段落顺序微调作为改写手法——这些是平台明确标记的洗稿手法，"
+            "会导致稿件被投诉并强制下架。改写必须重构信息架构、转换论证角度、加入真实信息增量。"
         )
         user_prompt = (
             "请返回 JSON，字段固定为：title,subtitle,digest,markdown_content。"
@@ -795,7 +797,10 @@ class Phase4PipelineService:
             "ai_trace_patterns 为字符串数组；"
             "rewrite_targets 为数组，每项必须包含 block_id,reason,instruction，且 block_id 只能引用下方 block_map 中出现过的编号；"
             "voice_summary 用一句话总结这篇稿件当前的表达气质；"
-            "issues/suggestions 为字符串数组。\n\n"
+            "issues/suggestions 为字符串数组。"
+            "评分标准：仅做近义词替换、语序调整或段落顺序微调而未带来新信息架构或新分析角度的稿件，"
+            "similarity_score 应评为高分（接近 1.0），novelty_score 应评为低分；"
+            "只有信息架构和论证角度相对原文有实质性差异的稿件才可获得低 similarity_score。\n\n"
             f"原文标题：{source.title or '未知'}\n"
             f"原文摘要：{source.summary or '无'}\n"
             f"新角度：{brief.new_angle or '未提供'}\n"
