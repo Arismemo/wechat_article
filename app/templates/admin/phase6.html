@@ -1,0 +1,948 @@
+{% raw %}<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Phase 6 反馈台</title>
+  <style>
+    :root {
+      --bg: var(--bg-body);
+      --panel: var(--bg-card);
+      --line: var(--border);
+      --muted: var(--text-secondary);
+      --accent: var(--primary);
+      --accent-dark: var(--primary-hover);
+      --warn: var(--warning);
+      --ok: var(--success);
+      --ink: var(--primary-hover);
+      --shadow: var(--shadow-card);
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 380px minmax(0, 1fr);
+      gap: 18px;
+      align-items: start;
+    }
+    .stack {
+      display: grid;
+      gap: 16px;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      padding: 20px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(8px);
+    }
+    .panel h2 {
+      margin: 0 0 14px;
+      font-size: 18px;
+    }
+    .panel-intro {
+      margin: 0 0 14px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.7;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+    }
+    .grid.single {
+      grid-template-columns: 1fr;
+    }
+    .field {
+      display: grid;
+      gap: 6px;
+    }
+    .field-hint {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.7;
+    }
+    label {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    input, textarea, button, select {
+      width: 100%;
+      font: inherit;
+      border-radius: 14px;
+    }
+    input, textarea, select {
+      padding: 12px 14px;
+      background: #fffefb;
+      color: var(--text);
+      border: 1px solid var(--line);
+    }
+    input:focus-visible,
+    textarea:focus-visible,
+    select:focus-visible,
+    button:focus-visible,
+    a:focus-visible,
+    summary:focus-visible {
+      outline: 2px solid rgba(43, 111, 88, 0.2);
+      outline-offset: 3px;
+    }
+    textarea {
+      min-height: 120px;
+      resize: vertical;
+    }
+    button {
+      border: none;
+      cursor: pointer;
+      padding: 12px 16px;
+      background: var(--accent);
+      color: #f7fdf8;
+      transition: transform 0.12s ease, background 0.12s ease;
+    }
+    button:hover {
+      background: var(--accent-dark);
+      transform: translateY(-1px);
+    }
+    button.secondary {
+      background: #d2e1d5;
+      color: var(--ink);
+    }
+    button.danger {
+      background: var(--danger);
+      color: #fff7f3;
+    }
+    button.warn {
+      background: var(--warn);
+      color: #fff9ea;
+    }
+    button[aria-busy="true"] {
+      opacity: 0.82;
+      cursor: progress;
+    }
+    .actions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .actions.compact {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .action-blocks {
+      display: grid;
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .action-block {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 12px;
+      background: rgba(255, 254, 251, 0.84);
+    }
+    .action-block h3 {
+      margin: 0 0 10px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .action-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .status {
+      display: inline-flex;
+      padding: 7px 12px;
+      border-radius: 999px;
+      background: rgba(43, 111, 88, 0.14);
+      color: var(--accent-dark);
+      font-size: 12px;
+    }
+    .status.warn {
+      background: rgba(168, 116, 24, 0.18);
+      color: #85570f;
+    }
+    .status.danger {
+      background: rgba(155, 65, 48, 0.12);
+      color: var(--danger);
+    }
+    pre {
+      margin: 0;
+      min-height: 240px;
+      padding: 16px;
+      border-radius: 18px;
+      background: #163028;
+      color: #eef8f1;
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.65;
+      overflow: auto;
+    }
+    .hint {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.7;
+    }
+    .list {
+      display: grid;
+      align-content: start;
+      grid-auto-rows: max-content;
+      gap: 12px;
+    }
+    .list[aria-busy="true"] {
+      opacity: 0.78;
+    }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 14px;
+      background: #fffefb;
+      display: grid;
+      align-content: start;
+      gap: 8px;
+      min-width: 0;
+    }
+    .card h3 {
+      margin: 0;
+      font-size: 16px;
+      overflow-wrap: anywhere;
+    }
+    .meta {
+      display: grid;
+      gap: 4px;
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.6;
+      overflow-wrap: anywhere;
+    }
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: #e4efe6;
+      color: var(--ink);
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+    .fold {
+      border: 1px dashed var(--line);
+      border-radius: 18px;
+      padding: 14px;
+      background: rgba(255, 254, 251, 0.72);
+    }
+    .fold + .fold {
+      margin-top: 12px;
+    }
+    .fold summary {
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .tool-note {
+      margin-top: 10px;
+    }
+    __ADMIN_NAV_STYLES__
+    @media (max-width: 1040px) {
+      .hero-grid { grid-template-columns: 1fr; }
+      .overview-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .overview-card.highlight { grid-column: span 2; }
+    }
+    @media (max-width: 980px) {
+      .layout { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 720px) {
+      main { padding: 22px 14px 36px; }
+      .panel { padding: 16px; border-radius: 20px; }
+      .hero h1 { font-size: 30px; }
+      .hero-summary,
+      .overview-strip,
+      .actions,
+      .actions.compact,
+      .action-grid,
+      .grid {
+        grid-template-columns: 1fr;
+      }
+      .overview-card.highlight { grid-column: span 1; }
+    }
+    __ADMIN_SHARED_STYLES__
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#feedback-region">跳到反馈主区</a>
+  <main class="admin-main">
+    __ADMIN_SECTION_NAV__
+    __ADMIN_HERO__
+    __ADMIN_OVERVIEW__
+
+    <section class="layout" id="feedback-region">
+      <div class="stack">
+        <section class="panel">
+          <h2>任务</h2>
+          <div class="grid single">
+            <div class="field">
+              <label for="task-id">Task ID</label>
+              <input id="task-id" type="text" placeholder="f703c3ef-..." aria-describedby="task-id-hint" />
+            </div>
+            <p class="field-hint" id="task-id-hint">无 task_id 时，导入和同步不可用。</p>
+            <div class="grid">
+              <div class="field">
+                <label for="generation-id">Generation ID（可选）</label>
+                <input id="generation-id" type="text" placeholder="默认取 latest accepted / latest" aria-describedby="generation-id-hint" />
+              </div>
+              <div class="field">
+                <label for="operator">操作人</label>
+                <input id="operator" type="text" value="admin-console" aria-describedby="operator-hint" />
+              </div>
+            </div>
+            <p class="field-hint" id="generation-id-hint">不填时默认取最新 accepted generation；如果任务还没 accepted，会回退到最近一次 generation。</p>
+            <p class="field-hint" id="operator-hint">写入审计日志。</p>
+          </div>
+          <div class="action-blocks">
+            <article class="action-block">
+              <h3>查询</h3>
+              <div class="action-grid">
+                <button id="query-feedback" class="secondary">查反馈</button>
+                <button id="refresh-experiments" class="secondary">查实验</button>
+                <button id="refresh-assets" class="secondary">查资产</button>
+                <button id="clear-output" class="danger">清空输出</button>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>同步</h2>
+          <div class="grid">
+            <div class="field">
+              <label for="sync-day-offsets">同步窗口（逗号分隔）</label>
+              <input id="sync-day-offsets" type="text" value="1,3,7" aria-describedby="sync-day-offsets-hint" />
+            </div>
+            <div class="field">
+              <label for="sync-limit">扫描最近草稿数</label>
+              <input id="sync-limit" type="number" min="1" max="100" value="20" aria-describedby="sync-limit-hint" />
+            </div>
+          </div>
+          <p class="field-hint" id="sync-day-offsets-hint">通常用 `1,3,7`，分别对应 T+1、T+3、T+7 反馈窗口。</p>
+          <p class="field-hint" id="sync-limit-hint">只对“扫描入队”生效，用来限制最近要扫多少条已入草稿任务。</p>
+          <div class="actions compact">
+            <button id="run-feedback-sync">立即同步</button>
+            <button id="queue-feedback-sync" class="secondary">单任务入队</button>
+            <button id="queue-recent-feedback-sync" class="secondary">扫描入队</button>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>导入</h2>
+          <div class="grid">
+            <div class="field">
+              <label for="day-offset">观察窗口</label>
+              <select id="day-offset">
+                <option value="1">T+1</option>
+                <option value="3">T+3</option>
+                <option value="7">T+7</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="snapshot-at">快照时间（ISO，可选）</label>
+              <input id="snapshot-at" type="text" placeholder="2026-03-08T10:00:00+08:00" />
+            </div>
+            <div class="field">
+              <label for="read-count">阅读数</label>
+              <input id="read-count" type="number" min="0" placeholder="1200" />
+            </div>
+            <div class="field">
+              <label for="like-count">点赞数</label>
+              <input id="like-count" type="number" min="0" placeholder="86" />
+            </div>
+            <div class="field">
+              <label for="share-count">转发数</label>
+              <input id="share-count" type="number" min="0" placeholder="14" />
+            </div>
+            <div class="field">
+              <label for="comment-count">评论数</label>
+              <input id="comment-count" type="number" min="0" placeholder="3" />
+            </div>
+            <div class="field">
+              <label for="click-rate">点击率（可选）</label>
+              <input id="click-rate" type="number" min="0" step="0.0001" placeholder="0.1825" />
+            </div>
+            <div class="field">
+              <label for="media-id">media_id（可选）</label>
+              <input id="media-id" type="text" placeholder="默认回填最近草稿 media_id" />
+            </div>
+          </div>
+          <div class="field" style="margin-top: 12px;">
+            <label for="feedback-notes">导入备注</label>
+            <textarea id="feedback-notes" placeholder="例如：后台手工抄录 T+1 数据"></textarea>
+          </div>
+          <div class="actions">
+            <button id="import-feedback">导入反馈</button>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>工具</h2>
+          <details class="fold">
+            <summary>批量导入 CSV</summary>
+            <div style="margin-top: 12px;">
+              <label for="feedback-csv">CSV 内容</label>
+              <textarea id="feedback-csv" placeholder="task_id,generation_id,day_offset,read_count,like_count,share_count,comment_count,click_rate,notes&#10;f703c3ef-e358-48ab-936d-187418c584c5,,1,1666,101,18,6,0.2031,第一批回填"></textarea>
+            </div>
+            <div class="actions">
+              <button id="import-feedback-csv" class="secondary">导入 CSV</button>
+            </div>
+            <p class="hint tool-note">支持常用列；不带 `task_id` 时，会默认使用上面的当前 `task_id`。</p>
+          </details>
+          <details class="fold">
+            <summary>新建风格资产</summary>
+            <div class="grid" style="margin-top: 12px;">
+              <div class="field">
+                <label for="asset-type">资产类型</label>
+                <input id="asset-type" type="text" value="opening_hook" />
+              </div>
+              <div class="field">
+                <label for="asset-title">标题</label>
+                <input id="asset-title" type="text" placeholder="反直觉开头模板" />
+              </div>
+              <div class="field">
+                <label for="asset-tags">标签（逗号分隔）</label>
+                <input id="asset-tags" type="text" placeholder="技术科普,误区纠偏" />
+              </div>
+              <div class="field">
+                <label for="asset-weight">权重</label>
+                <input id="asset-weight" type="number" min="0.1" step="0.1" value="1.0" />
+              </div>
+            </div>
+            <div class="field" style="margin-top: 12px;">
+              <label for="asset-content">资产内容</label>
+              <textarea id="asset-content" placeholder="写下经过验证的标题模板、开头结构、段落骨架或转场句式"></textarea>
+            </div>
+            <div class="field" style="margin-top: 12px;">
+              <label for="asset-notes">备注</label>
+              <textarea id="asset-notes" placeholder="可记录来源任务、适用题材、风险提醒"></textarea>
+            </div>
+            <div class="actions">
+              <button id="create-asset">新建资产</button>
+            </div>
+            <p class="hint tool-note">只把已经验证过、会重复用到的写法沉淀下来。</p>
+          </details>
+        </section>
+      </div>
+
+      <div class="stack">
+        <section class="panel">
+          <h2>输出</h2>
+          <pre id="output">等待输入...</pre>
+        </section>
+
+        <section class="panel">
+          <h2>反馈快照</h2>
+          <div class="list" id="task-feedback-list" aria-busy="false">
+            <div class="hint">先输入 task_id</div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>实验榜</h2>
+          <div class="list" id="experiment-list" aria-busy="false">
+            <div class="hint">点击“查实验”加载</div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>资产库</h2>
+          <div class="list" id="style-asset-list" aria-busy="false">
+            <div class="hint">点击“查资产”加载</div>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const taskIdEl = document.getElementById("task-id");
+    const generationIdEl = document.getElementById("generation-id");
+    const operatorEl = document.getElementById("operator");
+    const syncDayOffsetsEl = document.getElementById("sync-day-offsets");
+    const syncLimitEl = document.getElementById("sync-limit");
+    const dayOffsetEl = document.getElementById("day-offset");
+    const snapshotAtEl = document.getElementById("snapshot-at");
+    const readCountEl = document.getElementById("read-count");
+    const likeCountEl = document.getElementById("like-count");
+    const shareCountEl = document.getElementById("share-count");
+    const commentCountEl = document.getElementById("comment-count");
+    const clickRateEl = document.getElementById("click-rate");
+    const mediaIdEl = document.getElementById("media-id");
+    const feedbackNotesEl = document.getElementById("feedback-notes");
+    const feedbackCsvEl = document.getElementById("feedback-csv");
+    const assetTypeEl = document.getElementById("asset-type");
+    const assetTitleEl = document.getElementById("asset-title");
+    const assetTagsEl = document.getElementById("asset-tags");
+    const assetWeightEl = document.getElementById("asset-weight");
+    const assetContentEl = document.getElementById("asset-content");
+    const assetNotesEl = document.getElementById("asset-notes");
+    const outputEl = document.getElementById("output");
+    const statusEl = document.getElementById("status");
+    const flashMessageEl = document.getElementById("flash-message");
+    const heroFocusEl = document.getElementById("hero-focus");
+    const taskFeedbackListEl = document.getElementById("task-feedback-list");
+    const experimentListEl = document.getElementById("experiment-list");
+    const styleAssetListEl = document.getElementById("style-asset-list");
+    const overviewFeedbackCountEl = document.getElementById("overview-feedback-count");
+    const overviewExperimentCountEl = document.getElementById("overview-experiment-count");
+    const overviewAssetCountEl = document.getElementById("overview-asset-count");
+    const overviewFocusEl = document.getElementById("overview-focus");
+    const overviewFocusNoteEl = document.getElementById("overview-focus-note");
+    let currentTaskFeedbackCount = 0;
+    let currentExperimentItems = [];
+    let currentAssetItems = [];
+    const SESSION_EXPIRED_MESSAGE = "后台会话已失效，请刷新页面重新进入后台。";
+
+    const escapeHtml = (value) => String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+    const truncate = (value, length = 16) => {
+      const text = String(value ?? "");
+      if (!text || text.length <= length) return text || "当前任务";
+      return `${text.slice(0, length)}...`;
+    };
+
+    const formatDate = (value) => {
+      if (!value) return "未知";
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return String(value);
+      return date.toLocaleString("zh-CN", { hour12: false });
+    };
+
+    const setStatus = (value, tone = "", message = value) => {
+      statusEl.textContent = value;
+      statusEl.className = `status ${tone}`.trim();
+      if (flashMessageEl) {
+        flashMessageEl.textContent = message;
+      }
+    };
+    const renderOutput = (value) => {
+      outputEl.textContent = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+    };
+    const apiUrl = (path) => new URL(path, window.location.origin).toString();
+    const setListBusy = (element, busy, loadingText = "") => {
+      if (!element) return;
+      element.setAttribute("aria-busy", busy ? "true" : "false");
+      if (busy && loadingText) {
+        element.innerHTML = `<div class="hint">${escapeHtml(loadingText)}</div>`;
+      }
+    };
+    const setButtonBusy = (button, busy, pendingLabel = "处理中...") => {
+      if (!button) return;
+      if (!button.dataset.defaultLabel) {
+        button.dataset.defaultLabel = button.textContent.trim();
+      }
+      button.disabled = busy;
+      button.setAttribute("aria-busy", busy ? "true" : "false");
+      button.textContent = busy ? pendingLabel : button.dataset.defaultLabel;
+    };
+    const withButtonBusy = async (button, pendingLabel, work) => {
+      if (!button || button.disabled) return;
+      setButtonBusy(button, true, pendingLabel);
+      try {
+        await work();
+      } catch (error) {
+        setStatus("失败", "danger", "最近一次操作失败，详见输出区域。");
+        renderOutput(error.message || String(error));
+      } finally {
+        setButtonBusy(button, false);
+      }
+    };
+    const renderOverview = () => {
+      const taskId = taskIdEl.value.trim();
+      overviewFeedbackCountEl.textContent = String(currentTaskFeedbackCount);
+      overviewExperimentCountEl.textContent = String(currentExperimentItems.length);
+      overviewAssetCountEl.textContent = String(currentAssetItems.length);
+      let focus = "先补 task_id，再看当前任务有没有已有反馈。";
+      let note = "没有 task_id 时，只有实验榜和资产库能独立查询；导入与同步都需要任务上下文。";
+      if (!taskId) {
+        focus = "可以先查实验榜和资产库，但要补反馈或做同步前，先补上 task_id。";
+        note = "task_id 决定反馈快照、自动同步和资产来源归属。";
+      } else if (currentTaskFeedbackCount === 0) {
+        focus = `当前任务 ${truncate(taskId, 12)} 还没看到反馈，先查反馈，再决定同步还是手工导入。`;
+        note = "同步只处理已入草稿任务；如果数据来自微信后台手工抄录，用“导入反馈”最直接。";
+      } else if (!currentExperimentItems.length) {
+        focus = "已有任务反馈，接着刷新实验榜，看哪套 prompt 更稳。";
+        note = "实验榜适合判断是否继续用当前 prompt，或者要不要把结论固化成资产。";
+      } else if (!currentAssetItems.length) {
+        focus = "实验榜已经加载，可以把稳定写法沉淀成风格资产。";
+        note = "只记录已经验证过、会重复复用的结构或句式，避免把临时想法写进资产库。";
+      } else {
+        focus = "反馈、实验和资产都已就绪，可以围绕当前任务做完整复盘。";
+        note = "优先看早期反馈，再结合实验榜判断是否要补新资产或调整后续策略。";
+      }
+      overviewFocusEl.textContent = focus;
+      overviewFocusNoteEl.textContent = note;
+      if (heroFocusEl) {
+        heroFocusEl.textContent = focus;
+      }
+    };
+
+    const loadDraft = () => {
+      taskIdEl.value = localStorage.getItem("phase6_console_task_id") || "";
+      generationIdEl.value = localStorage.getItem("phase6_console_generation_id") || "";
+      operatorEl.value = localStorage.getItem("phase6_console_operator") || "admin-console";
+      syncDayOffsetsEl.value = localStorage.getItem("phase6_console_sync_day_offsets") || "1,3,7";
+      syncLimitEl.value = localStorage.getItem("phase6_console_sync_limit") || "20";
+    };
+
+    const saveDraft = () => {
+      localStorage.setItem("phase6_console_task_id", taskIdEl.value.trim());
+      localStorage.setItem("phase6_console_generation_id", generationIdEl.value.trim());
+      localStorage.setItem("phase6_console_operator", operatorEl.value.trim());
+      localStorage.setItem("phase6_console_sync_day_offsets", syncDayOffsetsEl.value.trim());
+      localStorage.setItem("phase6_console_sync_limit", syncLimitEl.value.trim());
+    };
+
+    const request = async (method, path, body) => {
+      saveDraft();
+      const headers = {};
+      if (body !== undefined) {
+        headers["Content-Type"] = "application/json";
+      }
+      const response = await fetch(apiUrl(path), {
+        method,
+        headers,
+        credentials: "same-origin",
+        body: body === undefined ? undefined : JSON.stringify(body)
+      });
+      const text = await response.text();
+      let payload = text;
+      try { payload = JSON.parse(text); } catch (_) {}
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error(SESSION_EXPIRED_MESSAGE);
+        }
+        throw new Error(typeof payload === "string" ? payload : JSON.stringify(payload, null, 2));
+      }
+      return payload;
+    };
+
+    const parseNumber = (value) => {
+      const normalized = String(value ?? "").trim();
+      if (!normalized) return undefined;
+      const parsed = Number(normalized);
+      return Number.isFinite(parsed) ? parsed : undefined;
+    };
+
+    const parseDayOffsets = () => String(syncDayOffsetsEl.value || "")
+      .split(",")
+      .map((item) => Number(item.trim()))
+      .filter((value) => Number.isInteger(value) && value >= 0);
+
+    const buildFeedbackPayload = () => ({
+      generation_id: generationIdEl.value.trim() || undefined,
+      day_offset: Number(dayOffsetEl.value),
+      snapshot_at: snapshotAtEl.value.trim() || undefined,
+      wechat_media_id: mediaIdEl.value.trim() || undefined,
+      read_count: parseNumber(readCountEl.value),
+      like_count: parseNumber(likeCountEl.value),
+      share_count: parseNumber(shareCountEl.value),
+      comment_count: parseNumber(commentCountEl.value),
+      click_rate: parseNumber(clickRateEl.value),
+      notes: feedbackNotesEl.value.trim() || undefined,
+      imported_by: operatorEl.value.trim() || "admin-console",
+      operator: operatorEl.value.trim() || "admin-console"
+    });
+
+    const buildStyleAssetPayload = () => ({
+      asset_type: assetTypeEl.value.trim(),
+      title: assetTitleEl.value.trim(),
+      content: assetContentEl.value.trim(),
+      tags: assetTagsEl.value.split(",").map((item) => item.trim()).filter(Boolean),
+      weight: parseNumber(assetWeightEl.value),
+      notes: assetNotesEl.value.trim() || undefined,
+      source_task_id: taskIdEl.value.trim() || undefined,
+      source_generation_id: generationIdEl.value.trim() || undefined,
+      operator: operatorEl.value.trim() || "admin-console"
+    });
+
+    const buildFeedbackSyncPayload = () => ({
+      day_offsets: parseDayOffsets(),
+      operator: operatorEl.value.trim() || "admin-console"
+    });
+
+    const buildFeedbackCsvPayload = () => ({
+      csv_text: feedbackCsvEl.value,
+      default_task_id: taskIdEl.value.trim() || undefined,
+      imported_by: operatorEl.value.trim() || "admin-console",
+      operator: operatorEl.value.trim() || "admin-console"
+    });
+
+    const buildRecentFeedbackSyncPayload = () => ({
+      limit: parseNumber(syncLimitEl.value) || 20,
+      day_offsets: parseDayOffsets(),
+      operator: operatorEl.value.trim() || "admin-console"
+    });
+
+    const renderTaskFeedback = (payload) => {
+      const items = payload?.metrics || [];
+      currentTaskFeedbackCount = items.length;
+      if (!items.length) {
+        taskFeedbackListEl.innerHTML = '<div class="hint">当前任务还没有反馈记录。先确认是否已经入草稿，再决定用“立即同步”还是“导入反馈”。</div>';
+        renderOverview();
+        return;
+      }
+      taskFeedbackListEl.innerHTML = items.map((item) => `
+        <article class="card">
+          <h3>${escapeHtml(`T+${item.day_offset} / ${item.prompt_version}`)}</h3>
+          <div class="pill-row">
+            <span class="pill">generation: ${escapeHtml(item.generation_id)}</span>
+            <span class="pill">media_id: ${escapeHtml(item.wechat_media_id || "-")}</span>
+          </div>
+          <div class="meta">
+            <div>快照时间: ${escapeHtml(formatDate(item.snapshot_at))}</div>
+            <div>阅读 / 点赞 / 转发 / 评论: ${escapeHtml(item.read_count ?? "-")} / ${escapeHtml(item.like_count ?? "-")} / ${escapeHtml(item.share_count ?? "-")} / ${escapeHtml(item.comment_count ?? "-")}</div>
+            <div>点击率: ${escapeHtml(item.click_rate ?? "-")}</div>
+            <div>导入来源: ${escapeHtml(item.source_type)} / ${escapeHtml(item.imported_by)}</div>
+            <div>备注: ${escapeHtml(item.notes || "-")}</div>
+          </div>
+        </article>
+      `).join("");
+      renderOverview();
+    };
+
+    const renderExperiments = (items) => {
+      currentExperimentItems = Array.isArray(items) ? items : [];
+      if (!currentExperimentItems.length) {
+        experimentListEl.innerHTML = '<div class="hint">还没有实验样本。等有更多反馈回流后，再来比较哪套 prompt 更稳。</div>';
+        renderOverview();
+        return;
+      }
+      experimentListEl.innerHTML = currentExperimentItems.map((item) => `
+        <article class="card">
+          <h3>${escapeHtml(`${item.prompt_type} / ${item.prompt_version}`)}</h3>
+          <div class="pill-row">
+            <span class="pill">窗口 T+${escapeHtml(item.day_offset)}</span>
+            <span class="pill">样本 ${escapeHtml(item.sample_count)}</span>
+            <span class="pill">最高阅读 ${escapeHtml(item.best_read_count ?? "-")}</span>
+          </div>
+          <div class="meta">
+            <div>平均阅读: ${escapeHtml(item.avg_read_count ?? "-")}</div>
+            <div>平均点赞: ${escapeHtml(item.avg_like_count ?? "-")}</div>
+            <div>平均转发: ${escapeHtml(item.avg_share_count ?? "-")}</div>
+            <div>平均评论: ${escapeHtml(item.avg_comment_count ?? "-")}</div>
+            <div>平均点击率: ${escapeHtml(item.avg_click_rate ?? "-")}</div>
+            <div>最近快照: ${escapeHtml(formatDate(item.latest_metric_at))}</div>
+            <div>最近任务: ${escapeHtml(item.last_task_id || "-")}</div>
+          </div>
+        </article>
+      `).join("");
+      renderOverview();
+    };
+
+    const renderStyleAssets = (items) => {
+      currentAssetItems = Array.isArray(items) ? items : [];
+      if (!currentAssetItems.length) {
+        styleAssetListEl.innerHTML = '<div class="hint">还没有风格资产。先看实验榜和真实反馈，再把稳定写法沉淀下来。</div>';
+        renderOverview();
+        return;
+      }
+      styleAssetListEl.innerHTML = currentAssetItems.map((item) => `
+        <article class="card">
+          <h3>${escapeHtml(item.title)}</h3>
+          <div class="pill-row">
+            <span class="pill">${escapeHtml(item.asset_type)}</span>
+            <span class="pill">状态 ${escapeHtml(item.status)}</span>
+            <span class="pill">权重 ${escapeHtml(item.weight)}</span>
+          </div>
+          <div class="meta">
+            <div>标签: ${escapeHtml((item.tags || []).join(", ") || "-")}</div>
+            <div>来源任务: ${escapeHtml(item.source_task_id || "-")}</div>
+            <div>来源 generation: ${escapeHtml(item.source_generation_id || "-")}</div>
+            <div>内容: ${escapeHtml(item.content)}</div>
+            <div>备注: ${escapeHtml(item.notes || "-")}</div>
+          </div>
+        </article>
+      `).join("");
+      renderOverview();
+    };
+
+    const queryTaskFeedback = async () => {
+      const taskId = taskIdEl.value.trim();
+      if (!taskId) throw new Error("请先输入 task_id");
+      setListBusy(taskFeedbackListEl, true, "正在查询当前任务反馈...");
+      try {
+        const payload = await request("GET", `/api/v1/tasks/${taskId}/feedback`);
+        renderTaskFeedback(payload);
+        return payload;
+      } finally {
+        setListBusy(taskFeedbackListEl, false);
+      }
+    };
+
+    const refreshExperiments = async () => {
+      setListBusy(experimentListEl, true, "正在查询 prompt 实验榜...");
+      try {
+        const items = await request("GET", "/api/v1/feedback/experiments?limit=12");
+        renderExperiments(items);
+        return items;
+      } finally {
+        setListBusy(experimentListEl, false);
+      }
+    };
+
+    const refreshStyleAssets = async () => {
+      setListBusy(styleAssetListEl, true, "正在查询风格资产...");
+      try {
+        const items = await request("GET", "/api/v1/feedback/style-assets?limit=12");
+        renderStyleAssets(items);
+        return items;
+      } finally {
+        setListBusy(styleAssetListEl, false);
+      }
+    };
+
+    document.getElementById("query-feedback").addEventListener("click", (event) => {
+      withButtonBusy(event.currentTarget, "查询中...", async () => {
+        saveDraft();
+        setStatus("查反馈", "", "正在查询当前任务的反馈快照。");
+        const payload = await queryTaskFeedback();
+        renderOutput(payload);
+        setStatus("已完成", "", "任务反馈已更新，可以决定是否同步、补录或继续看实验榜。");
+      });
+    });
+
+    document.getElementById("refresh-experiments").addEventListener("click", (event) => {
+      withButtonBusy(event.currentTarget, "查询中...", async () => {
+        saveDraft();
+        setStatus("查实验", "", "正在刷新 prompt 实验榜。");
+        const items = await refreshExperiments();
+        renderOutput(items);
+        setStatus("已完成", "", "实验榜已更新，可以对比哪套 prompt 更稳。");
+      });
+    });
+
+    document.getElementById("refresh-assets").addEventListener("click", (event) => {
+      withButtonBusy(event.currentTarget, "查询中...", async () => {
+        saveDraft();
+        setStatus("查资产", "", "正在刷新风格资产库。");
+        const items = await refreshStyleAssets();
+        renderOutput(items);
+        setStatus("已完成", "", "风格资产已更新，可以判断是否还需要新增沉淀。");
+      });
+    });
+
+    document.getElementById("import-feedback").addEventListener("click", (event) => {
+      withButtonBusy(event.currentTarget, "导入中...", async () => {
+        saveDraft();
+        const taskId = taskIdEl.value.trim();
+        if (!taskId) throw new Error("请先输入 task_id");
+        setStatus("导入中", "", "正在写入手工补录反馈，并回刷当前任务与实验榜。");
+        const result = await request("POST", `/internal/v1/tasks/${taskId}/import-feedback`, buildFeedbackPayload());
+        renderOutput(result);
+        await queryTaskFeedback();
+        await refreshExperiments();
+        setStatus("导入完成", "", "反馈已补录完成，当前任务和实验榜都已回刷。");
+      });
+    });
+
+    document.getElementById("run-feedback-sync").addEventListener("click", (event) => {
+      withButtonBusy(event.currentTarget, "同步中...", async () => {
+        saveDraft();
+        const taskId = taskIdEl.value.trim();
+        if (!taskId) throw new Error("请先输入 task_id");
+        setStatus("同步中", "", "正在为当前任务拉取自动反馈，并回刷反馈快照与实验榜。");
+        const result = await request("POST", `/internal/v1/tasks/${taskId}/run-feedback-sync`, buildFeedbackSyncPayload());
+        renderOutput(result);
+        await queryTaskFeedback();
+        await refreshExperiments();
+        setStatus(`同步完成 (${result.imported_count})`, "", `自动同步完成，新增 ${result.imported_count} 条反馈记录。`);
+      });
+    });
+
+    document.getElementById("queue-feedback-sync").addEventListener("click", (event) => {
+      withButtonBusy(event.currentTarget, "入队中...", async () => {
+        saveDraft();
+        const taskId = taskIdEl.value.trim();
+        if (!taskId) throw new Error("请先输入 task_id");
+        setStatus("入队中", "", "正在把当前任务的反馈同步动作送入队列。");
+        const result = await request("POST", `/internal/v1/tasks/${taskId}/enqueue-feedback-sync`, buildFeedbackSyncPayload());
+        renderOutput(result);
+        setStatus(result.enqueued ? "已入队" : "已在队列中", "", result.enqueued ? "当前任务的反馈同步已入队。" : "当前任务已经在反馈同步队列里。");
+      });
+    });
+
+    document.getElementById("queue-recent-feedback-sync").addEventListener("click", (event) => {
+      withButtonBusy(event.currentTarget, "扫描中...", async () => {
+        saveDraft();
+        setStatus("扫描中", "", "正在扫描最近已入草稿任务，并把缺反馈的任务入队。");
+        const result = await request("POST", "/internal/v1/feedback/enqueue-recent-sync", buildRecentFeedbackSyncPayload());
+        renderOutput(result);
+        setStatus(`已扫描 ${result.requested_count} 个任务`, "", `最近草稿扫描完成，共入队 ${result.enqueued_count} 个任务。`);
+      });
+    });
+
+    document.getElementById("import-feedback-csv").addEventListener("click", (event) => {
+      withButtonBusy(event.currentTarget, "导入中...", async () => {
+        saveDraft();
+        if (!feedbackCsvEl.value.trim()) throw new Error("请先粘贴 CSV 内容");
+        setStatus("批量导入中", "", "正在按 CSV 批量写入反馈，并回刷实验榜。");
+        const result = await request("POST", "/internal/v1/feedback/import-csv", buildFeedbackCsvPayload());
+        renderOutput(result);
+        if (taskIdEl.value.trim()) {
+          await queryTaskFeedback();
+        }
+        await refreshExperiments();
+        setStatus(`批量导入完成 (${result.imported_count})`, "", `CSV 导入完成，共写入 ${result.imported_count} 条反馈。`);
+      });
+    });
+
+    document.getElementById("create-asset").addEventListener("click", (event) => {
+      withButtonBusy(event.currentTarget, "创建中...", async () => {
+        saveDraft();
+        if (!assetTypeEl.value.trim() || !assetTitleEl.value.trim() || !assetContentEl.value.trim()) {
+          throw new Error("请填写资产类型、标题和内容");
+        }
+        setStatus("创建资产中", "", "正在创建风格资产，并回刷资产库。");
+        const result = await request("POST", "/internal/v1/style-assets", buildStyleAssetPayload());
+        renderOutput(result);
+        await refreshStyleAssets();
+        setStatus("创建完成", "", "风格资产已创建完成，可以继续整理其他稳定写法。");
+      });
+    });
+
+    document.getElementById("clear-output").addEventListener("click", () => {
+      setStatus("已清空", "", "已清空最近一次输出；当前列表内容会保留。");
+      renderOutput("等待输入...");
+    });
+
+    [taskIdEl, generationIdEl, operatorEl, syncDayOffsetsEl, syncLimitEl].forEach((element) => {
+      const eventName = element === taskIdEl ? "input" : "change";
+      element.addEventListener(eventName, () => {
+        if (element === taskIdEl) {
+          currentTaskFeedbackCount = 0;
+          taskFeedbackListEl.innerHTML = '<div class="hint">task_id 已变更。点击“查反馈”加载这条任务的反馈快照。</div>';
+        }
+        saveDraft();
+        renderOverview();
+      });
+    });
+
+    loadDraft();
+    renderOverview();
+    Promise.allSettled([refreshExperiments(), refreshStyleAssets()]).then((results) => {
+      const failed = results.find((item) => item.status === "rejected");
+      if (!failed) return;
+      setStatus("加载失败", "warn", failed.reason?.message || "初始数据加载失败，详见输出区域。");
+      renderOutput(failed.reason?.message || "初始数据加载失败。");
+    });
+  </script>
+</body>
+</html>
+{% endraw %}
