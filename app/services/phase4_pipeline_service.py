@@ -31,6 +31,7 @@ from app.services.llm_runtime_service import LLMRuntimeService
 from app.services.llm_service import LLMServiceError
 from app.services.phase3_pipeline_service import Phase3PipelineService
 from app.services.system_setting_service import SystemSettingService
+from app.services.task_generation_selection_service import TaskGenerationSelectionService
 from app.services.wechat_draft_publish_service import WechatDraftPublishService
 from app.services.wechat_layout_service import WechatLayoutService
 from app.settings import get_settings
@@ -84,6 +85,20 @@ class Phase4PipelineService:
 
     def run(self, task_id: str) -> Phase4PipelineResult:
         task = self._require_task(task_id)
+
+        if task.status == TaskStatus.DRAFT_SAVED.value:
+            existing_gen = TaskGenerationSelectionService(self.session).resolve_current_accepted_generation(task_id)
+            if existing_gen is not None:
+                existing_review = self.reviews.get_latest_by_generation_id(existing_gen.id)
+                return Phase4PipelineResult(
+                    task_id=task.id,
+                    status=task.status,
+                    generation_id=existing_gen.id,
+                    review_report_id=existing_review.id if existing_review is not None else None,
+                    decision=existing_review.final_decision if existing_review is not None else None,
+                    auto_revised=False,
+                )
+
         source, analysis, brief, related = self._ensure_phase3_inputs(task)
 
         try:

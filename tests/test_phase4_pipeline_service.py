@@ -524,6 +524,95 @@ class Phase4PipelineServiceTests(unittest.TestCase):
         self.assertEqual(generation.status, "accepted")
         session.close()
 
+    def test_draft_saved_task_skips_generation_and_returns_existing(self) -> None:
+        """DRAFT_SAVED task: run() must not create a new Generation or call the LLM."""
+        session = self.Session()
+        task = self._seed_phase4_ready_task(session, "tsk_phase4_idempotent")
+        # Put task directly into DRAFT_SAVED with an existing accepted generation + review
+        task.status = TaskStatus.DRAFT_SAVED.value
+        existing_gen = Generation(
+            task_id=task.id,
+            version_no=1,
+            model_name="glm-5",
+            title="已保存草稿标题",
+            digest="已保存摘要",
+            html_content="<section><h1>已保存草稿标题</h1></section>",
+            markdown_content="# 已保存草稿标题\n\n已生成内容。",
+            status="accepted",
+        )
+        session.add(existing_gen)
+        session.flush()
+        from app.models.review_report import ReviewReport as RR
+        existing_review = RR(
+            generation_id=existing_gen.id,
+            similarity_score=0.20,
+            factual_risk_score=0.15,
+            policy_risk_score=0.05,
+            readability_score=85.0,
+            title_score=83.0,
+            novelty_score=82.0,
+            final_decision="pass",
+            issues={"items": ["通过。"]},
+            suggestions={"items": ["无需调整。"]},
+        )
+        session.add(existing_review)
+        session.commit()
+
+        service = Phase4PipelineService(session)
+        service.llm = MagicMock()
+
+        result = service.run(task.id)
+
+        # LLM must NOT be called
+        service.llm.complete_json.assert_not_called()
+        # No new Generation row should be created
+        all_gens = list(session.scalars(select(Generation).where(Generation.task_id == task.id)))
+        self.assertEqual(len(all_gens), 1, "Expected no new Generation row to be created")
+        # Result must point at the existing generation
+        self.assertEqual(result.generation_id, existing_gen.id)
+        self.assertEqual(result.task_id, task.id)
+        session.close()
+
+    def test_draft_saved_fallthrough_when_no_accepted_generation(self) -> None:
+        """DRAFT_SAVED task with no accepted generation falls through to normal path (no crash)."""
+        session = self.Session()
+        task = self._seed_phase4_ready_task(session, "tsk_phase4_idempotent_fallthrough")
+        task.status = TaskStatus.DRAFT_SAVED.value
+        # No Generation rows at all — unexpected state, but must not crash
+        session.commit()
+
+        service = Phase4PipelineService(session)
+        service.llm = MagicMock()
+        service.llm.complete_json.side_effect = [
+            {
+                "title": "降级路径测试",
+                "subtitle": "副标题",
+                "digest": "摘要",
+                "markdown_content": (
+                    "# 降级路径测试\n\n"
+                    "## 一\n内容一。\n\n"
+                    "## 二\n内容二。\n\n"
+                    "## 三\n内容三。\n"
+                ),
+            },
+            {
+                "final_decision": "pass",
+                "similarity_score": 0.20,
+                "factual_risk_score": 0.15,
+                "policy_risk_score": 0.05,
+                "readability_score": 85.0,
+                "title_score": 83.0,
+                "novelty_score": 82.0,
+                "issues": ["通过。"],
+                "suggestions": ["无需调整。"],
+            },
+        ]
+        # Should fall through to the normal path and call the LLM
+        result = service.run(task.id)
+        service.llm.complete_json.assert_called()
+        self.assertIsNotNone(result.generation_id)
+        session.close()
+
     def _seed_phase4_ready_task(self, session, task_code: str) -> Task:
         task = Task(
             task_code=task_code,
