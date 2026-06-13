@@ -5,6 +5,7 @@ from uuid import uuid4
 from unittest.mock import patch
 
 import httpx
+import redis.exceptions
 from sqlalchemy import create_engine
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.compiler import compiles
@@ -73,6 +74,13 @@ class IsRetriableTests(unittest.TestCase):
         self.assertFalse(is_retriable(LLMServiceError("parse failed")))
         self.assertFalse(is_retriable(_http_error(400)))
         self.assertFalse(is_retriable(_http_error(404)))
+
+    # Fix 3: transient Redis errors must be retriable
+    def test_redis_connection_error_is_retriable(self) -> None:
+        self.assertTrue(is_retriable(redis.exceptions.ConnectionError("lost")))
+
+    def test_redis_timeout_error_is_retriable(self) -> None:
+        self.assertTrue(is_retriable(redis.exceptions.TimeoutError("timed out")))
 
 
 class HandleWorkerFailureTests(unittest.TestCase):
@@ -254,7 +262,64 @@ class HandleWorkerFailureTests(unittest.TestCase):
         refreshed = session.get(Task, self.task_id)
         # post-publish side job must not clobber the article's terminal status
         self.assertEqual(refreshed.status, TaskStatus.DRAFT_SAVED.value)
-        self.assertEqual(refreshed.error_code, "ValueError")
+        # Fix 1: error fields must NOT be written when update_status=False
+        self.assertIsNone(refreshed.error_code)
+        self.assertIsNone(refreshed.error_message)
+        # job must still reach the dead-letter list for observability
+        self.assertEqual(outcome, "dead")
+        self.assertEqual(queue.dead, [self.task_id])
+        session.close()
+
+    # Fix 1: explicit test — non-retriable failure with update_status=False
+    def test_update_status_false_does_not_write_error_fields(self) -> None:
+        """Feedback failures must not stamp error_code/error_message on the Task."""
+        session = self.Session()
+        queue = FakeQueue(self.task_id)
+        self._make_task(session, retry_count=0, status=TaskStatus.DRAFT_SAVED.value)
+
+        outcome = handle_worker_failure(
+            queue,
+            session,
+            self.task_id,
+            ValueError("feedback broke"),
+            failed_status="feedback_failed",
+            max_retries=0,
+            backoff_seconds=0,
+            update_status=False,
+        )
+
+        self.assertEqual(outcome, "dead")
+        refreshed = session.get(Task, self.task_id)
+        self.assertIsNone(refreshed.error_code)
+        self.assertIsNone(refreshed.error_message)
+        self.assertEqual(refreshed.status, TaskStatus.DRAFT_SAVED.value)
+        self.assertEqual(queue.dead, [self.task_id])
+        session.close()
+
+    # Fix 2: dirty uncommitted objects from the pipeline must be discarded
+    def test_rollback_discards_dirty_pipeline_state(self) -> None:
+        """Uncommitted changes on the session before handle_worker_failure must not persist."""
+        session = self.Session()
+        queue = FakeQueue(self.task_id)
+        task = self._make_task(session, retry_count=0, status=TaskStatus.GENERATING.value)
+
+        # Simulate a dirty write left by the failed pipeline (not committed)
+        task.source_url = "https://dirty.example/should-not-persist"
+        # Do NOT call session.commit() — this is the partial pipeline state
+
+        handle_worker_failure(
+            queue,
+            session,
+            self.task_id,
+            ValueError("pipeline crashed"),
+            failed_status=TaskStatus.GENERATE_FAILED.value,
+            max_retries=0,
+            backoff_seconds=0,
+        )
+
+        # The dirty source_url change must have been rolled back
+        refreshed = session.get(Task, self.task_id)
+        self.assertEqual(refreshed.source_url, "https://src.example/a")
         session.close()
 
 

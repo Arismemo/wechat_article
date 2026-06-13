@@ -13,6 +13,16 @@ _TERMINAL_FAILURE_VALUES = {status.value for status in FINAL_FAILURE_STATUSES}
 _MAX_ERROR_MESSAGE_CHARS = 1000
 _UNSET = object()
 
+# Fix 3: import Redis exceptions defensively so a missing redis package does not
+# crash the module (e.g. in unit-test environments that mock it out).
+try:
+    from redis.exceptions import ConnectionError as _RedisConnectionError
+    from redis.exceptions import TimeoutError as _RedisTimeoutError
+
+    _REDIS_RETRIABLE: tuple[type, ...] = (_RedisConnectionError, _RedisTimeoutError)
+except ImportError:  # pragma: no cover
+    _REDIS_RETRIABLE = ()
+
 
 class RetryableError(Exception):
     """Marker exception pipeline code can raise to force a worker retry."""
@@ -22,13 +32,16 @@ def is_retriable(exc: BaseException) -> bool:
     """Classify whether a worker failure is worth retrying.
 
     Retriable: explicit RetryableError markers, httpx timeouts/transport errors
-    (covers ConnectError/ReadError/etc.), and provider HTTP errors whose status
-    code is transient. Everything else (parse/validation/programming errors) is
-    non-retriable and goes straight to the dead-letter queue.
+    (covers ConnectError/ReadError/etc.), provider HTTP errors whose status code
+    is transient, and transient Redis connection/timeout errors.  Everything
+    else (parse/validation/programming errors) is non-retriable and goes
+    straight to the dead-letter queue.
     """
     if isinstance(exc, RetryableError):
         return True
     if isinstance(exc, (httpx.TimeoutException, httpx.TransportError)):
+        return True
+    if _REDIS_RETRIABLE and isinstance(exc, _REDIS_RETRIABLE):
         return True
 
     provider_http_error = _llm_provider_http_error_type()
@@ -61,11 +74,17 @@ def handle_worker_failure(
     topic_fetch pass the bare id), but feedback passes its ``FeedbackSyncQueueJob``
     because that queue stores a JSON payload rather than the bare id.
 
-    ``update_status=False`` keeps retry bookkeeping (retry_count / error fields)
-    but never writes ``task.status``. Feedback uses this because its job is a
-    post-publish side task — clobbering the article's terminal status would be
-    wrong — while still getting a *bounded* retry via the Task's retry_count.
+    ``update_status=False`` suppresses all writes to ``task.status``,
+    ``task.error_code``, and ``task.error_message``.  Feedback uses this
+    because its job is a post-publish side task — clobbering the article's
+    terminal status or surfacing a misleading error would be wrong — while
+    still getting a *bounded* retry via the Task's retry_count.
     """
+    # Fix 2: discard any uncommitted dirty objects left by the failed pipeline
+    # before we load the Task so we get a clean view and commit only our
+    # bookkeeping writes.
+    session.rollback()
+
     if queue_ref is _UNSET:
         queue_ref = task_id
 
@@ -83,8 +102,9 @@ def handle_worker_failure(
     if retriable and retry_count < max_retries:
         if task is not None:
             task.retry_count += 1
-            task.error_code = error_code
-            task.error_message = error_message
+            if update_status:
+                task.error_code = error_code
+                task.error_message = error_message
             # NOTE: status is left re-runnable on purpose so the requeued job
             # can resume from where the pipeline left off.
             session.commit()
@@ -94,10 +114,15 @@ def handle_worker_failure(
         return "retried"
 
     if task is not None:
-        task.error_code = error_code
-        task.error_message = error_message
-        if update_status and task.status not in _TERMINAL_FAILURE_VALUES:
-            task.status = failed_status
+        # Fix 1: only stamp error fields (and status) when update_status=True.
+        # With update_status=False (feedback worker) the Task is the published
+        # article's record — writing error fields would surface a misleading
+        # "error" in the admin UI against a successfully-published article.
+        if update_status:
+            task.error_code = error_code
+            task.error_message = error_message
+            if task.status not in _TERMINAL_FAILURE_VALUES:
+                task.status = failed_status
         session.commit()
     queue.move_to_dead(queue_ref, reason=error_code)
     return "dead"
