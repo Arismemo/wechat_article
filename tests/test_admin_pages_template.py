@@ -18,6 +18,7 @@
 import unittest
 
 from app.api.admin import phase2_console, phase5_console, phase6_console
+from app.api.admin_factors_page import admin_factors_page
 from app.api.admin_topics import admin_topics_console
 from app.api.admin_ui import (
     admin_hero_summary_card,
@@ -207,6 +208,44 @@ class TopicsTemplateTests(unittest.TestCase):
             self.assertIn(anchor, out)
         # 占位符已被实际 HTML 替换，无残留。
         self.assertNotIn("__TOPICS_OVERVIEW__", out)
+        # 框体锚点（render_admin_page 包裹后应存在）。
+        self.assertIn('class="admin-app"', out)
+        self.assertIn("admin-sidebar", out)
+
+
+class FactorsTemplateTests(unittest.TestCase):
+    """/admin/factors 是混合 f-string 页：迁移前 CSS/HTML/JS 来自三个 Python 字符串
+    helper（``_page_css`` / ``_page_html`` / ``_page_js``），由外层 f-string 拼装后过框体。
+
+    迁移后整页（含三段 helper 的字面内容）内联进 ``app/templates/admin/factors.html``，
+    整段 ``{% raw %}`` 包裹（JS 里含 ``${...}`` 模板字面量与 ``}}`` 对象字面量闭合）。
+    等价组合式直接复刻路由：``render_admin_page(render_template(...), "factors")``。
+    """
+
+    def _expected(self) -> str:
+        return render_admin_page(render_template("admin/factors.html"), "factors")
+
+    def test_factors_page_equals_template_through_frame(self) -> None:
+        """admin_factors_page() 的输出与等价组合式逐字节相同。"""
+        self.assertEqual(admin_factors_page(), self._expected())
+
+    def test_factors_page_anchors(self) -> None:
+        out = admin_factors_page()
+        self.assertIn("<title>因子库</title>", out)
+        for anchor in (
+            'id="fl-grid"',
+            'id="pending-list"',
+            'id="extract-panel"',
+            'id="fl-modal"',
+            'id="fl-drawer"',
+            'id="btn-create"',
+            'data-dim="opening"',
+            'data-status="active"',
+        ):
+            self.assertIn(anchor, out)
+        # 整段 raw 包裹：渲染后无残留 Jinja 标记。
+        self.assertNotIn("{% raw %}", out)
+        self.assertNotIn("{% endraw %}", out)
         # 框体锚点（render_admin_page 包裹后应存在）。
         self.assertIn('class="admin-app"', out)
         self.assertIn("admin-sidebar", out)
