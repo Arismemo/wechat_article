@@ -14,7 +14,6 @@ from app.repositories.article_analysis_repository import ArticleAnalysisReposito
 from app.repositories.audit_log_repository import AuditLogRepository
 from app.repositories.source_article_repository import SourceArticleRepository
 from app.repositories.task_repository import TaskRepository
-from app.services.llm_runtime_service import LLMRuntimeService
 
 
 class AnalyzeSourceStep:

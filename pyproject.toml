@@ -20,6 +20,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
   "pytest>=8.3.4,<9.0.0",
+  "ruff>=0.6,<1.0",
 ]
 
 [build-system]
@@ -32,3 +33,12 @@ packages = ["app"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+
+[tool.ruff]
+target-version = "py39"
+line-length = 120
+
+[tool.ruff.lint.per-file-ignores]
+# admin_console.py embeds large HTML/CSS/JS blobs in f-strings; the doubled
+# braces ({{ }}) are literal CSS/JS syntax, not missing interpolations.
+"app/api/admin_console.py" = ["F541"]

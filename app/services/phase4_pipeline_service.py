@@ -28,7 +28,7 @@ from app.repositories.source_article_repository import SourceArticleRepository
 from app.repositories.style_asset_repository import StyleAssetRepository
 from app.repositories.task_repository import TaskRepository
 from app.services.llm_runtime_service import LLMRuntimeService
-from app.services.llm_service import LLMService, LLMServiceError
+from app.services.llm_service import LLMServiceError
 from app.services.phase3_pipeline_service import Phase3PipelineService
 from app.services.system_setting_service import SystemSettingService
 from app.services.wechat_draft_publish_service import WechatDraftPublishService

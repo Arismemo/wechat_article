@@ -73,6 +73,7 @@ class FeedbackSyncServiceTests(unittest.TestCase):
                 "WECHAT_APP_ID": "wx-test",
                 "WECHAT_APP_SECRET": "secret-test",
                 "LOCAL_STORAGE_ROOT": self.temp_dir.name,
+                "FEEDBACK_SYNC_PROVIDER": "mock",
             },
             clear=False,
         )
