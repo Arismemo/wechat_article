@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
@@ -33,7 +35,11 @@ def create_app() -> FastAPI:
     app.include_router(admin_topics_router)
     # 静态资源（前端去字符串化所需的本地 vendored 资产，如 htmx）。后台需可离线运行，
     # 不走 CDN。
-    app.mount("/static", StaticFiles(directory="app/static"), name="static")
+    app.mount(
+        "/static",
+        StaticFiles(directory=str(Path(__file__).resolve().parent / "static")),
+        name="static",
+    )
     return app
 
 

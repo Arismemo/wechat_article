@@ -81,6 +81,32 @@ class IsRetriableTests(unittest.TestCase):
         self.assertFalse(is_retriable(_http_error(400)))
         self.assertFalse(is_retriable(_http_error(404)))
 
+    # Fix 1 (duck-typed path): an exception with status_code=400 must NOT be
+    # retriable even if typed isinstance check is bypassed; status_code=503 must be.
+    def test_duck_typed_http_400_is_not_retriable(self) -> None:
+        """LLMProviderHTTPError(400) is non-retriable via duck-typed status_code path."""
+        self.assertFalse(is_retriable(_http_error(400)))
+
+    def test_duck_typed_http_503_is_retriable(self) -> None:
+        """LLMProviderHTTPError(503) is retriable via duck-typed status_code path."""
+        self.assertTrue(is_retriable(_http_error(503)))
+
+    def test_plain_exception_with_status_code_400_is_not_retriable(self) -> None:
+        """A plain exception carrying status_code=400 is NOT retriable (duck-typed)."""
+
+        class ArbitraryHTTPLike(Exception):
+            status_code = 400
+
+        self.assertFalse(is_retriable(ArbitraryHTTPLike("bad request")))
+
+    def test_plain_exception_with_status_code_503_is_retriable(self) -> None:
+        """A plain exception carrying status_code=503 IS retriable (duck-typed)."""
+
+        class ArbitraryHTTPLike(Exception):
+            status_code = 503
+
+        self.assertTrue(is_retriable(ArbitraryHTTPLike("service unavailable")))
+
     # Fix 3: transient Redis errors must be retriable
     def test_redis_connection_error_is_retriable(self) -> None:
         self.assertTrue(is_retriable(redis.exceptions.ConnectionError("lost")))

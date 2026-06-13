@@ -44,10 +44,14 @@ def is_retriable(exc: BaseException) -> bool:
     if _REDIS_RETRIABLE and isinstance(exc, _REDIS_RETRIABLE):
         return True
 
-    provider_http_error = _llm_provider_http_error_type()
-    if provider_http_error is not None and isinstance(exc, provider_http_error):
-        status_code = getattr(exc, "status_code", None)
-        return isinstance(status_code, int) and status_code in _RETRIABLE_HTTP_STATUS
+    # Duck-typed HTTP-status check: if the exception carries an integer
+    # status_code attribute, classify by that code regardless of whether the
+    # typed import succeeded.  This must run BEFORE the generic LLMServiceError
+    # branch because LLMProviderHTTPError is a subclass of LLMServiceError —
+    # falling through to that branch would wrongly mark a 400 as retriable.
+    status_code = getattr(exc, "status_code", None)
+    if isinstance(status_code, int):
+        return status_code in _RETRIABLE_HTTP_STATUS
 
     # A bare LLMServiceError that is NOT an HTTP error means the LLM returned a
     # malformed / unparseable / schema-invalid response (covers LLMSchemaError,
@@ -112,8 +116,8 @@ def handle_worker_failure(
             if update_status:
                 task.error_code = error_code
                 task.error_message = error_message
-            # NOTE: status is left re-runnable on purpose so the requeued job
-            # can resume from where the pipeline left off.
+            # NOTE: status is intentionally NOT reset here; the pipeline
+            # re-enters from any status on the requeued run.
             session.commit()
         if backoff_seconds > 0:
             sleep(backoff_seconds)
