@@ -28,12 +28,13 @@ from app.repositories.source_article_repository import SourceArticleRepository
 from app.repositories.style_asset_repository import StyleAssetRepository
 from app.repositories.task_repository import TaskRepository
 from app.services.llm_runtime_service import LLMRuntimeService
-from app.services.llm_service import LLMServiceError
+from app.services.llm_service import LLMSchemaError, require_keys
 from app.services.phase3_pipeline_service import Phase3PipelineService
 from app.services.system_setting_service import SystemSettingService
 from app.services.task_generation_selection_service import TaskGenerationSelectionService
 from app.services.wechat_draft_publish_service import WechatDraftPublishService
 from app.services.wechat_layout_service import WechatLayoutService
+from app.services.worker_failure import is_retriable
 from app.settings import get_settings
 
 
@@ -128,13 +129,20 @@ class Phase4PipelineService:
         decision = self._normalize_decision(review.final_decision)
         humanize_applied = False
         if decision != "reject" and self._should_run_humanize(review):
-            humanize_result = self._try_humanize_generation(
-                task=task,
-                source=source,
-                brief=brief,
-                generation=generation,
-                review=review,
-            )
+            try:
+                humanize_result = self._try_humanize_generation(
+                    task=task,
+                    source=source,
+                    brief=brief,
+                    generation=generation,
+                    review=review,
+                )
+            except Exception as exc:
+                # _try_humanize_generation only re-raises retriable LLM failures;
+                # stamp the task as failed so the worker retry layer takes over
+                # with a clean status (mirrors the generate/review handlers).
+                self._fail_task(task, TaskStatus.REVIEW_FAILED, "phase4_humanize_failed", str(exc))
+                raise
             if humanize_result is not None:
                 generation = humanize_result.generation
                 humanize_applied = True
@@ -227,6 +235,12 @@ class Phase4PipelineService:
             prior_generation=prior_generation,
             prior_review=prior_review,
         )
+        # A missing/empty markdown_content is a schema violation in the LLM
+        # response. Check the raw payload here (before ensure_title_heading masks
+        # it by prepending the title heading) and raise a retriable LLMSchemaError
+        # so the generation is re-sampled instead of dead-lettered. title/subtitle/
+        # digest are intentionally excluded — they have legitimate fallbacks below.
+        require_keys(payload, ["markdown_content"], context="phase4.generate")
         draft_title = self._limit(str(payload.get("title") or self._fallback_title(source, brief)), 64)
         draft_subtitle = self._limit(str(payload.get("subtitle") or ""), 120) or None
         markdown_content = self.wechat_layout.ensure_title_heading(
@@ -235,10 +249,10 @@ class Phase4PipelineService:
             draft_subtitle,
         )
         if not markdown_content:
-            raise ValueError("Generated draft does not contain markdown_content.")
+            raise LLMSchemaError("Generated draft does not contain markdown_content.")
         rendered_layout = self.wechat_layout.render_markdown(markdown_content)
         if rendered_layout.residual_markdown_markers:
-            raise ValueError(
+            raise LLMSchemaError(
                 "Generated draft still contains unsupported markdown markers: "
                 + ", ".join(rendered_layout.residual_markdown_markers)
             )
@@ -482,6 +496,12 @@ class Phase4PipelineService:
                 },
             )
             self.session.commit()
+            # Retriable LLM failures (HTTP 5xx/timeout, parse/schema errors)
+            # propagate so the worker can retry the humanize pass. Non-retriable
+            # failures degrade gracefully: keep the already-reviewed generation
+            # and skip the optional humanize polish.
+            if is_retriable(exc):
+                raise
             return None
 
     def _auto_revise_once(
@@ -736,6 +756,11 @@ class Phase4PipelineService:
                 write_model,
             )
         except Exception as exc:
+            # Retriable failures (HTTP 5xx/timeout, parse/schema errors) must
+            # propagate to the worker retry layer instead of silently shipping a
+            # low-quality template. Only genuinely non-retriable errors degrade.
+            if is_retriable(exc):
+                raise
             self._log_action(
                 task_id,
                 "phase4.generation.fallback",
@@ -804,7 +829,11 @@ class Phase4PipelineService:
                 json_mode=True,
                 timeout_seconds=self.settings.llm_review_timeout_seconds,
             )
-        except (LLMServiceError, Exception) as exc:
+        except Exception as exc:
+            # Retriable failures propagate to the worker retry layer; only
+            # non-retriable errors fall back to the heuristic review.
+            if is_retriable(exc):
+                raise
             self._log_action(
                 task_id,
                 "phase4.review.fallback",

@@ -48,6 +48,13 @@ def is_retriable(exc: BaseException) -> bool:
     if provider_http_error is not None and isinstance(exc, provider_http_error):
         status_code = getattr(exc, "status_code", None)
         return isinstance(status_code, int) and status_code in _RETRIABLE_HTTP_STATUS
+
+    # A bare LLMServiceError that is NOT an HTTP error means the LLM returned a
+    # malformed / unparseable / schema-invalid response (covers LLMSchemaError,
+    # which subclasses LLMServiceError). Re-sampling can fix it, so it's retriable.
+    service_error = _llm_service_error_type()
+    if service_error is not None and isinstance(exc, service_error):
+        return True
     return False
 
 
@@ -151,3 +158,13 @@ def _llm_provider_http_error_type() -> Optional[type]:
     except Exception:  # noqa: BLE001
         return None
     return LLMProviderHTTPError
+
+
+def _llm_service_error_type() -> Optional[type]:
+    # Imported defensively (mirrors _llm_provider_http_error_type) to avoid import
+    # cycles and to stay robust if the exception class is relocated.
+    try:
+        from app.services.llm_service import LLMServiceError
+    except Exception:  # noqa: BLE001
+        return None
+    return LLMServiceError

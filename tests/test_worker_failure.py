@@ -15,7 +15,7 @@ import app.models  # noqa: F401
 from app.core.enums import TaskStatus
 from app.db.base import Base
 from app.models.task import Task
-from app.services.llm_service import LLMProviderHTTPError, LLMServiceError
+from app.services.llm_service import LLMProviderHTTPError, LLMSchemaError, LLMServiceError
 from app.services.worker_failure import (
     RetryableError,
     handle_worker_failure,
@@ -69,9 +69,15 @@ class IsRetriableTests(unittest.TestCase):
         self.assertTrue(is_retriable(_http_error(503)))
         self.assertTrue(is_retriable(_http_error(429)))
 
+    # A bare LLMServiceError (and its LLMSchemaError subclass) means the response
+    # was malformed / unparseable / schema-invalid — re-sampling can fix it, so
+    # these are retriable. Only LLMProviderHTTPError is classified by status code.
+    def test_llm_parse_and_schema_errors_are_retriable(self) -> None:
+        self.assertTrue(is_retriable(LLMServiceError("parse failed")))
+        self.assertTrue(is_retriable(LLMSchemaError("missing keys")))
+
     def test_non_retriable_cases(self) -> None:
         self.assertFalse(is_retriable(ValueError("bad value")))
-        self.assertFalse(is_retriable(LLMServiceError("parse failed")))
         self.assertFalse(is_retriable(_http_error(400)))
         self.assertFalse(is_retriable(_http_error(404)))
 

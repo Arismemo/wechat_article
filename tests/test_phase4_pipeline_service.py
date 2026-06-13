@@ -22,6 +22,7 @@ from app.models.source_article import SourceArticle
 from app.models.style_asset import StyleAsset
 from app.models.system_setting import SystemSetting
 from app.models.task import Task
+from app.services.llm_service import LLMProviderHTTPError, LLMSchemaError, LLMServiceError
 from app.services.phase4_pipeline_service import Phase4PipelineService
 from app.services.wechat_draft_publish_service import WechatDraftPublishResult
 from app.settings import get_settings
@@ -611,6 +612,110 @@ class Phase4PipelineServiceTests(unittest.TestCase):
         result = service.run(task.id)
         service.llm.complete_json.assert_called()
         self.assertIsNotNone(result.generation_id)
+        session.close()
+
+    def test_retriable_llm_parse_error_during_generation_propagates(self) -> None:
+        """A bare LLMServiceError (parse failure) during generation must NOT fall
+        back to the template — it propagates so the worker retry layer re-samples."""
+        session = self.Session()
+        task = self._seed_phase4_ready_task(session, "tsk_phase4_parse_error")
+        self._set_ai_trace_rewrite_threshold(session, 70.0)
+
+        service = Phase4PipelineService(session)
+        service.llm = MagicMock()
+        service.llm.complete_json.side_effect = LLMServiceError(
+            "Failed to parse JSON from LLM response: <garbage>"
+        )
+
+        with self.assertRaises(LLMServiceError):
+            service.run(task.id)
+
+        # No fallback-template Generation may have been shipped.
+        generations = list(session.scalars(select(Generation).where(Generation.task_id == task.id)))
+        self.assertEqual(generations, [])
+        refreshed_task = session.get(Task, task.id)
+        self.assertEqual(refreshed_task.status, TaskStatus.GENERATE_FAILED.value)
+        self.assertEqual(refreshed_task.error_code, "phase4_generate_failed")
+        session.close()
+
+    def test_retriable_http_5xx_during_generation_propagates(self) -> None:
+        """A transient provider HTTP 503 during generation must propagate, not fall back."""
+        session = self.Session()
+        task = self._seed_phase4_ready_task(session, "tsk_phase4_http_5xx")
+        self._set_ai_trace_rewrite_threshold(session, 70.0)
+
+        service = Phase4PipelineService(session)
+        service.llm = MagicMock()
+        service.llm.complete_json.side_effect = LLMProviderHTTPError(
+            url="https://llm.example/chat/completions",
+            status_code=503,
+            response_text="service unavailable",
+        )
+
+        with self.assertRaises(LLMProviderHTTPError):
+            service.run(task.id)
+
+        generations = list(session.scalars(select(Generation).where(Generation.task_id == task.id)))
+        self.assertEqual(generations, [])
+        refreshed_task = session.get(Task, task.id)
+        self.assertEqual(refreshed_task.status, TaskStatus.GENERATE_FAILED.value)
+        session.close()
+
+    def test_missing_markdown_content_payload_raises_schema_error(self) -> None:
+        """A JSON payload lacking markdown_content is a retriable schema violation."""
+        session = self.Session()
+        task = self._seed_phase4_ready_task(session, "tsk_phase4_missing_md")
+        self._set_ai_trace_rewrite_threshold(session, 70.0)
+
+        service = Phase4PipelineService(session)
+        service.llm = MagicMock()
+        # Valid JSON, but markdown_content is absent — re-sampling could fix it.
+        service.llm.complete_json.return_value = {
+            "title": "缺少正文的稿件",
+            "subtitle": "副标题",
+            "digest": "摘要",
+        }
+
+        with self.assertRaises(LLMSchemaError):
+            service.run(task.id)
+
+        generations = list(session.scalars(select(Generation).where(Generation.task_id == task.id)))
+        self.assertEqual(generations, [])
+        refreshed_task = session.get(Task, task.id)
+        self.assertEqual(refreshed_task.status, TaskStatus.GENERATE_FAILED.value)
+        session.close()
+
+    def test_non_retriable_error_during_generation_still_falls_back_to_template(self) -> None:
+        """A genuinely non-retriable error (plain ValueError from non-LLM code)
+        preserves the graceful template fallback for the generation payload."""
+        session = self.Session()
+        task = self._seed_phase4_ready_task(session, "tsk_phase4_nonretriable_fallback")
+        self._set_ai_trace_rewrite_threshold(session, 70.0)
+
+        service = Phase4PipelineService(session)
+        service.llm = MagicMock()
+        # First call (generation) raises a non-retriable error -> template fallback.
+        # Second call (review) succeeds so the pipeline can complete.
+        service.llm.complete_json.side_effect = [
+            ValueError("non-llm bug in payload assembly"),
+            {
+                "final_decision": "pass",
+                "similarity_score": 0.20,
+                "factual_risk_score": 0.15,
+                "policy_risk_score": 0.05,
+                "readability_score": 86,
+                "title_score": 84,
+                "novelty_score": 82,
+                "issues": ["通过。"],
+                "suggestions": ["可以进入下一阶段。"],
+            },
+        ]
+
+        result = service.run(task.id)
+
+        generation = session.get(Generation, result.generation_id)
+        self.assertIsNotNone(generation)
+        self.assertEqual(generation.model_name, "phase4-fallback-template")
         session.close()
 
     def _seed_phase4_ready_task(self, session, task_code: str) -> Task:
