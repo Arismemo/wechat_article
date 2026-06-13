@@ -1,0 +1,128 @@
+from __future__ import annotations
+
+from time import sleep
+from typing import Any, Optional
+
+import httpx
+
+from app.core.enums import FINAL_FAILURE_STATUSES
+from app.models.task import Task
+
+_RETRIABLE_HTTP_STATUS = {408, 425, 429, 500, 502, 503, 504}
+_TERMINAL_FAILURE_VALUES = {status.value for status in FINAL_FAILURE_STATUSES}
+_MAX_ERROR_MESSAGE_CHARS = 1000
+_UNSET = object()
+
+
+class RetryableError(Exception):
+    """Marker exception pipeline code can raise to force a worker retry."""
+
+
+def is_retriable(exc: BaseException) -> bool:
+    """Classify whether a worker failure is worth retrying.
+
+    Retriable: explicit RetryableError markers, httpx timeouts/transport errors
+    (covers ConnectError/ReadError/etc.), and provider HTTP errors whose status
+    code is transient. Everything else (parse/validation/programming errors) is
+    non-retriable and goes straight to the dead-letter queue.
+    """
+    if isinstance(exc, RetryableError):
+        return True
+    if isinstance(exc, (httpx.TimeoutException, httpx.TransportError)):
+        return True
+
+    provider_http_error = _llm_provider_http_error_type()
+    if provider_http_error is not None and isinstance(exc, provider_http_error):
+        status_code = getattr(exc, "status_code", None)
+        return isinstance(status_code, int) and status_code in _RETRIABLE_HTTP_STATUS
+    return False
+
+
+def handle_worker_failure(
+    queue: Any,
+    session: Any,
+    task_id: Optional[str],
+    exc: BaseException,
+    *,
+    failed_status: str,
+    max_retries: int,
+    backoff_seconds: float,
+    queue_ref: Any = _UNSET,
+    update_status: bool = True,
+) -> str:
+    """Apply retry / dead-letter policy for a failed worker job.
+
+    Returns one of "retried" or "dead". When a DB ``Task`` row backs the job we
+    update retry bookkeeping and error fields; for queues without a Task row
+    (``task_id is None``) we apply queue-level retry/DLQ only.
+
+    ``queue_ref`` is the identifier the queue's ``requeue_for_retry`` /
+    ``move_to_dead`` methods expect. It defaults to ``task_id`` (phase2/3/4 and
+    topic_fetch pass the bare id), but feedback passes its ``FeedbackSyncQueueJob``
+    because that queue stores a JSON payload rather than the bare id.
+
+    ``update_status=False`` keeps retry bookkeeping (retry_count / error fields)
+    but never writes ``task.status``. Feedback uses this because its job is a
+    post-publish side task — clobbering the article's terminal status would be
+    wrong — while still getting a *bounded* retry via the Task's retry_count.
+    """
+    if queue_ref is _UNSET:
+        queue_ref = task_id
+
+    error_code = _error_code(exc)
+    error_message = _truncate(str(exc))
+
+    task = session.get(Task, task_id) if task_id is not None else None
+    if task_id is not None and task is None:
+        queue.move_to_dead(queue_ref, "task-not-found")
+        return "dead"
+
+    retriable = is_retriable(exc)
+    retry_count = task.retry_count if task is not None else 0
+
+    if retriable and retry_count < max_retries:
+        if task is not None:
+            task.retry_count += 1
+            task.error_code = error_code
+            task.error_message = error_message
+            # NOTE: status is left re-runnable on purpose so the requeued job
+            # can resume from where the pipeline left off.
+            session.commit()
+        if backoff_seconds > 0:
+            sleep(backoff_seconds)
+        queue.requeue_for_retry(queue_ref)
+        return "retried"
+
+    if task is not None:
+        task.error_code = error_code
+        task.error_message = error_message
+        if update_status and task.status not in _TERMINAL_FAILURE_VALUES:
+            task.status = failed_status
+        session.commit()
+    queue.move_to_dead(queue_ref, reason=error_code)
+    return "dead"
+
+
+def _truncate(message: str) -> str:
+    if len(message) <= _MAX_ERROR_MESSAGE_CHARS:
+        return message
+    return message[:_MAX_ERROR_MESSAGE_CHARS]
+
+
+def _error_code(exc: BaseException) -> str:
+    provider_http_error = _llm_provider_http_error_type()
+    if provider_http_error is not None and isinstance(exc, provider_http_error):
+        status_code = getattr(exc, "status_code", None)
+        if isinstance(status_code, int):
+            return f"llm_http_{status_code}"
+    return type(exc).__name__
+
+
+def _llm_provider_http_error_type() -> Optional[type]:
+    # Imported defensively so relocating LLMProviderHTTPError does not crash the
+    # classifier — non-import failures simply fall back to "not a provider error".
+    try:
+        from app.services.llm_service import LLMProviderHTTPError
+    except Exception:  # noqa: BLE001
+        return None
+    return LLMProviderHTTPError

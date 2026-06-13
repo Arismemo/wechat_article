@@ -8,8 +8,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from app.core.enums import TaskStatus
 from app.db.session import get_session_factory
 from app.services.phase3_queue_service import Phase3QueueService
+from app.services.worker_failure import handle_worker_failure
 from app.services.worker_heartbeat import heartbeat_refresh_interval, keep_worker_heartbeat
 from app.steps.executor import run_pipeline_for_phase
 
@@ -37,6 +39,7 @@ def main() -> None:
 
         logger.info("processing task %s", task_id)
         session = session_factory()
+        outcome = "ok"
         try:
             with keep_worker_heartbeat(
                 queue.mark_worker_heartbeat,
@@ -46,11 +49,21 @@ def main() -> None:
             ):
                 run_pipeline_for_phase("phase3", session, task_id)
             logger.info("task %s completed", task_id)
-        except Exception:  # noqa: BLE001
-            logger.exception("task %s failed", task_id)
+        except Exception as exc:  # noqa: BLE001
+            outcome = handle_worker_failure(
+                queue,
+                session,
+                task_id,
+                exc,
+                failed_status=TaskStatus.ANALYZE_FAILED.value,
+                max_retries=queue.settings.worker_max_retries,
+                backoff_seconds=queue.settings.worker_retry_backoff_seconds,
+            )
+            logger.exception("task %s failed (outcome=%s)", task_id, outcome)
         finally:
             session.close()
-            queue.acknowledge(task_id)
+            if outcome != "retried":
+                queue.acknowledge(task_id)
             queue.mark_worker_heartbeat()
 
 

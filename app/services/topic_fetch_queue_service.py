@@ -42,6 +42,20 @@ class TopicFetchQueueService:
         self.redis.lrem(self.settings.topic_fetch_processing_key, 0, source_id)
         self.redis.srem(self.settings.topic_fetch_pending_set_key, source_id)
 
+    def requeue_for_retry(self, source_id: str) -> None:
+        # Remove from processing and push back to the head of the queue,
+        # keeping pending-set membership so re-enqueue stays deduplicated.
+        self.redis.lrem(self.settings.topic_fetch_processing_key, 0, source_id)
+        self.redis.lpush(self.settings.topic_fetch_queue_key, source_id)
+
+    def move_to_dead(self, source_id: str, reason: Optional[str] = None) -> None:
+        # reason is accepted for caller observability; we keep the dead list
+        # as a simple id list (no reason hash) to match the existing style.
+        del reason
+        self.redis.lrem(self.settings.topic_fetch_processing_key, 0, source_id)
+        self.redis.srem(self.settings.topic_fetch_pending_set_key, source_id)
+        self.redis.lpush(self.settings.topic_fetch_dead_key, source_id)
+
     def requeue_processing_jobs(self) -> int:
         recovered = 0
         while True:
