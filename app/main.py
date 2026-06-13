@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from app.api.admin import router as admin_router
 from app.api.admin_console import router as admin_console_router
@@ -30,6 +31,9 @@ def create_app() -> FastAPI:
     app.include_router(admin_console_router)
     app.include_router(admin_factors_page_router)
     app.include_router(admin_topics_router)
+    # 静态资源（前端去字符串化所需的本地 vendored 资产，如 htmx）。后台需可离线运行，
+    # 不走 CDN。
+    app.mount("/static", StaticFiles(directory="app/static"), name="static")
     return app
 
 
