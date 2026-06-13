@@ -18,6 +18,7 @@
 import unittest
 
 from app.api.admin import phase2_console, phase5_console, phase6_console
+from app.api.admin_topics import admin_topics_console
 from app.api.admin_ui import (
     admin_hero_summary_card,
     admin_overview_card,
@@ -163,6 +164,50 @@ class Phase6TemplateTests(unittest.TestCase):
             self.assertIn(anchor, out)
         self.assertNotIn("__ADMIN_HERO__", out)
         self.assertNotIn("__ADMIN_OVERVIEW__", out)
+        self.assertIn('class="admin-app"', out)
+        self.assertIn("admin-sidebar", out)
+
+
+class TopicsTemplateTests(unittest.TestCase):
+    def _expected(self) -> str:
+        overview_html = admin_overview_strip(
+            "选题概览",
+            "".join(
+                [
+                    admin_overview_card("启用来源", "0", "当前处于启用状态的抓取来源。", value_id="summary-source-enabled"),
+                    admin_overview_card("候选总量", "0", "当前候选池规模。", value_id="summary-candidate-total"),
+                    admin_overview_card("已计划", "0", "已经形成计划但尚未推进到任务。", value_id="summary-planned-total"),
+                    admin_overview_card(
+                        "24h 新信号",
+                        "0",
+                        "最近 24 小时新进入系统的公开信号。",
+                        highlight=True,
+                        value_id="summary-new-signal-24h",
+                    ),
+                ]
+            ),
+        )
+        html = render_template("admin/topics.html")
+        return render_admin_page(html.replace("__TOPICS_OVERVIEW__", overview_html), "topics")
+
+    def test_topics_console_equals_template_through_frame(self) -> None:
+        """admin_topics_console() 的输出与等价组合式逐字节相同。"""
+        self.assertEqual(admin_topics_console(), self._expected())
+
+    def test_topics_console_anchors(self) -> None:
+        out = admin_topics_console()
+        self.assertIn("<title>选题情报台</title>", out)
+        for anchor in (
+            'id="topics-source-list"',
+            'id="topics-candidate-list"',
+            'id="topics-workspace"',
+            'id="topic-status-filter"',
+            'id="refresh-snapshot"',
+        ):
+            self.assertIn(anchor, out)
+        # 占位符已被实际 HTML 替换，无残留。
+        self.assertNotIn("__TOPICS_OVERVIEW__", out)
+        # 框体锚点（render_admin_page 包裹后应存在）。
         self.assertIn('class="admin-app"', out)
         self.assertIn("admin-sidebar", out)
 
