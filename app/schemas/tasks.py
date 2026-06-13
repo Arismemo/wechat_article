@@ -23,6 +23,16 @@ class TaskResponse(APIModel):
     error: Optional[str] = None
 
 
+class PublicationMetricSummary(APIModel):
+    """Most-recent metric snapshot for a task, as surfaced in admin snapshots."""
+
+    read_count: Optional[int] = None
+    like_count: Optional[int] = None
+    share_count: Optional[int] = None
+    day_offset: Optional[int] = None
+    snapshot_at: Optional[datetime] = None
+
+
 class TaskSummaryResponse(APIModel):
     task_id: str
     task_code: str
@@ -41,6 +51,7 @@ class TaskSummaryResponse(APIModel):
     error: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    latest_metrics: Optional[PublicationMetricSummary] = None
 
 
 class ArticleAnalysisResponse(APIModel):

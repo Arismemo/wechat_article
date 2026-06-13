@@ -2738,6 +2738,7 @@ def unified_console() -> str:
                           <div><strong>草稿</strong> ${escapeHtml(task.wechat_media_id || "暂无")}</div>
                           <div><strong>链接</strong> ${escapeHtml(truncate(task.source_url, 88))}</div>
                           <div><strong>错误</strong> ${escapeHtml(task.error || "无")}</div>
+                          ${task.latest_metrics ? `<div><strong>阅读</strong> ${escapeHtml(String(task.latest_metrics.read_count ?? "-"))} · <strong>赞</strong> ${escapeHtml(String(task.latest_metrics.like_count ?? "-"))} · <strong>转发</strong> ${escapeHtml(String(task.latest_metrics.share_count ?? "-"))} <span style="opacity:0.6">(T+${escapeHtml(String(task.latest_metrics.day_offset ?? "?"))})</span></div>` : ""}
                         </div>
                         <div class="task-note"><strong>下一步</strong> ${escapeHtml(nextActionText(task))}</div>
                         <div class="task-actions">
