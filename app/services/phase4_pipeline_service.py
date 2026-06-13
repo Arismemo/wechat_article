@@ -129,20 +129,13 @@ class Phase4PipelineService:
         decision = self._normalize_decision(review.final_decision)
         humanize_applied = False
         if decision != "reject" and self._should_run_humanize(review):
-            try:
-                humanize_result = self._try_humanize_generation(
-                    task=task,
-                    source=source,
-                    brief=brief,
-                    generation=generation,
-                    review=review,
-                )
-            except Exception as exc:
-                # _try_humanize_generation only re-raises retriable LLM failures;
-                # stamp the task as failed so the worker retry layer takes over
-                # with a clean status (mirrors the generate/review handlers).
-                self._fail_task(task, TaskStatus.REVIEW_FAILED, "phase4_humanize_failed", str(exc))
-                raise
+            humanize_result = self._try_humanize_generation(
+                task=task,
+                source=source,
+                brief=brief,
+                generation=generation,
+                review=review,
+            )
             if humanize_result is not None:
                 generation = humanize_result.generation
                 humanize_applied = True
@@ -496,12 +489,6 @@ class Phase4PipelineService:
                 },
             )
             self.session.commit()
-            # Retriable LLM failures (HTTP 5xx/timeout, parse/schema errors)
-            # propagate so the worker can retry the humanize pass. Non-retriable
-            # failures degrade gracefully: keep the already-reviewed generation
-            # and skip the optional humanize polish.
-            if is_retriable(exc):
-                raise
             return None
 
     def _auto_revise_once(

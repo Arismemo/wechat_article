@@ -718,6 +718,102 @@ class Phase4PipelineServiceTests(unittest.TestCase):
         self.assertEqual(generation.model_name, "phase4-fallback-template")
         session.close()
 
+    def test_retriable_llm_error_during_humanize_is_swallowed_pipeline_continues(self) -> None:
+        """A retriable LLM error (LLMServiceError) during the humanize step must NOT
+        fail or raise from run(). The already-reviewed generation is kept and the
+        pipeline proceeds to a normal terminal decision without humanize polish.
+
+        Flow: generate(1) → review(2, ai_trace_score=88 triggers humanize) →
+        humanize(3, raises LLMServiceError — swallowed, returns None) →
+        decision flips to 'revise' → auto_revise_once → generate(4) + review(5).
+        """
+        session = self.Session()
+        task = self._seed_phase4_ready_task(session, "tsk_phase4_humanize_swallow")
+        self._set_ai_trace_rewrite_threshold(session, 70.0)
+
+        service = Phase4PipelineService(session)
+        service.llm = MagicMock()
+        # Call 1: generate — high-ai-trace article so humanize is triggered by call 2 review.
+        # Call 2: review — ai_trace_score > threshold + rewrite_targets => humanize triggered.
+        # Call 3: humanize — raises a retriable LLMServiceError; must be swallowed.
+        #   → decision "pass" flips to "revise" (humanize returned None) → auto_revise.
+        # Call 4: revised generate — succeeds.
+        # Call 5: revised review — passes.
+        service.llm.complete_json.side_effect = [
+            {
+                "title": "humanize 降级测试标题",
+                "subtitle": "副标题",
+                "digest": "摘要",
+                "markdown_content": (
+                    "# humanize 降级测试标题\n\n"
+                    "## 先把现象摆出来\n\n"
+                    "首先，我们可以看到很多团队都在接入自动化，但协作边界依然很模糊。\n\n"
+                    "## 再看真正的卡点\n\n"
+                    "团队真正卡住的，是流程断点一出现，就没人知道该由谁接手。\n\n"
+                    "## 最后说结论\n\n"
+                    "总之，真正要补的是协作接口，而不是再加一个模型。\n"
+                ),
+            },
+            {
+                "final_decision": "pass",
+                "similarity_score": 0.18,
+                "factual_risk_score": 0.18,
+                "policy_risk_score": 0.04,
+                "readability_score": 84,
+                "title_score": 82,
+                "novelty_score": 83,
+                "ai_trace_score": 88,
+                "ai_trace_patterns": ["承接词偏模板化"],
+                "rewrite_targets": [{"block_id": "b3", "reason": "模板腔", "instruction": "改写"}],
+                "voice_summary": "需要润色",
+                "issues": ["先做定点润色。"],
+                "suggestions": ["先做定点润色。"],
+            },
+            # Call 3: humanize LLM call raises a retriable error — must be swallowed.
+            LLMServiceError("Failed to parse JSON from LLM response: <timeout garbage>"),
+            # Call 4+5: auto_revise_once generate + review (triggered because decision → "revise")
+            {
+                "title": "humanize 降级后修订稿",
+                "subtitle": "修订副标题",
+                "digest": "修订摘要",
+                "markdown_content": (
+                    "# humanize 降级后修订稿\n\n"
+                    "## 重新拆解\n"
+                    "接入自动化不代表解决了协作问题。\n\n"
+                    "## 看真正卡点\n"
+                    "协作边界模糊才是核心障碍。\n\n"
+                    "## 判断框架\n"
+                    "- 先补接口\n"
+                    "- 再看模型\n"
+                ),
+            },
+            {
+                "final_decision": "pass",
+                "similarity_score": 0.20,
+                "factual_risk_score": 0.15,
+                "policy_risk_score": 0.04,
+                "readability_score": 87,
+                "title_score": 84,
+                "novelty_score": 85,
+                "issues": ["修订通过。"],
+                "suggestions": ["可以进入下一阶段。"],
+            },
+        ]
+
+        # Must NOT raise — humanize failure is best-effort and gets swallowed.
+        service.run(task.id)
+
+        # Task should not be in REVIEW_FAILED due to humanize — pipeline completes normally.
+        refreshed_task = session.get(Task, task.id)
+        self.assertNotEqual(refreshed_task.status, TaskStatus.REVIEW_FAILED.value)
+        self.assertNotEqual(refreshed_task.error_code, "phase4_humanize_failed")
+        # The pipeline must have produced at least one generation (did not abort).
+        generations = list(session.scalars(select(Generation).where(Generation.task_id == task.id)))
+        self.assertGreater(len(generations), 0, "Expected at least one generation to exist")
+        # All 5 LLM calls were made (3rd raised and was swallowed, 4th+5th are auto-revise).
+        self.assertEqual(service.llm.complete_json.call_count, 5)
+        session.close()
+
     def _seed_phase4_ready_task(self, session, task_code: str) -> Task:
         task = Task(
             task_code=task_code,
