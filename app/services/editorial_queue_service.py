@@ -1,0 +1,89 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from time import sleep
+from typing import Optional
+
+from redis import Redis
+
+from app.db.redis_client import get_redis_client
+from app.services.queue_observability_service import QueueRuntimeSnapshot, mark_worker_heartbeat, read_queue_runtime
+from app.settings import get_settings
+
+
+@dataclass
+class EditorialEnqueueResult:
+    task_id: str
+    enqueued: bool
+    queue_depth: int
+
+
+class EditorialQueueService:
+    def __init__(self, redis_client: Optional[Redis] = None) -> None:
+        self.settings = get_settings()
+        self.redis = redis_client or get_redis_client()
+
+    def enqueue(self, task_id: str) -> EditorialEnqueueResult:
+        enqueued = bool(self.redis.sadd(self.settings.editorial_pending_set_key, task_id))
+        if enqueued:
+            self.redis.lpush(self.settings.editorial_queue_key, task_id)
+        queue_depth = int(self.redis.llen(self.settings.editorial_queue_key))
+        return EditorialEnqueueResult(task_id=task_id, enqueued=enqueued, queue_depth=queue_depth)
+
+    def pop_next(self) -> Optional[str]:
+        task_id = self.redis.brpoplpush(
+            self.settings.editorial_queue_key,
+            self.settings.editorial_processing_key,
+            timeout=self.settings.editorial_worker_poll_timeout_seconds,
+        )
+        return task_id if isinstance(task_id, str) and task_id else None
+
+    def acknowledge(self, task_id: str) -> None:
+        self.redis.lrem(self.settings.editorial_processing_key, 0, task_id)
+        self.redis.srem(self.settings.editorial_pending_set_key, task_id)
+
+    def requeue_for_retry(self, task_id: str) -> None:
+        # Remove from processing and push back to the head of the queue,
+        # keeping pending-set membership so re-enqueue stays deduplicated.
+        self.redis.lrem(self.settings.editorial_processing_key, 0, task_id)
+        self.redis.lpush(self.settings.editorial_queue_key, task_id)
+
+    def move_to_dead(self, task_id: str, reason: Optional[str] = None) -> None:
+        # reason is accepted for caller observability; we keep the dead list
+        # as a simple id list (no reason hash) to match the existing style.
+        del reason
+        self.redis.lrem(self.settings.editorial_processing_key, 0, task_id)
+        self.redis.srem(self.settings.editorial_pending_set_key, task_id)
+        self.redis.lpush(self.settings.editorial_dead_key, task_id)
+
+    def requeue_processing_jobs(self) -> int:
+        recovered = 0
+        while True:
+            task_id = self.redis.rpoplpush(self.settings.editorial_processing_key, self.settings.editorial_queue_key)
+            if task_id is None:
+                break
+            recovered += 1
+        return recovered
+
+    def idle_sleep(self) -> None:
+        sleep(self.settings.editorial_worker_idle_sleep_seconds)
+
+    def mark_worker_heartbeat(self, current_task_id: Optional[str] = None) -> None:
+        mark_worker_heartbeat(
+            self.redis,
+            heartbeat_key=self.settings.editorial_worker_heartbeat_key,
+            stale_after_seconds=self.settings.worker_heartbeat_stale_seconds,
+            current_task_id=current_task_id,
+        )
+
+    def runtime_snapshot(self) -> QueueRuntimeSnapshot:
+        return read_queue_runtime(
+            self.redis,
+            name="editorial",
+            label="编委会评审",
+            queue_key=self.settings.editorial_queue_key,
+            processing_key=self.settings.editorial_processing_key,
+            pending_key=self.settings.editorial_pending_set_key,
+            heartbeat_key=self.settings.editorial_worker_heartbeat_key,
+            stale_after_seconds=self.settings.worker_heartbeat_stale_seconds,
+        )
