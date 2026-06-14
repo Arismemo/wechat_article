@@ -60,7 +60,6 @@ class LLMServiceTests(unittest.TestCase):
         self.assertIn("model not found", str(exc.exception))
 
     def test_complete_json_supports_responses_endpoint(self) -> None:
-        request = httpx.Request("POST", "https://example.test/v1/responses")
         body = {
             "output": [
                 {

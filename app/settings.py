@@ -120,6 +120,13 @@ class Settings(BaseSettings):
     feedback_sync_worker_heartbeat_key: str = Field(default="feedback:worker:heartbeat", alias="FEEDBACK_SYNC_WORKER_HEARTBEAT_KEY")
     feedback_sync_recent_limit: int = Field(default=20, alias="FEEDBACK_SYNC_RECENT_LIMIT")
     worker_heartbeat_stale_seconds: int = Field(default=60, alias="WORKER_HEARTBEAT_STALE_SECONDS")
+    worker_max_retries: int = Field(default=3, alias="WORKER_MAX_RETRIES")
+    worker_retry_backoff_seconds: float = Field(default=5.0, alias="WORKER_RETRY_BACKOFF_SECONDS")
+    phase2_dead_key: str = Field(default="phase2:dead", alias="PHASE2_DEAD_KEY")
+    phase3_dead_key: str = Field(default="phase3:dead", alias="PHASE3_DEAD_KEY")
+    phase4_dead_key: str = Field(default="phase4:dead", alias="PHASE4_DEAD_KEY")
+    feedback_sync_dead_key: str = Field(default="feedback:dead", alias="FEEDBACK_SYNC_DEAD_KEY")
+    topic_fetch_dead_key: str = Field(default="topics:fetch:dead", alias="TOPIC_FETCH_DEAD_KEY")
     alert_webhook_url: Optional[str] = Field(default=None, alias="ALERT_WEBHOOK_URL")
 
     local_storage_root: Path = Field(default=Path("./data"), alias="LOCAL_STORAGE_ROOT")

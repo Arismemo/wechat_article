@@ -23,7 +23,6 @@ from app.schemas.tasks import (
     ContentBriefResponse,
     GenerationResponse,
     RelatedArticleResponse,
-    SourceArticleDetailResponse,
     TaskBriefResponse,
     TaskDraftResponse,
     TaskResponse,
@@ -34,8 +33,6 @@ from app.services.review_report_response_service import build_review_report_resp
 from app.services.task_service import TaskService
 from app.services.task_workspace_query_service import TaskWorkspaceQueryService
 from app.services.wechat_draft_metadata_service import build_wechat_draft_metadata
-from app.services.wechat_push_policy_service import WechatPushPolicyService
-
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
@@ -100,7 +97,6 @@ def get_task(task_id: str, session: Session = Depends(get_db_session)) -> TaskRe
     wechat_draft = WechatDraftRepository(session).get_latest_by_task_id(task_id)
     draft_metadata = build_wechat_draft_metadata(wechat_draft)
     task_status = TaskStatus(task.status)
-    push_policy = WechatPushPolicyService(session).get_policy(task_id)
     error = task.error_message or task.error_code
     return TaskResponse(
         task_id=task.id,

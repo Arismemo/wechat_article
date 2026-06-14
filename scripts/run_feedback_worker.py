@@ -11,6 +11,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from app.db.session import get_session_factory
 from app.services.feedback_queue_service import FeedbackQueueService
 from app.services.feedback_sync_service import FeedbackSyncService
+from app.services.worker_failure import handle_worker_failure
 from app.services.worker_heartbeat import heartbeat_refresh_interval, keep_worker_heartbeat
 
 
@@ -37,6 +38,7 @@ def main() -> None:
 
         logger.info("syncing feedback for task %s day_offsets=%s", job.task_id, job.day_offsets)
         session = session_factory()
+        outcome = "ok"
         try:
             with keep_worker_heartbeat(
                 queue.mark_worker_heartbeat,
@@ -50,11 +52,27 @@ def main() -> None:
                     operator=job.operator,
                 )
             logger.info("feedback sync completed for task %s", job.task_id)
-        except Exception:  # noqa: BLE001
-            logger.exception("feedback sync failed for task %s", job.task_id)
+        except Exception as exc:  # noqa: BLE001
+            # Feedback is a post-publish side job: use the Task for bounded retry
+            # bookkeeping but never overwrite the article's terminal status.
+            outcome = handle_worker_failure(
+                queue,
+                session,
+                job.task_id,
+                exc,
+                # failed_status is unused because update_status=False; the
+                # feedback job must not overwrite the article's terminal status.
+                failed_status="failed",
+                max_retries=queue.settings.worker_max_retries,
+                backoff_seconds=queue.settings.worker_retry_backoff_seconds,
+                queue_ref=job,
+                update_status=False,
+            )
+            logger.exception("feedback sync failed for task %s (outcome=%s)", job.task_id, outcome)
         finally:
             session.close()
-            queue.acknowledge(job)
+            if outcome != "retried":
+                queue.acknowledge(job)
             queue.mark_worker_heartbeat()
 
 

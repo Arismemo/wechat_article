@@ -12,6 +12,31 @@ class LLMServiceError(RuntimeError):
     pass
 
 
+class LLMSchemaError(LLMServiceError):
+    """Raised when an LLM response parses as JSON but is missing required keys.
+
+    Subclasses ``LLMServiceError`` so the worker retry layer treats it as a
+    retriable format failure (re-sampling can fix it) rather than dead-lettering.
+    """
+
+
+def require_keys(payload: dict[str, Any], keys: Any, *, context: str = "") -> None:
+    """Assert that ``payload`` contains every key in ``keys`` with a usable value.
+
+    A key is considered missing when it is absent, ``None``, or an empty string.
+    Raises :class:`LLMSchemaError` listing the missing keys, which the retry
+    layer treats as retriable so a malformed response is re-sampled.
+    """
+    missing: list[str] = []
+    for key in keys:
+        value = payload.get(key) if isinstance(payload, dict) else None
+        if value is None or (isinstance(value, str) and value.strip() == ""):
+            missing.append(key)
+    if missing:
+        suffix = f" ({context})" if context else ""
+        raise LLMSchemaError(f"LLM response missing keys {missing}{suffix}")
+
+
 class LLMProviderHTTPError(LLMServiceError):
     def __init__(self, *, url: str, status_code: int, response_text: str) -> None:
         self.url = url

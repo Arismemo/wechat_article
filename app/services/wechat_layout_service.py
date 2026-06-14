@@ -57,7 +57,7 @@ class WechatLayoutService:
         "margin:30px 0 14px;"
         "padding-left:10px;"
         "border-left:4px solid #1f7a68;"
-        "font-size:19px;"
+        "font-size:18px;"
         "line-height:1.45;"
         "font-weight:700;"
         "color:#1f1f1f;"
@@ -69,7 +69,7 @@ class WechatLayoutService:
         "font-weight:700;"
         "color:#23685a;"
     )
-    _P_STYLE = "margin:0 0 16px;text-align:justify;"
+    _P_STYLE = "margin:0 0 16px;"
     _LEAD_STYLE = "margin:0 0 18px;color:#5d5d5d;font-size:15px;"
     _BLOCKQUOTE_STYLE = (
         "margin:18px 0;"

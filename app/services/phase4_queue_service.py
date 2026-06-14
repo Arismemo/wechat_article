@@ -42,6 +42,20 @@ class Phase4QueueService:
         self.redis.lrem(self.settings.phase4_processing_key, 0, task_id)
         self.redis.srem(self.settings.phase4_pending_set_key, task_id)
 
+    def requeue_for_retry(self, task_id: str) -> None:
+        # Remove from processing and push back to the head of the queue,
+        # keeping pending-set membership so re-enqueue stays deduplicated.
+        self.redis.lrem(self.settings.phase4_processing_key, 0, task_id)
+        self.redis.lpush(self.settings.phase4_queue_key, task_id)
+
+    def move_to_dead(self, task_id: str, reason: Optional[str] = None) -> None:
+        # reason is accepted for caller observability; we keep the dead list
+        # as a simple id list (no reason hash) to match the existing style.
+        del reason
+        self.redis.lrem(self.settings.phase4_processing_key, 0, task_id)
+        self.redis.srem(self.settings.phase4_pending_set_key, task_id)
+        self.redis.lpush(self.settings.phase4_dead_key, task_id)
+
     def requeue_processing_jobs(self) -> int:
         recovered = 0
         while True:

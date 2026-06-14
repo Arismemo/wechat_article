@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Run tests
+        run: pytest -q
+
+      - name: Ruff lint (errors only)
+        run: ruff check --select E9,F .
+
+      - name: Check single Alembic head
+        continue-on-error: true
+        run: |
+          python -c "
+          from alembic.config import Config
+          from alembic.script import ScriptDirectory
+          sd = ScriptDirectory.from_config(Config('alembic.ini'))
+          hs = sd.get_heads()
+          print('alembic heads:', hs)
+          assert len(hs) == 1, f'Expected 1 head, got {len(hs)}: {hs}'
+          "

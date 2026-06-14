@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -20,7 +19,6 @@ from app.repositories.related_article_repository import RelatedArticleRepository
 from app.repositories.source_article_repository import SourceArticleRepository
 from app.repositories.task_repository import TaskRepository
 from app.services.llm_runtime_service import LLMRuntimeService
-from app.services.llm_service import LLMService
 from app.services.search_service import RankedSearchResult, SearchService
 from app.services.source_fetch_service import FetchedArticle, SourceFetchService
 from app.services.url_service import detect_source_type

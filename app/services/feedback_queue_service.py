@@ -81,6 +81,22 @@ class FeedbackQueueService:
         self.redis.lrem(self.settings.feedback_sync_processing_key, 0, job.raw_payload)
         self.redis.srem(self.settings.feedback_sync_pending_set_key, job.task_id)
 
+    def requeue_for_retry(self, job: FeedbackSyncQueueJob) -> None:
+        # Feedback jobs carry a JSON payload in the queue list (not a bare id),
+        # so retry/dead operate on the FeedbackSyncQueueJob's raw_payload while
+        # the pending set is keyed by task_id. Remove from processing and push
+        # the payload back to the head of the queue, keeping pending membership.
+        self.redis.lrem(self.settings.feedback_sync_processing_key, 0, job.raw_payload)
+        self.redis.lpush(self.settings.feedback_sync_queue_key, job.raw_payload)
+
+    def move_to_dead(self, job: FeedbackSyncQueueJob, reason: Optional[str] = None) -> None:
+        # reason is accepted for caller observability; the dead list stores the
+        # raw payload so the job can be inspected/replayed later.
+        del reason
+        self.redis.lrem(self.settings.feedback_sync_processing_key, 0, job.raw_payload)
+        self.redis.srem(self.settings.feedback_sync_pending_set_key, job.task_id)
+        self.redis.lpush(self.settings.feedback_sync_dead_key, job.raw_payload)
+
     def requeue_processing_jobs(self) -> int:
         recovered = 0
         while True:

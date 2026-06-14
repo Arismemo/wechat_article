@@ -1,0 +1,1040 @@
+{% raw %}<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>微信文章工厂</title>
+  <style>
+    __ADMIN_SHARED_STYLES__
+
+    /* 极简工作流样式 */
+    .flow-container {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 32px 20px;
+    }
+
+    /* 输入区 */
+    .input-section {
+      margin-bottom: 32px;
+    }
+    .input-bar {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      background: var(--bg-card);
+      border: 2px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 8px 8px 8px 20px;
+      box-shadow: var(--shadow-card);
+      transition: border-color var(--transition), box-shadow var(--transition);
+    }
+    .input-bar:focus-within {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(59,130,246,.12);
+    }
+    .input-bar input {
+      flex: 1;
+      border: none;
+      outline: none;
+      font-size: 15px;
+      background: transparent;
+      color: var(--text);
+      line-height: 1.5;
+    }
+    .input-bar input::placeholder {
+      color: var(--text-secondary);
+      opacity: 0.6;
+    }
+    .input-bar button {
+      flex-shrink: 0;
+      padding: 10px 24px;
+      border: none;
+      border-radius: var(--radius-md);
+      background: var(--primary);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background var(--transition);
+    }
+    .input-bar button:hover { background: var(--primary-hover); }
+    .input-bar button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .input-error {
+      margin-top: 8px;
+      padding: 8px 14px;
+      border-radius: var(--radius-sm);
+      background: var(--danger-soft);
+      color: var(--danger);
+      font-size: 13px;
+      display: none;
+    }
+
+    /* 计数条 */
+    .count-bar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 16px;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+    .count-bar .count {
+      font-weight: 600;
+      color: var(--text);
+    }
+    .count-bar .dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 4px;
+    }
+    .count-bar .dot.blue { background: var(--primary); }
+    .count-bar .dot.orange { background: var(--warning); }
+    .count-bar .dot.red { background: var(--danger); }
+    .count-bar .dot.green { background: var(--success); }
+
+    /* 任务列表 */
+    .task-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .task-empty {
+      text-align: center;
+      padding: 48px 20px;
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+    .task-empty .icon {
+      font-size: 40px;
+      margin-bottom: 12px;
+      opacity: 0.4;
+    }
+
+    /* 任务卡片 */
+    .task-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 14px 18px;
+      cursor: pointer;
+      transition: border-color var(--transition), box-shadow var(--transition);
+      position: relative;
+    }
+    .task-card:hover {
+      border-color: var(--primary);
+      box-shadow: var(--shadow-card);
+    }
+    .task-card.expanded {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(59,130,246,.08);
+    }
+    .task-card-header {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      min-height: 24px;
+      gap: 12px;
+    }
+    .task-card-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      overflow: hidden;
+    }
+    .task-status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .task-status-dot.processing {
+      background: var(--primary);
+      animation: pulse-dot 1.5s ease-in-out infinite;
+    }
+    .task-status-dot.pending { background: var(--warning); }
+    .task-status-dot.done { background: var(--success); }
+    .task-status-dot.failed { background: var(--danger); }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+    .task-title {
+      flex: 1;
+      min-width: 0;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .task-card.done-card .task-title {
+      color: var(--text-secondary);
+    }
+    .task-status-label {
+      font-size: 12px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+    .task-status-label.processing {
+      background: var(--primary-soft);
+      color: var(--primary);
+    }
+    .task-status-label.pending {
+      background: var(--warning-soft);
+      color: #B45309;
+    }
+    .task-status-label.done {
+      background: var(--success-soft);
+      color: #047857;
+    }
+    .task-status-label.failed {
+      background: var(--danger-soft);
+      color: var(--danger);
+    }
+    .task-actions {
+      display: flex;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .task-actions button {
+      padding: 4px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--bg-card);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all var(--transition);
+    }
+    .task-actions .btn-primary {
+      background: var(--primary);
+      color: #fff;
+      border-color: var(--primary);
+    }
+    .task-actions .btn-primary:hover {
+      background: var(--primary-hover);
+    }
+    .task-actions .btn-danger {
+      color: var(--danger);
+      border-color: var(--danger-soft);
+    }
+    .task-actions .btn-danger:hover {
+      background: var(--danger-soft);
+    }
+    .task-progress {
+      margin-top: 8px;
+      height: 3px;
+      background: var(--border-light);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .task-progress-bar {
+      height: 100%;
+      background: var(--primary);
+      border-radius: 2px;
+      transition: width 0.5s ease;
+    }
+
+    /* 展开详情 */
+    /* Modal 弹窗 */
+    .modal-overlay {
+      display: none;
+      position: fixed; inset: 0; z-index: 1000;
+      background: rgba(0,0,0,.45);
+      justify-content: center; align-items: center;
+    }
+    .modal-overlay.open {
+      display: flex;
+    }
+    .modal-content {
+      background: #fff;
+      border-radius: 12px;
+      width: min(1100px, 94vw);
+      max-height: 88vh;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0,0,0,.2);
+      padding: 0;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+    }
+    .modal-header {
+      padding: 20px 28px 16px;
+      border-bottom: 1px solid var(--border-light);
+      flex-shrink: 0;
+    }
+    .modal-close {
+      position: absolute; top: 16px; right: 20px;
+      background: none; border: none; font-size: 22px;
+      cursor: pointer; color: var(--text-secondary);
+      line-height: 1; padding: 4px; z-index: 1;
+    }
+    .modal-close:hover { color: var(--text); }
+    .modal-title {
+      font-size: 18px; font-weight: 700;
+      padding-right: 36px;
+      line-height: 1.4;
+    }
+    .modal-columns {
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      flex: 1;
+      overflow: hidden;
+    }
+    .modal-left {
+      padding: 20px 24px;
+      overflow-y: auto;
+      border-right: 1px solid var(--border-light);
+    }
+    .modal-right {
+      padding: 20px 24px;
+      overflow-y: auto;
+    }
+    @media (max-width: 768px) {
+      .modal-columns {
+        grid-template-columns: 1fr;
+      }
+      .modal-left {
+        border-right: none;
+        border-bottom: 1px solid var(--border-light);
+        max-height: 40vh;
+      }
+    }
+    .detail-section {
+      margin-bottom: 18px;
+    }
+    .detail-section h4 {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+    .detail-preview {
+      background: var(--bg-input);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-sm);
+      padding: 20px;
+      font-size: 14px;
+      line-height: 1.8;
+    }
+    .detail-preview img {
+      max-width: 100%;
+      border-radius: var(--radius-sm);
+    }
+    .detail-meta {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 6px 16px;
+      font-size: 13px;
+    }
+    .detail-meta dt {
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+    .detail-meta dd {
+      color: var(--text);
+    }
+    .detail-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border-light);
+    }
+    .detail-actions button {
+      padding: 10px 24px;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--transition);
+    }
+    .detail-actions .btn-confirm {
+      background: var(--success);
+      color: #fff;
+    }
+    .detail-actions .btn-confirm:hover {
+      background: #059669;
+    }
+    .detail-actions .btn-push {
+      background: var(--primary);
+      color: #fff;
+    }
+    .detail-actions .btn-push:hover {
+      background: var(--primary-hover);
+    }
+    .detail-actions .btn-retry {
+      background: var(--warning-soft);
+      color: #92400E;
+      border: 1px solid rgba(245,158,11,.2);
+    }
+    .detail-actions .btn-retry:hover {
+      background: var(--warning);
+      color: #fff;
+    }
+    .detail-actions .btn-delete {
+      background: transparent;
+      color: var(--danger);
+      border: 1px solid var(--danger-soft);
+    }
+    .detail-actions .btn-delete:hover {
+      background: var(--danger-soft);
+    }
+    .detail-actions button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .badge {
+      display: inline-block; padding: 2px 8px; border-radius: 10px;
+      font-size: 11px; font-weight: 600; line-height: 1.4;
+    }
+    .badge.ok { background: #d4edda; color: #155724; }
+    .badge.warn { background: #fff3cd; color: #856404; }
+    .badge.error { background: #f8d7da; color: #721c24; }
+
+    /* 底部高级入口 */
+    .advanced-link {
+      text-align: center;
+      margin-top: 32px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border-light);
+    }
+    .advanced-link a {
+      font-size: 13px;
+      color: var(--text-secondary);
+      text-decoration: none;
+      transition: color var(--transition);
+    }
+    .advanced-link a:hover {
+      color: var(--primary);
+    }
+
+    /* 加载动画 */
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .spinner {
+      display: inline-block;
+      width: 14px; height: 14px;
+      border: 2px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+
+    /* Pipeline 步骤进度条 */
+    .pipeline-steps {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      padding: 12px 0 8px;
+      overflow-x: auto;
+    }
+    .pipeline-step {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      min-width: 48px;
+      position: relative;
+    }
+    .pipeline-step .ps-icon {
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      border: 2px solid var(--border);
+      background: var(--bg-card);
+      color: var(--text-secondary);
+      transition: all 0.3s;
+    }
+    .pipeline-step.done .ps-icon {
+      border-color: #10b981;
+      background: #ecfdf5;
+      color: #10b981;
+    }
+    .pipeline-step.active .ps-icon {
+      border-color: var(--primary);
+      background: #eef2ff;
+      color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+      animation: pulse-step 1.5s ease-in-out infinite;
+    }
+    @keyframes pulse-step {
+      0%, 100% { box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15); }
+      50% { box-shadow: 0 0 0 6px rgba(99, 102, 241, 0.08); }
+    }
+    .pipeline-step .ps-label {
+      font-size: 10px;
+      color: var(--text-secondary);
+      white-space: nowrap;
+      max-width: 56px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      text-align: center;
+    }
+    .pipeline-step.active .ps-label {
+      color: var(--primary);
+      font-weight: 600;
+    }
+    .pipeline-step.done .ps-label {
+      color: #10b981;
+    }
+    .pipeline-connector {
+      flex: 1;
+      height: 2px;
+      min-width: 12px;
+      background: var(--border);
+      margin: 0 2px;
+      margin-bottom: 18px;
+    }
+    .pipeline-connector.done {
+      background: #10b981;
+    }
+  </style>
+</head>
+<body class="admin-app">
+  <script>__ADMIN_SHARED_SCRIPT_HELPERS__</script>
+
+  <main class="admin-main">
+    <div class="flow-container">
+      <!-- 输入区 -->
+      <section class="input-section">
+        <div class="input-bar">
+          <input
+            id="url-input"
+            type="url"
+            placeholder="粘贴微信文章链接..."
+            autocomplete="off"
+          />
+          <button id="submit-btn">开始</button>
+        </div>
+        <div class="input-error" id="input-error"></div>
+      </section>
+
+      <!-- 计数条 -->
+      <div class="count-bar" id="count-bar">
+        <span><span class="dot blue"></span> 处理中 <span class="count" id="cnt-processing">0</span></span>
+        <span><span class="dot orange"></span> 待确认 <span class="count" id="cnt-pending">0</span></span>
+        <span><span class="dot red"></span> 失败 <span class="count" id="cnt-failed">0</span></span>
+        <span><span class="dot green"></span> 已推送 <span class="count" id="cnt-done">0</span></span>
+      </div>
+
+      <!-- 任务列表 -->
+      <div class="task-list" id="task-list">
+        <div class="task-empty">
+          <div class="icon">📋</div>
+          粘贴一个微信文章链接开始
+        </div>
+      </div>
+
+    </div>
+
+      <div class="advanced-link">
+        <a href="/admin/pipeline">🔧 流程配置</a>
+        &nbsp;&nbsp;·&nbsp;&nbsp;
+        <a href="/admin/settings">⚙ 设置</a>
+      </div>
+  </main>
+
+  <!-- Modal 弹窗 -->
+  <div class="modal-overlay" id="modal-overlay">
+    <div class="modal-content">
+      <button class="modal-close" id="modal-close">&times;</button>
+      <div class="modal-header">
+        <div class="modal-title" id="modal-title">加载中...</div>
+      </div>
+      <div class="modal-columns">
+        <div class="modal-left" id="modal-left">加载中...</div>
+        <div class="modal-right" id="modal-right"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const { escapeHtml } = AdminUiShared;
+    // 状态映射
+    const PROCESSING = new Set([
+      "queued", "deduping", "fetching_source", "source_ready",
+      "analyzing_source", "searching_related", "fetching_related",
+      "building_brief", "brief_ready", "generating", "reviewing",
+      "pushing_wechat_draft",
+    ]);
+    const PENDING = new Set(["needs_manual_review", "needs_regenerate", "review_passed", "needs_manual_source"]);
+    const DONE = new Set(["draft_saved"]);
+
+    const statusCategory = (s) => {
+      if (PROCESSING.has(s)) return "processing";
+      if (PENDING.has(s)) return "pending";
+      if (DONE.has(s)) return "done";
+      if (String(s || "").endsWith("_failed")) return "failed";
+      return "processing";
+    };
+
+    // 状态 → 中文标签
+    const STATUS_STEP_LABEL = {
+      queued: "排队中", deduping: "去重检查",
+      fetching_source: "抓取原文", source_ready: "原文就绪",
+      analyzing_source: "深度分析", searching_related: "搜索素材",
+      fetching_related: "抓取素材", building_brief: "生成 Brief",
+      brief_ready: "Brief 就绪", generating: "AI 写稿",
+      reviewing: "AI 审核", review_passed: "审核通过",
+      pushing_wechat_draft: "推送草稿", draft_saved: "已完成",
+    };
+
+    const statusLabel = (s) => {
+      const cat = statusCategory(s);
+      if (cat === "processing") return STATUS_STEP_LABEL[s] || "处理中";
+      if (cat === "pending") {
+        if (s === "review_passed") return "待推送";
+        if (s === "needs_regenerate") return "待重写";
+        return "待确认";
+      }
+      if (cat === "done") return "已推送 ✓";
+      if (cat === "failed") return "失败";
+      return s;
+    };
+
+    // 进度估算（与后端 progress.py 保持一致）
+    const statusProgress = (s) => {
+      const map = {
+        "queued": 5, "deduping": 10,
+        "fetching_source": 20, "source_ready": 30,
+        "analyzing_source": 40, "searching_related": 50,
+        "fetching_related": 60, "building_brief": 70,
+        "brief_ready": 75, "generating": 80,
+        "reviewing": 90, "review_passed": 95,
+        "pushing_wechat_draft": 97, "draft_saved": 100,
+        "needs_manual_review": 90, "needs_regenerate": 70,
+      };
+      return map[s] || 50;
+    };
+
+    // Pipeline 步骤定义（用于进度条可视化）
+    const PIPELINE_STEPS = [
+      { id: "fetch", label: "抓取", icon: "📥", statuses: ["fetching_source", "source_ready"] },
+      { id: "analyze", label: "分析", icon: "🔍", statuses: ["analyzing_source"] },
+      { id: "search", label: "搜索", icon: "🌐", statuses: ["searching_related", "fetching_related"] },
+      { id: "brief", label: "Brief", icon: "📋", statuses: ["building_brief", "brief_ready"] },
+      { id: "write", label: "写稿", icon: "✍️", statuses: ["generating"] },
+      { id: "review", label: "审核", icon: "🔎", statuses: ["reviewing"] },
+      { id: "push", label: "推送", icon: "📤", statuses: ["pushing_wechat_draft", "draft_saved"] },
+    ];
+
+    // 构建步骤进度条 HTML
+    const buildPipelineProgress = (status) => {
+      const cat = statusCategory(status);
+      if (cat !== "processing" && cat !== "pending" && cat !== "done") return "";
+
+      let activeIdx = -1;
+      for (let i = 0; i < PIPELINE_STEPS.length; i++) {
+        if (PIPELINE_STEPS[i].statuses.includes(status)) { activeIdx = i; break; }
+      }
+      // queued / deduping 还没进入第一步
+      if (activeIdx < 0 && (status === "queued" || status === "deduping")) activeIdx = -0.5;
+      // 已完成 / 待推送等终态
+      if (cat === "done" || status === "review_passed") activeIdx = PIPELINE_STEPS.length;
+      if (status === "needs_manual_review" || status === "needs_regenerate") activeIdx = 5; // 停在审核
+
+      let html = '<div class="pipeline-steps">';
+      PIPELINE_STEPS.forEach((step, i) => {
+        if (i > 0) {
+          const connDone = i <= activeIdx;
+          html += `<div class="pipeline-connector${connDone ? ' done' : ''}"></div>`;
+        }
+        let cls = '';
+        if (i < activeIdx) cls = 'done';
+        else if (i === activeIdx) cls = 'active';
+        const iconContent = cls === 'done' ? '✓' : step.icon;
+        html += `<div class="pipeline-step ${cls}">`;
+        html += `<div class="ps-icon">${iconContent}</div>`;
+        html += `<div class="ps-label">${step.label}</div>`;
+        html += '</div>';
+      });
+      html += '</div>';
+      return html;
+    };
+
+    // DOM 元素
+    const urlInput = document.getElementById("url-input");
+    const submitBtn = document.getElementById("submit-btn");
+    const inputError = document.getElementById("input-error");
+    const taskList = document.getElementById("task-list");
+    const cntProcessing = document.getElementById("cnt-processing");
+    const cntPending = document.getElementById("cnt-pending");
+    const cntFailed = document.getElementById("cnt-failed");
+    const cntDone = document.getElementById("cnt-done");
+
+    let allTasks = [];
+
+    // DOM
+    const modalOverlay = document.getElementById("modal-overlay");
+    const modalTitle = document.getElementById("modal-title");
+    const modalLeft = document.getElementById("modal-left");
+    const modalRight = document.getElementById("modal-right");
+    const modalClose = document.getElementById("modal-close");
+
+    // Modal 控制
+    const openModal = (title) => {
+      modalTitle.textContent = title || "任务详情";
+      modalLeft.innerHTML = '<div style="color:var(--text-secondary);padding:8px 0">加载中...</div>';
+      modalRight.innerHTML = '';
+      modalOverlay.classList.add("open");
+      document.body.style.overflow = "hidden";
+    };
+    const closeModal = () => {
+      modalOverlay.classList.remove("open");
+      document.body.style.overflow = "";
+    };
+    modalClose.addEventListener("click", closeModal);
+    modalOverlay.addEventListener("click", (e) => {
+      if (e.target === modalOverlay) closeModal();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closeModal();
+    });
+
+    // API 请求
+    const api = async (method, path, body) => {
+      const opts = {
+        method,
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+      };
+      if (body) opts.body = JSON.stringify(body);
+      const res = await fetch(path, opts);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(err.detail || res.statusText);
+      }
+      return res.json();
+    };
+
+    // 显示错误
+    const showError = (msg) => {
+      inputError.textContent = msg;
+      inputError.style.display = "block";
+      setTimeout(() => { inputError.style.display = "none"; }, 5000);
+    };
+
+    // 提交链接
+    const submitUrl = async () => {
+      const url = urlInput.value.trim();
+      if (!url) return;
+      submitBtn.disabled = true;
+      submitBtn.textContent = "提交中...";
+      inputError.style.display = "none";
+      try {
+        await api("POST", "/admin/api/ingest", { url });
+        urlInput.value = "";
+        await refreshTasks();
+      } catch (e) {
+        showError(e.message || "提交失败");
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "开始";
+      }
+    };
+
+    submitBtn.addEventListener("click", submitUrl);
+    urlInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") submitUrl();
+    });
+
+    // 刷新任务列表
+    const refreshTasks = async () => {
+      try {
+        const data = await api("GET", "/admin/api/home-snapshot?limit=30");
+        allTasks = data.tasks || [];
+        renderTasks();
+      } catch (e) {
+        console.error("刷新失败:", e);
+      }
+    };
+
+    // 渲染任务列表
+    const renderTasks = () => {
+      // 计数
+      let pCnt = 0, nCnt = 0, fCnt = 0, dCnt = 0;
+      allTasks.forEach((t) => {
+        const cat = statusCategory(t.status);
+        if (cat === "processing") pCnt++;
+        else if (cat === "pending") nCnt++;
+        else if (cat === "failed") fCnt++;
+        else if (cat === "done") dCnt++;
+      });
+      cntProcessing.textContent = pCnt;
+      cntPending.textContent = nCnt;
+      cntFailed.textContent = fCnt;
+      cntDone.textContent = dCnt;
+
+      if (!allTasks.length) {
+        taskList.innerHTML = `
+          <div class="task-empty">
+            <div class="icon">📋</div>
+            粘贴一个微信文章链接开始
+          </div>`;
+        return;
+      }
+
+      // 排序：待确认 → 处理中 → 失败 → 已推送
+      const order = { pending: 0, processing: 1, failed: 2, done: 3 };
+      const sorted = [...allTasks].sort((a, b) => {
+        const oa = order[statusCategory(a.status)] ?? 1;
+        const ob = order[statusCategory(b.status)] ?? 1;
+        if (oa !== ob) return oa - ob;
+        return new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at);
+      });
+
+      taskList.innerHTML = sorted.map((t) => {
+        const cat = statusCategory(t.status);
+        const label = statusLabel(t.status);
+        const progress = statusProgress(t.status);
+        const title = t.title || t.source_url || t.task_id.slice(0, 12);
+        const cardClass = `task-card ${cat === "done" ? "done-card" : ""}`;
+
+        // 进度条（仅处理中）
+        let progressBar = "";
+        if (cat === "processing") {
+          progressBar = `<div class="task-progress"><div class="task-progress-bar" style="width:${progress}%"></div></div>`;
+        }
+
+        return `
+          <div class="${cardClass}" data-task-id="${t.task_id}" style="cursor:pointer;">
+            <div class="task-card-header">
+              <div class="task-card-info">
+                <div class="task-status-dot ${cat}"></div>
+                <div class="task-title">${escapeHtml(title)}</div>
+              </div>
+              <span class="task-status-label ${cat}">${label}</span>
+            </div>
+            ${progressBar}
+          </div>`;
+      }).join("");
+    };
+
+    // 格式化评分（兼容 0-1 和 0-100 两种格式）
+    const fmtScore = (v) => {
+      if (v == null) return null;
+      const n = v <= 1 ? v * 100 : v;
+      return n.toFixed(0) + "%";
+    };
+
+    // 加载任务详情到 Modal
+    const loadTaskDetail = async (taskId) => {
+      try {
+        const data = await api("GET", `/admin/api/home-snapshot?limit=1&selected_task_id=${taskId}`);
+        const ws = data.workspace;
+        if (!ws) {
+          modalLeft.innerHTML = '<div style="color:var(--text-secondary)">无详情数据</div>';
+          modalRight.innerHTML = '';
+          return;
+        }
+
+        const cat = statusCategory(ws.status);
+        const gens = ws.generations || [];
+        const gen = gens[0];
+        const review = gen?.review;
+        const srcArt = ws.source_article;
+
+        // 标题
+        modalTitle.textContent = ws.title || srcArt?.title || ws.source_url || "任务详情";
+
+        // 计算耗时
+        const elapsed = (() => {
+          if (!ws.created_at) return null;
+          const ms = new Date(ws.updated_at || Date.now()) - new Date(ws.created_at);
+          const mins = Math.floor(ms / 60000);
+          if (mins < 1) return "不到 1 分钟";
+          if (mins < 60) return `${mins} 分钟`;
+          const hrs = Math.floor(mins / 60);
+          return `${hrs} 小时 ${mins % 60} 分`;
+        })();
+
+        // 元信息
+        const meta = [];
+        if (srcArt?.title && srcArt.title !== ws.title) meta.push(["原文标题", escapeHtml(srcArt.title)]);
+        if (ws.source_url) meta.push(["来源", `<a href="${escapeHtml(ws.source_url)}" target="_blank" style="color:var(--primary);word-break:break-all;">${escapeHtml(ws.source_url.substring(0, 80))}</a>`]);
+        meta.push(["状态", `<span class="badge ${cat === "done" ? "ok" : cat === "failed" ? "error" : "warn"}">${statusLabel(ws.status)}</span>`]);
+        if (gen) meta.push(["版本", `第 ${gen.version_no} 版`]);
+        if (elapsed) meta.push(["耗时", elapsed]);
+        if (ws.created_at) meta.push(["创建", escapeHtml(new Date(ws.created_at).toLocaleString("zh-CN"))]);
+        if (ws.error) meta.push(["错误", `<span style="color:var(--danger)">${escapeHtml(ws.error)}</span>`]);
+
+        // Pipeline 步骤进度条
+        const pipelineHtml = buildPipelineProgress(ws.status);
+
+        let metaHtml = `
+          <div class="detail-section">
+            <h4>基本信息</h4>
+            <dl class="detail-meta">
+              ${meta.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}
+            </dl>
+            ${pipelineHtml}
+          </div>`;
+
+        // AI 审核意见
+        let reviewHtml = "";
+        if (review) {
+          const verdict = review.final_decision || "—";
+          const verdictClass = verdict === "pass" ? "ok" : (verdict === "fail" ? "error" : "warn");
+          const verdictLabel = verdict === "pass" ? "通过" : (verdict === "fail" ? "未通过" : verdict);
+          const items = [];
+          if (review.similarity_score != null) items.push(`相似度 ${fmtScore(review.similarity_score)}`);
+          if (review.readability_score != null) items.push(`可读性 ${fmtScore(review.readability_score)}`);
+          if (review.ai_trace_score != null) items.push(`AI 痕迹 ${fmtScore(review.ai_trace_score)}`);
+          if (review.factual_risk_score != null) items.push(`事实风险 ${fmtScore(review.factual_risk_score)}`);
+          const summaryText = review.voice_summary || (review.suggestions ? JSON.stringify(review.suggestions).slice(0, 200) : "");
+          reviewHtml = `
+            <div class="detail-section">
+              <h4>AI 审核 <span class="badge ${verdictClass}" style="margin-left:6px;vertical-align:middle;">${verdictLabel}</span></h4>
+              ${items.length ? `<div style="font-size:13px;color:var(--text-secondary);margin-bottom:6px;">${items.join(" · ")}</div>` : ""}
+              ${summaryText ? `<div style="font-size:13px;color:var(--text-secondary);line-height:1.6;">${escapeHtml(summaryText.slice(0, 300))}</div>` : ""}
+            </div>`;
+        }
+
+        // 文章预览
+        let previewHtml = "";
+        if (gen?.html_content) {
+          previewHtml = `
+            <div class="detail-section">
+              <h4>文章预览</h4>
+              <div class="detail-preview">${gen.html_content}</div>
+            </div>`;
+        }
+
+        // 微信草稿链接
+        let draftHtml = "";
+        if (ws.wechat_draft_url) {
+          draftHtml = `
+            <div class="detail-section">
+              <h4>微信草稿</h4>
+              <a href="${escapeHtml(ws.wechat_draft_url)}" target="_blank" style="color:var(--primary);font-size:13px;">${ws.wechat_draft_url_hint || "查看草稿 →"}</a>
+            </div>`;
+        }
+
+        // 操作按钮
+        let actionsHtml = "";
+        if (cat === "pending") {
+          if (ws.status === "review_passed") {
+            actionsHtml = `<div class="detail-actions">
+              <button class="btn-push" data-action="push" data-id="${ws.task_id}">推送到草稿箱</button>
+              <button class="btn-delete" data-action="delete" data-id="${ws.task_id}">删除</button>
+            </div>`;
+          } else {
+            actionsHtml = `<div class="detail-actions">
+              <button class="btn-confirm" data-action="approve" data-id="${ws.task_id}">确认通过</button>
+              <button class="btn-retry" data-action="retry" data-id="${ws.task_id}">重新生成</button>
+              <button class="btn-delete" data-action="delete" data-id="${ws.task_id}">删除</button>
+            </div>`;
+          }
+        } else if (cat === "failed") {
+          actionsHtml = `<div class="detail-actions">
+            <button class="btn-retry" data-action="retry" data-id="${ws.task_id}">重试</button>
+            <button class="btn-delete" data-action="delete" data-id="${ws.task_id}">删除</button>
+          </div>`;
+        } else if (cat === "done") {
+          actionsHtml = `<div class="detail-actions">
+            <button class="btn-delete" data-action="delete" data-id="${ws.task_id}">删除</button>
+          </div>`;
+        }
+
+        modalLeft.innerHTML = metaHtml + reviewHtml + draftHtml + actionsHtml;
+        modalRight.innerHTML = previewHtml || '<div style="color:var(--text-secondary);padding:20px;text-align:center">暂无预览内容</div>';
+
+      } catch (e) {
+        modalLeft.innerHTML = `<div style="color:var(--danger)">${escapeHtml(e.message)}</div>`;
+        modalRight.innerHTML = '';
+      }
+    };
+
+    // 处理操作按钮（卡片和弹窗中通用）
+    const handleAction = async (actionBtn) => {
+      const action = actionBtn.dataset.action;
+      const id = actionBtn.dataset.id;
+      actionBtn.disabled = true;
+      const origText = actionBtn.textContent;
+      actionBtn.textContent = "处理中...";
+      try {
+        if (action === "approve") {
+          await api("POST", `/admin/api/tasks/${id}/approve`, { device_id: "admin-web" });
+        } else if (action === "push") {
+          await api("POST", `/admin/api/tasks/${id}/push-draft`, { device_id: "admin-web" });
+        } else if (action === "retry") {
+          await api("POST", `/admin/api/tasks/${id}/retry`);
+        } else if (action === "delete") {
+          if (!confirm("确定要删除这个任务吗？")) {
+            actionBtn.disabled = false;
+            actionBtn.textContent = origText;
+            return;
+          }
+          await api("DELETE", `/admin/api/tasks/${id}`);
+        }
+        closeModal();
+        await refreshTasks();
+      } catch (err) {
+        showError(err.message || "操作失败");
+        actionBtn.disabled = false;
+        actionBtn.textContent = origText;
+      }
+    };
+
+    // 事件代理 - 任务列表
+    taskList.addEventListener("click", (e) => {
+      const actionBtn = e.target.closest("[data-action]");
+      if (actionBtn) { e.stopPropagation(); handleAction(actionBtn); return; }
+
+      const card = e.target.closest(".task-card");
+      if (!card) return;
+      const id = card.dataset.taskId;
+      const t = allTasks.find(x => x.task_id === id);
+      openModal(t?.title || t?.source_url || "任务详情");
+      loadTaskDetail(id);
+    });
+
+    // 事件代理 - Modal 内操作按钮
+    modalLeft.addEventListener("click", (e) => {
+      const actionBtn = e.target.closest("[data-action]");
+      if (actionBtn) handleAction(actionBtn);
+    });
+
+    // 自动刷新
+    let refreshTimer = null;
+    const startAutoRefresh = () => {
+      refreshTimer = setInterval(refreshTasks, 8000);
+    };
+    const stopAutoRefresh = () => {
+      if (refreshTimer) clearInterval(refreshTimer);
+    };
+
+    // 页面可见性控制
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) {
+        stopAutoRefresh();
+      } else {
+        refreshTasks();
+        startAutoRefresh();
+      }
+    });
+
+    // 初始化
+    refreshTasks();
+    startAutoRefresh();
+  </script>
+</body>
+</html>
+{% endraw %}

@@ -55,5 +55,16 @@ class WechatLayoutServiceTests(unittest.TestCase):
         self.assertNotIn("```", result.html)
 
 
+    def test_paragraph_left_aligned_and_body_font_size_16px(self) -> None:
+        """Spec D: 正文统一左对齐(禁两端对齐); 正文字号 16px."""
+        result = self.service.render_markdown("第一段正文内容。\n\n第二段正文内容。")
+        # The wrapper section must carry font-size:16px
+        self.assertIn("font-size:16px;", result.html)
+        # No paragraph should carry justify alignment
+        self.assertNotIn("text-align:justify", result.html)
+        # Paragraphs must be rendered
+        self.assertIn("<p ", result.html)
+
+
 if __name__ == "__main__":
     unittest.main()

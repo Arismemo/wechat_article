@@ -22,6 +22,7 @@ from app.models.source_article import SourceArticle
 from app.models.style_asset import StyleAsset
 from app.models.system_setting import SystemSetting
 from app.models.task import Task
+from app.services.llm_service import LLMProviderHTTPError, LLMSchemaError, LLMServiceError
 from app.services.phase4_pipeline_service import Phase4PipelineService
 from app.services.wechat_draft_publish_service import WechatDraftPublishResult
 from app.settings import get_settings
@@ -133,6 +134,13 @@ class Phase4PipelineServiceTests(unittest.TestCase):
         self.assertIn("先给反直觉结论，再拆误区", service.llm.complete_json.call_args_list[0].kwargs["user_prompt"])
         self.assertIn("只允许使用以下 Markdown 子集", service.llm.complete_json.call_args_list[0].kwargs["user_prompt"])
         self.assertIn("避免整篇都用“首先/其次/最后/总之", service.llm.complete_json.call_args_list[0].kwargs["user_prompt"])
+        write_prompt = service.llm.complete_json.call_args_list[0].kwargs["user_prompt"]
+        self.assertIn("先在心里产出 5 个标题候选", write_prompt)
+        self.assertIn("前 50 字内必须出现【悬念/数据/故事】", write_prompt)
+        self.assertIn("主动语态 ≥60%", write_prompt)
+        review_prompt = service.llm.complete_json.call_args_list[1].kwargs["user_prompt"]
+        self.assertIn("句长方差过小", review_prompt)
+        self.assertIn("反标题党校验", review_prompt)
         self.assertEqual(service.llm.complete_json.call_args_list[0].kwargs["timeout_seconds"], 180)
         self.assertEqual(service.llm.complete_json.call_args_list[1].kwargs["timeout_seconds"], 90)
         session.close()
@@ -523,6 +531,395 @@ class Phase4PipelineServiceTests(unittest.TestCase):
         self.assertIsNotNone(generation)
         self.assertEqual(generation.status, "accepted")
         session.close()
+
+    def test_draft_saved_task_skips_generation_and_returns_existing(self) -> None:
+        """DRAFT_SAVED task: run() must not create a new Generation or call the LLM."""
+        session = self.Session()
+        task = self._seed_phase4_ready_task(session, "tsk_phase4_idempotent")
+        # Put task directly into DRAFT_SAVED with an existing accepted generation + review
+        task.status = TaskStatus.DRAFT_SAVED.value
+        existing_gen = Generation(
+            task_id=task.id,
+            version_no=1,
+            model_name="glm-5",
+            title="已保存草稿标题",
+            digest="已保存摘要",
+            html_content="<section><h1>已保存草稿标题</h1></section>",
+            markdown_content="# 已保存草稿标题\n\n已生成内容。",
+            status="accepted",
+        )
+        session.add(existing_gen)
+        session.flush()
+        from app.models.review_report import ReviewReport as RR
+        existing_review = RR(
+            generation_id=existing_gen.id,
+            similarity_score=0.20,
+            factual_risk_score=0.15,
+            policy_risk_score=0.05,
+            readability_score=85.0,
+            title_score=83.0,
+            novelty_score=82.0,
+            final_decision="pass",
+            issues={"items": ["通过。"]},
+            suggestions={"items": ["无需调整。"]},
+        )
+        session.add(existing_review)
+        session.commit()
+
+        service = Phase4PipelineService(session)
+        service.llm = MagicMock()
+
+        result = service.run(task.id)
+
+        # LLM must NOT be called
+        service.llm.complete_json.assert_not_called()
+        # No new Generation row should be created
+        all_gens = list(session.scalars(select(Generation).where(Generation.task_id == task.id)))
+        self.assertEqual(len(all_gens), 1, "Expected no new Generation row to be created")
+        # Result must point at the existing generation
+        self.assertEqual(result.generation_id, existing_gen.id)
+        self.assertEqual(result.task_id, task.id)
+        session.close()
+
+    def test_draft_saved_fallthrough_when_no_accepted_generation(self) -> None:
+        """DRAFT_SAVED task with no accepted generation falls through to normal path (no crash)."""
+        session = self.Session()
+        task = self._seed_phase4_ready_task(session, "tsk_phase4_idempotent_fallthrough")
+        task.status = TaskStatus.DRAFT_SAVED.value
+        # No Generation rows at all — unexpected state, but must not crash
+        session.commit()
+
+        service = Phase4PipelineService(session)
+        service.llm = MagicMock()
+        service.llm.complete_json.side_effect = [
+            {
+                "title": "降级路径测试",
+                "subtitle": "副标题",
+                "digest": "摘要",
+                "markdown_content": (
+                    "# 降级路径测试\n\n"
+                    "## 一\n内容一。\n\n"
+                    "## 二\n内容二。\n\n"
+                    "## 三\n内容三。\n"
+                ),
+            },
+            {
+                "final_decision": "pass",
+                "similarity_score": 0.20,
+                "factual_risk_score": 0.15,
+                "policy_risk_score": 0.05,
+                "readability_score": 85.0,
+                "title_score": 83.0,
+                "novelty_score": 82.0,
+                "issues": ["通过。"],
+                "suggestions": ["无需调整。"],
+            },
+        ]
+        # Should fall through to the normal path and call the LLM
+        result = service.run(task.id)
+        service.llm.complete_json.assert_called()
+        self.assertIsNotNone(result.generation_id)
+        session.close()
+
+    def test_retriable_llm_parse_error_during_generation_propagates(self) -> None:
+        """A bare LLMServiceError (parse failure) during generation must NOT fall
+        back to the template — it propagates so the worker retry layer re-samples."""
+        session = self.Session()
+        task = self._seed_phase4_ready_task(session, "tsk_phase4_parse_error")
+        self._set_ai_trace_rewrite_threshold(session, 70.0)
+
+        service = Phase4PipelineService(session)
+        service.llm = MagicMock()
+        service.llm.complete_json.side_effect = LLMServiceError(
+            "Failed to parse JSON from LLM response: <garbage>"
+        )
+
+        with self.assertRaises(LLMServiceError):
+            service.run(task.id)
+
+        # No fallback-template Generation may have been shipped.
+        generations = list(session.scalars(select(Generation).where(Generation.task_id == task.id)))
+        self.assertEqual(generations, [])
+        refreshed_task = session.get(Task, task.id)
+        self.assertEqual(refreshed_task.status, TaskStatus.GENERATE_FAILED.value)
+        self.assertEqual(refreshed_task.error_code, "phase4_generate_failed")
+        session.close()
+
+    def test_retriable_http_5xx_during_generation_propagates(self) -> None:
+        """A transient provider HTTP 503 during generation must propagate, not fall back."""
+        session = self.Session()
+        task = self._seed_phase4_ready_task(session, "tsk_phase4_http_5xx")
+        self._set_ai_trace_rewrite_threshold(session, 70.0)
+
+        service = Phase4PipelineService(session)
+        service.llm = MagicMock()
+        service.llm.complete_json.side_effect = LLMProviderHTTPError(
+            url="https://llm.example/chat/completions",
+            status_code=503,
+            response_text="service unavailable",
+        )
+
+        with self.assertRaises(LLMProviderHTTPError):
+            service.run(task.id)
+
+        generations = list(session.scalars(select(Generation).where(Generation.task_id == task.id)))
+        self.assertEqual(generations, [])
+        refreshed_task = session.get(Task, task.id)
+        self.assertEqual(refreshed_task.status, TaskStatus.GENERATE_FAILED.value)
+        session.close()
+
+    def test_missing_markdown_content_payload_raises_schema_error(self) -> None:
+        """A JSON payload lacking markdown_content is a retriable schema violation."""
+        session = self.Session()
+        task = self._seed_phase4_ready_task(session, "tsk_phase4_missing_md")
+        self._set_ai_trace_rewrite_threshold(session, 70.0)
+
+        service = Phase4PipelineService(session)
+        service.llm = MagicMock()
+        # Valid JSON, but markdown_content is absent — re-sampling could fix it.
+        service.llm.complete_json.return_value = {
+            "title": "缺少正文的稿件",
+            "subtitle": "副标题",
+            "digest": "摘要",
+        }
+
+        with self.assertRaises(LLMSchemaError):
+            service.run(task.id)
+
+        generations = list(session.scalars(select(Generation).where(Generation.task_id == task.id)))
+        self.assertEqual(generations, [])
+        refreshed_task = session.get(Task, task.id)
+        self.assertEqual(refreshed_task.status, TaskStatus.GENERATE_FAILED.value)
+        session.close()
+
+    def test_non_retriable_error_during_generation_still_falls_back_to_template(self) -> None:
+        """A genuinely non-retriable error (plain ValueError from non-LLM code)
+        preserves the graceful template fallback for the generation payload."""
+        session = self.Session()
+        task = self._seed_phase4_ready_task(session, "tsk_phase4_nonretriable_fallback")
+        self._set_ai_trace_rewrite_threshold(session, 70.0)
+
+        service = Phase4PipelineService(session)
+        service.llm = MagicMock()
+        # First call (generation) raises a non-retriable error -> template fallback.
+        # Second call (review) succeeds so the pipeline can complete.
+        service.llm.complete_json.side_effect = [
+            ValueError("non-llm bug in payload assembly"),
+            {
+                "final_decision": "pass",
+                "similarity_score": 0.20,
+                "factual_risk_score": 0.15,
+                "policy_risk_score": 0.05,
+                "readability_score": 86,
+                "title_score": 84,
+                "novelty_score": 82,
+                "issues": ["通过。"],
+                "suggestions": ["可以进入下一阶段。"],
+            },
+        ]
+
+        result = service.run(task.id)
+
+        generation = session.get(Generation, result.generation_id)
+        self.assertIsNotNone(generation)
+        self.assertEqual(generation.model_name, "phase4-fallback-template")
+        session.close()
+
+    def test_retriable_llm_error_during_humanize_is_swallowed_pipeline_continues(self) -> None:
+        """A retriable LLM error (LLMServiceError) during the humanize step must NOT
+        fail or raise from run(). The already-reviewed generation is kept and the
+        pipeline proceeds to a normal terminal decision without humanize polish.
+
+        Flow: generate(1) → review(2, ai_trace_score=88 triggers humanize) →
+        humanize(3, raises LLMServiceError — swallowed, returns None) →
+        decision flips to 'revise' → auto_revise_once → generate(4) + review(5).
+        """
+        session = self.Session()
+        task = self._seed_phase4_ready_task(session, "tsk_phase4_humanize_swallow")
+        self._set_ai_trace_rewrite_threshold(session, 70.0)
+
+        service = Phase4PipelineService(session)
+        service.llm = MagicMock()
+        # Call 1: generate — high-ai-trace article so humanize is triggered by call 2 review.
+        # Call 2: review — ai_trace_score > threshold + rewrite_targets => humanize triggered.
+        # Call 3: humanize — raises a retriable LLMServiceError; must be swallowed.
+        #   → decision "pass" flips to "revise" (humanize returned None) → auto_revise.
+        # Call 4: revised generate — succeeds.
+        # Call 5: revised review — passes.
+        service.llm.complete_json.side_effect = [
+            {
+                "title": "humanize 降级测试标题",
+                "subtitle": "副标题",
+                "digest": "摘要",
+                "markdown_content": (
+                    "# humanize 降级测试标题\n\n"
+                    "## 先把现象摆出来\n\n"
+                    "首先，我们可以看到很多团队都在接入自动化，但协作边界依然很模糊。\n\n"
+                    "## 再看真正的卡点\n\n"
+                    "团队真正卡住的，是流程断点一出现，就没人知道该由谁接手。\n\n"
+                    "## 最后说结论\n\n"
+                    "总之，真正要补的是协作接口，而不是再加一个模型。\n"
+                ),
+            },
+            {
+                "final_decision": "pass",
+                "similarity_score": 0.18,
+                "factual_risk_score": 0.18,
+                "policy_risk_score": 0.04,
+                "readability_score": 84,
+                "title_score": 82,
+                "novelty_score": 83,
+                "ai_trace_score": 88,
+                "ai_trace_patterns": ["承接词偏模板化"],
+                "rewrite_targets": [{"block_id": "b3", "reason": "模板腔", "instruction": "改写"}],
+                "voice_summary": "需要润色",
+                "issues": ["先做定点润色。"],
+                "suggestions": ["先做定点润色。"],
+            },
+            # Call 3: humanize LLM call raises a retriable error — must be swallowed.
+            LLMServiceError("Failed to parse JSON from LLM response: <timeout garbage>"),
+            # Call 4+5: auto_revise_once generate + review (triggered because decision → "revise")
+            {
+                "title": "humanize 降级后修订稿",
+                "subtitle": "修订副标题",
+                "digest": "修订摘要",
+                "markdown_content": (
+                    "# humanize 降级后修订稿\n\n"
+                    "## 重新拆解\n"
+                    "接入自动化不代表解决了协作问题。\n\n"
+                    "## 看真正卡点\n"
+                    "协作边界模糊才是核心障碍。\n\n"
+                    "## 判断框架\n"
+                    "- 先补接口\n"
+                    "- 再看模型\n"
+                ),
+            },
+            {
+                "final_decision": "pass",
+                "similarity_score": 0.20,
+                "factual_risk_score": 0.15,
+                "policy_risk_score": 0.04,
+                "readability_score": 87,
+                "title_score": 84,
+                "novelty_score": 85,
+                "issues": ["修订通过。"],
+                "suggestions": ["可以进入下一阶段。"],
+            },
+        ]
+
+        # Must NOT raise — humanize failure is best-effort and gets swallowed.
+        service.run(task.id)
+
+        # Task should not be in REVIEW_FAILED due to humanize — pipeline completes normally.
+        refreshed_task = session.get(Task, task.id)
+        self.assertNotEqual(refreshed_task.status, TaskStatus.REVIEW_FAILED.value)
+        self.assertNotEqual(refreshed_task.error_code, "phase4_humanize_failed")
+        # The pipeline must have produced at least one generation (did not abort).
+        generations = list(session.scalars(select(Generation).where(Generation.task_id == task.id)))
+        self.assertGreater(len(generations), 0, "Expected at least one generation to exist")
+        # All 5 LLM calls were made (3rd raised and was swallowed, 4th+5th are auto-revise).
+        self.assertEqual(service.llm.complete_json.call_count, 5)
+        session.close()
+
+    # ── Similarity hard-gate characterization tests ────────────────────────
+
+    def test_high_similarity_blocks_auto_push_routes_to_manual_review(self) -> None:
+        """When similarity_score exceeds phase4_similarity_max the pipeline must NOT
+        auto-push to WeChat and must route the task to NEEDS_MANUAL_REVIEW."""
+        session = self.Session()
+        task = self._seed_phase4_ready_task(session, "tsk_phase4_sim_high")
+        # Enable auto-push + env flag so the only thing blocking push is similarity.
+        session.add(SystemSetting(key="phase4.auto_push_wechat_draft", value=True))
+        # similarity_max defaults to 0.45; set explicitly for clarity.
+        session.add(SystemSetting(key="phase4.similarity_max", value=0.45))
+        self._set_ai_trace_rewrite_threshold(session, 70.0)
+
+        with patch.dict(os.environ, {"WECHAT_ENABLE_DRAFT_PUSH": "true"}, clear=False):
+            get_settings.cache_clear()
+            service = Phase4PipelineService(session)
+            service.llm = MagicMock()
+            # High similarity (0.9) but otherwise-passing scores and final_decision="pass".
+            service.llm.complete_json.side_effect = [
+                {
+                    "title": "高相似度测试标题",
+                    "subtitle": "副标题",
+                    "digest": "摘要",
+                    "markdown_content": (
+                        "# 高相似度测试标题\n\n"
+                        "## 背景\n近义词替换版内容。\n\n"
+                        "## 分析\n语序调整后的段落。\n\n"
+                        "## 结论\n段落顺序微调的收尾。\n"
+                    ),
+                },
+                {
+                    "final_decision": "pass",
+                    "similarity_score": 0.90,  # ABOVE phase4_similarity_max=0.45
+                    "factual_risk_score": 0.10,
+                    "policy_risk_score": 0.05,
+                    "readability_score": 85,
+                    "title_score": 83,
+                    "novelty_score": 40,
+                    "issues": ["与原文高度相似，涉嫌洗稿。"],
+                    "suggestions": ["需要实质性重构信息架构。"],
+                },
+            ]
+            service.wechat_publisher = MagicMock()
+
+            result = service.run(task.id)
+
+            # Must NOT auto-push to WeChat.
+            service.wechat_publisher.push_generation.assert_not_called()
+            # Must route to manual review.
+            self.assertEqual(result.status, TaskStatus.NEEDS_MANUAL_REVIEW.value)
+            refreshed_task = session.get(Task, task.id)
+            self.assertEqual(refreshed_task.status, TaskStatus.NEEDS_MANUAL_REVIEW.value)
+            get_settings.cache_clear()
+        session.close()
+
+    def test_low_similarity_with_passing_scores_reaches_review_passed(self) -> None:
+        """When similarity_score is well below phase4_similarity_max and other scores pass,
+        the pipeline reaches REVIEW_PASSED (auto-push path accessible)."""
+        session = self.Session()
+        task = self._seed_phase4_ready_task(session, "tsk_phase4_sim_low")
+        session.add(SystemSetting(key="phase4.similarity_max", value=0.45))
+        self._set_ai_trace_rewrite_threshold(session, 70.0)
+
+        service = Phase4PipelineService(session)
+        service.llm = MagicMock()
+        service.llm.complete_json.side_effect = [
+            {
+                "title": "低相似度测试标题",
+                "subtitle": "副标题",
+                "digest": "摘要",
+                "markdown_content": (
+                    "# 低相似度测试标题\n\n"
+                    "## 新视角切入\n完全不同的信息架构。\n\n"
+                    "## 实质性增量分析\n原文未覆盖的判断框架。\n\n"
+                    "## 读者收益\n具体可操作的结论。\n"
+                ),
+            },
+            {
+                "final_decision": "pass",
+                "similarity_score": 0.15,  # BELOW phase4_similarity_max=0.45
+                "factual_risk_score": 0.12,
+                "policy_risk_score": 0.05,
+                "readability_score": 87,
+                "title_score": 85,
+                "novelty_score": 84,
+                "issues": ["通过。"],
+                "suggestions": ["可以进入下一阶段。"],
+            },
+        ]
+
+        result = service.run(task.id)
+
+        # Must reach REVIEW_PASSED (the gate to auto-push).
+        self.assertEqual(result.status, TaskStatus.REVIEW_PASSED.value)
+        refreshed_task = session.get(Task, task.id)
+        self.assertEqual(refreshed_task.status, TaskStatus.REVIEW_PASSED.value)
+        session.close()
+
+    # ── end similarity hard-gate tests ─────────────────────────────────────
 
     def _seed_phase4_ready_task(self, session, task_code: str) -> Task:
         task = Task(

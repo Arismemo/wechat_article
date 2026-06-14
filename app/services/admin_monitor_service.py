@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.enums import ACTIVE_TASK_STATUSES, FINAL_FAILURE_STATUSES, TaskStatus
 from app.db.redis_client import get_redis_client
+from app.repositories.publication_metric_repository import PublicationMetricRepository
 from app.repositories.task_repository import TaskRepository
 from app.schemas.admin_monitor import (
     AdminMonitorAlertResponse,
@@ -18,7 +19,7 @@ from app.schemas.admin_monitor import (
     AdminMonitorTrendPointResponse,
     QueueWorkerStatusResponse,
 )
-from app.schemas.tasks import TaskSummaryResponse, TaskWorkspaceResponse
+from app.schemas.tasks import PublicationMetricSummary, TaskSummaryResponse, TaskWorkspaceResponse
 from app.services.feedback_queue_service import FeedbackQueueService
 from app.services.phase2_queue_service import Phase2QueueService
 from app.services.phase3_queue_service import Phase3QueueService
@@ -51,6 +52,7 @@ class AdminMonitorService:
         self.tasks = TaskRepository(session)
         self.task_service = TaskService(session)
         self.workspace_query = TaskWorkspaceQueryService(session)
+        self.publication_metrics = PublicationMetricRepository(session)
 
     def build_snapshot(self, filters: AdminMonitorFilters) -> AdminMonitorSnapshotResponse:
         task_rows = self.task_service.list_recent(
@@ -61,7 +63,13 @@ class AdminMonitorService:
             query=filters.query,
             created_after=filters.created_after,
         )
-        task_summaries = [self._build_task_summary_response(item) for item in task_rows]
+        # Batch-fetch latest metrics for the page in a single query to avoid N+1.
+        task_ids = [item.task_id for item in task_rows]
+        metrics_by_task = self.publication_metrics.list_latest_by_task_ids(task_ids)
+        task_summaries = [
+            self._build_task_summary_response(item, metrics_by_task.get(item.task_id))
+            for item in task_rows
+        ]
         summary = self._build_summary(filters, task_summaries)
         operations = self._build_operations()
         workspace = None
@@ -149,7 +157,16 @@ class AdminMonitorService:
             generated_at=datetime.now(timezone.utc),
         )
 
-    def _build_task_summary_response(self, item) -> TaskSummaryResponse:
+    def _build_task_summary_response(self, item, metric=None) -> TaskSummaryResponse:
+        latest_metrics: Optional[PublicationMetricSummary] = None
+        if metric is not None:
+            latest_metrics = PublicationMetricSummary(
+                read_count=metric.read_count,
+                like_count=metric.like_count,
+                share_count=metric.share_count,
+                day_offset=metric.day_offset,
+                snapshot_at=metric.snapshot_at,
+            )
         return TaskSummaryResponse(
             task_id=item.task_id,
             task_code=item.task_code,
@@ -168,6 +185,7 @@ class AdminMonitorService:
             error=item.error,
             created_at=item.created_at,
             updated_at=item.updated_at,
+            latest_metrics=latest_metrics,
         )
 
     def _build_operations(self) -> AdminMonitorOperationsResponse:
