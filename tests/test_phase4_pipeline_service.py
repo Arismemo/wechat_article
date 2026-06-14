@@ -134,6 +134,13 @@ class Phase4PipelineServiceTests(unittest.TestCase):
         self.assertIn("先给反直觉结论，再拆误区", service.llm.complete_json.call_args_list[0].kwargs["user_prompt"])
         self.assertIn("只允许使用以下 Markdown 子集", service.llm.complete_json.call_args_list[0].kwargs["user_prompt"])
         self.assertIn("避免整篇都用“首先/其次/最后/总之", service.llm.complete_json.call_args_list[0].kwargs["user_prompt"])
+        write_prompt = service.llm.complete_json.call_args_list[0].kwargs["user_prompt"]
+        self.assertIn("先在心里产出 5 个标题候选", write_prompt)
+        self.assertIn("前 50 字内必须出现【悬念/数据/故事】", write_prompt)
+        self.assertIn("主动语态 ≥60%", write_prompt)
+        review_prompt = service.llm.complete_json.call_args_list[1].kwargs["user_prompt"]
+        self.assertIn("句长方差过小", review_prompt)
+        self.assertIn("反标题党校验", review_prompt)
         self.assertEqual(service.llm.complete_json.call_args_list[0].kwargs["timeout_seconds"], 180)
         self.assertEqual(service.llm.complete_json.call_args_list[1].kwargs["timeout_seconds"], 90)
         session.close()
