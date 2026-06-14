@@ -1,0 +1,349 @@
+{% raw %}<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>编委会评审</title>
+  <style>
+    __ADMIN_SHARED_STYLES__
+
+    .editorial-container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 32px 20px;
+    }
+
+    .editorial-title {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .editorial-task-id {
+      font-size: 13px;
+      color: var(--text-secondary);
+      font-family: monospace;
+      margin-bottom: 24px;
+    }
+
+    /* Empty state */
+    .editorial-empty {
+      padding: 48px 24px;
+      border-radius: var(--radius-md);
+      border: 1px dashed var(--border);
+      background: var(--bg-card);
+      text-align: center;
+      color: var(--text-secondary);
+      font-size: 15px;
+    }
+    .editorial-empty strong {
+      display: block;
+      font-size: 17px;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+
+    /* Verdict card */
+    .verdict-card {
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      padding: 20px 24px;
+      margin-bottom: 24px;
+      display: grid;
+      gap: 14px;
+    }
+    .verdict-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .verdict-title {
+      font-size: 16px;
+      font-weight: 700;
+    }
+    .decision-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .decision-pass {
+      background: var(--success-soft);
+      color: #047857;
+    }
+    .decision-revise {
+      background: var(--warning-soft);
+      color: #B45309;
+    }
+    .decision-reject {
+      background: var(--danger-soft);
+      color: var(--danger);
+    }
+    .decision-unknown {
+      background: var(--border-light);
+      color: var(--text-secondary);
+    }
+    .verdict-meta {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .verdict-rationale {
+      font-size: 14px;
+      line-height: 1.7;
+      color: var(--text);
+    }
+    .verdict-section-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+    }
+    .verdict-dissent {
+      padding: 12px 16px;
+      border-radius: var(--radius-sm);
+      background: var(--warning-soft);
+      color: #92400E;
+      font-size: 13px;
+      line-height: 1.7;
+    }
+    .revision-list {
+      margin: 0;
+      padding-left: 16px;
+      display: grid;
+      gap: 6px;
+    }
+    .revision-item {
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--text);
+    }
+    .revision-location {
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+
+    /* Rounds */
+    .rounds-section-title {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 14px;
+    }
+    .round-block {
+      margin-bottom: 20px;
+    }
+    .round-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .round-label {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--primary);
+    }
+    .round-divider {
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+    .opinions-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 10px;
+    }
+    .opinion-card {
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      padding: 12px 14px;
+      display: grid;
+      gap: 6px;
+    }
+    .opinion-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+    .opinion-role {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text);
+      font-family: monospace;
+    }
+    .stance-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .stance-pass { background: var(--success-soft); color: #047857; }
+    .stance-revise { background: var(--warning-soft); color: #B45309; }
+    .stance-reject { background: var(--danger-soft); color: var(--danger); }
+    .opinion-argument {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+    .opinion-issues {
+      margin: 0;
+      padding-left: 14px;
+      display: grid;
+      gap: 2px;
+    }
+    .opinion-issues li {
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    .back-link {
+      text-align: center;
+      margin-top: 32px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border-light);
+    }
+    .back-link a {
+      font-size: 13px;
+      color: var(--text-secondary);
+      text-decoration: none;
+    }
+    .back-link a:hover {
+      color: var(--primary);
+    }
+  </style>
+</head>
+<body class="admin-app">
+  <main class="admin-main">
+    <div class="editorial-container">{% endraw %}
+
+      <div class="editorial-title">编委会评审详情</div>
+      <div class="editorial-task-id">任务 ID：{{ task_id }}</div>
+
+      {% if review is none %}
+      <div class="editorial-empty">
+        <strong>暂无编委会评审</strong>
+        该任务尚未经过编委会辩论评审，或评审结果尚未落库。
+      </div>
+      {% else %}
+
+      <!-- 终裁结果 -->
+      <div class="verdict-card">
+        <div class="verdict-header">
+          <span class="verdict-title">终裁结果</span>
+          {% if review.decision == "pass" %}
+          <span class="decision-badge decision-pass">通过</span>
+          {% elif review.decision == "revise" %}
+          <span class="decision-badge decision-revise">修改</span>
+          {% elif review.decision == "reject" %}
+          <span class="decision-badge decision-reject">否决</span>
+          {% else %}
+          <span class="decision-badge decision-unknown">{{ review.decision or "待裁决" }}</span>
+          {% endif %}
+        </div>
+        <div class="verdict-meta">
+          状态：{{ review.status }}
+          &nbsp;·&nbsp;辩论轮次：{{ review.rounds_used }}
+          {% if review.created_at %}
+          &nbsp;·&nbsp;时间：{{ review.created_at }}
+          {% endif %}
+        </div>
+        {% if review.rationale %}
+        <div>
+          <div class="verdict-section-label">裁决理由</div>
+          <div class="verdict-rationale">{{ review.rationale }}</div>
+        </div>
+        {% endif %}
+        {% if review.revision_directives %}
+        <div>
+          <div class="verdict-section-label">修改指令</div>
+          <ol class="revision-list">
+            {% for directive in review.revision_directives %}
+            <li class="revision-item">
+              <span class="revision-location">{{ directive.get("location", "") }}</span>
+              {% if directive.get("problem") %}
+              — {{ directive.get("problem", "") }}
+              {% endif %}
+              {% if directive.get("fix") %}
+              <em>（建议：{{ directive.get("fix", "") }}）</em>
+              {% endif %}
+            </li>
+            {% endfor %}
+          </ol>
+        </div>
+        {% endif %}
+        {% if review.dissent_summary %}
+        <div>
+          <div class="verdict-section-label">异议摘要</div>
+          <div class="verdict-dissent">{{ review.dissent_summary }}</div>
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- 辩论逐轮意见 -->
+      {% set rounds = review.transcript.get("rounds", []) if review.transcript else [] %}
+      {% if rounds %}
+      <div class="rounds-section-title">辩论记录（共 {{ rounds | length }} 轮）</div>
+      {% for round_item in rounds %}
+      <div class="round-block">
+        <div class="round-header">
+          <span class="round-label">
+            {% if round_item.round_no == 0 %}第 0 轮（独立评审）{% else %}第 {{ round_item.round_no }} 轮辩论{% endif %}
+          </span>
+          <span class="round-divider"></span>
+          <span style="font-size:12px;color:var(--text-secondary);">{{ (round_item.opinions or []) | length }} 岗</span>
+        </div>
+        <div class="opinions-grid">
+          {% for opinion in (round_item.opinions or []) %}
+          <div class="opinion-card">
+            <div class="opinion-header">
+              <span class="opinion-role">{{ opinion.get("role_key", "?") }}</span>
+              {% set stance = opinion.get("stance", "") %}
+              {% if stance == "pass" %}
+              <span class="stance-badge stance-pass">通过</span>
+              {% elif stance == "revise" %}
+              <span class="stance-badge stance-revise">修改</span>
+              {% elif stance == "reject" %}
+              <span class="stance-badge stance-reject">否决</span>
+              {% endif %}
+            </div>
+            {% if opinion.get("key_argument") %}
+            <div class="opinion-argument">{{ opinion.get("key_argument", "") }}</div>
+            {% endif %}
+            {% if opinion.get("issues") %}
+            <ul class="opinion-issues">
+              {% for issue in opinion.get("issues", []) %}
+              <li>{{ issue }}</li>
+              {% endfor %}
+            </ul>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+      {% else %}
+      <div class="empty" style="margin-bottom:20px;">暂无辩论记录</div>
+      {% endif %}
+
+      {% endif %}
+
+      <div class="back-link">
+        <a href="/admin">← 返回工作台</a>
+      </div>
+    </div>
+  </main>
+{% raw %}
+</body>
+</html>
+{% endraw %}
