@@ -9,6 +9,7 @@ from sqlalchemy.orm import sessionmaker
 
 import app.models  # noqa: F401
 from app.core.enums import TaskStatus
+from app.core.review_metadata import extract_review_metadata
 from app.db.base import Base
 from app.models.content_brief import ContentBrief
 from app.models.generation import Generation
@@ -194,8 +195,11 @@ class EditorialBoardServiceTests(unittest.TestCase):
         self.assertEqual(report.final_decision, "pass")
         self.assertEqual(review.review_report_id, report.id)
         # score columns mapped from final_scores.
+        # Quality scores (readability/title/novelty) remain on 0-100.
         self.assertAlmostEqual(float(report.readability_score), 82.0)
-        self.assertAlmostEqual(float(report.factual_risk_score), 8.0)
+        # Risk scores (similarity/factual_risk/policy_risk) converted to 0-1 scale.
+        # chief returns factual_risk=8 (0-100) -> persisted as 0.08 (0-1).
+        self.assertAlmostEqual(float(report.factual_risk_score), 0.08)
 
         # editorial review fetchable via repository.
         fetched = EditorialReviewRepository(session).get_latest_by_task_id(task.id)
@@ -216,6 +220,97 @@ class EditorialBoardServiceTests(unittest.TestCase):
 
         report = ReviewReportRepository(session).get_latest_by_generation_id(generation.id)
         self.assertEqual(report.final_decision, "revise")
+        session.close()
+
+    def test_risk_scores_stored_on_0_to_1_scale(self) -> None:
+        """Fix 1: chief returns risk scores on 0-100; persisted ReviewReport must use 0-1.
+
+        FakeClient chief returns similarity=12, factual_risk=8, policy_risk=5 (on 0-100).
+        After /100 conversion these become 0.12, 0.08, 0.05 on the 0-1 scale phase4 expects.
+        """
+        client = FakeClient(new_substantive_objection=False, chief_decision="pass")
+        session, task, generation, review = self._run(client)
+
+        report = ReviewReportRepository(session).get_latest_by_generation_id(generation.id)
+        self.assertIsNotNone(report)
+
+        # Risk columns: 0-1 scale (higher = worse).
+        similarity = float(report.similarity_score or 0)
+        factual_risk = float(report.factual_risk_score or 0)
+        policy_risk = float(report.policy_risk_score or 0)
+        self.assertAlmostEqual(similarity, 0.12, places=6)
+        self.assertAlmostEqual(factual_risk, 0.08, places=6)
+        self.assertAlmostEqual(policy_risk, 0.05, places=6)
+        # All risk scores must be in [0, 1].
+        for score, name in [(similarity, "similarity"), (factual_risk, "factual_risk"), (policy_risk, "policy_risk")]:
+            self.assertGreaterEqual(score, 0.0, msg=f"{name} < 0")
+            self.assertLessEqual(score, 1.0, msg=f"{name} > 1 — still on 0-100 scale!")
+
+        # Quality scores remain on 0-100 scale.
+        self.assertAlmostEqual(float(report.readability_score or 0), 82.0)
+        self.assertAlmostEqual(float(report.title_score or 0), 77.0)
+        self.assertAlmostEqual(float(report.novelty_score or 0), 70.0)
+
+        # Verify phase4's _overall_score arithmetic works correctly with these values.
+        # Expected = title*0.2 + readability*0.25 + novelty*0.25
+        #          + (100 - similarity*100)*0.15 + (100 - policy_risk*100)*0.1
+        #          + (100 - factual_risk*100)*0.05
+        expected_overall = (
+            77.0 * 0.2
+            + 82.0 * 0.25
+            + 70.0 * 0.25
+            + (100.0 - 0.12 * 100.0) * 0.15
+            + (100.0 - 0.05 * 100.0) * 0.1
+            + (100.0 - 0.08 * 100.0) * 0.05
+        )
+        # Threshold default is 60; verify this clean report would pass.
+        self.assertGreater(expected_overall, 60.0, msg="overall score should pass default threshold")
+
+        session.close()
+
+    def test_rewrite_targets_contract_for_revise_verdict(self) -> None:
+        """Fix 2: suggestions must contain rewrite_targets key with {block_id, reason, instruction} items.
+
+        The board's _persist_review_report must map RevisionDirective(location, problem, fix)
+        to rewrite_targets items so extract_review_metadata yields non-empty rewrite_targets.
+        """
+        client = FakeClient(
+            new_substantive_objection=False,
+            chief_decision="revise",
+            chief_directives=[
+                {"location": "段落b2", "problem": "论证不足", "fix": "补充数据支撑"},
+                {"location": "标题", "problem": "无数字", "fix": "加具体数字"},
+            ],
+        )
+        session, task, generation, review = self._run(client)
+
+        report = ReviewReportRepository(session).get_latest_by_generation_id(generation.id)
+        self.assertIsNotNone(report)
+        self.assertEqual(report.final_decision, "revise")
+
+        # suggestions dict must have rewrite_targets key.
+        self.assertIsInstance(report.suggestions, dict)
+        self.assertIn("rewrite_targets", report.suggestions, msg="suggestions missing 'rewrite_targets' key — downstream humanize loop is broken")
+
+        # extract_review_metadata must yield non-empty rewrite_targets.
+        metadata = extract_review_metadata(report.issues, report.suggestions)
+        self.assertTrue(metadata.rewrite_targets, msg="extract_review_metadata returned empty rewrite_targets")
+        self.assertEqual(len(metadata.rewrite_targets), 2)
+
+        # Each item must have the three required fields.
+        first = metadata.rewrite_targets[0]
+        self.assertTrue(first.block_id, msg="rewrite_target missing block_id")
+        self.assertTrue(first.reason, msg="rewrite_target missing reason")
+        self.assertTrue(first.instruction, msg="rewrite_target missing instruction")
+
+        # Verify the field mapping: location->block_id, problem->reason, fix->instruction.
+        block_ids = {t.block_id for t in metadata.rewrite_targets}
+        self.assertIn("段落b2", block_ids, msg="location should map to block_id")
+        reasons = {t.reason for t in metadata.rewrite_targets}
+        self.assertIn("论证不足", reasons, msg="problem should map to reason")
+        instructions = {t.instruction for t in metadata.rewrite_targets}
+        self.assertIn("补充数据支撑", instructions, msg="fix should map to instruction")
+
         session.close()
 
 

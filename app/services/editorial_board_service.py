@@ -182,12 +182,32 @@ class EditorialBoardService:
         verdict: EditorialVerdict,
     ) -> ReviewReport:
         scores = verdict.final_scores or {}
+
+        # Fix 1: Chief prompt uses 0-100 for ALL scores; phase4 expects risk columns on 0-1.
+        # Convert similarity/factual_risk/policy_risk from 0-100 → 0-1 by dividing by 100.
+        # Quality columns (readability/title/novelty) stay on 0-100 as phase4 expects.
+        def _risk(key: str) -> float:
+            return self._score(scores, key, _RISK_SCORE_DEFAULT * 100.0) / 100.0
+
+        # Fix 2: Map RevisionDirective(location, problem, fix) to rewrite_targets items
+        # shaped {block_id, reason, instruction} as expected by extract_review_metadata /
+        # _coerce_rewrite_targets in app/core/review_metadata.py.
+        raw_directives = [rd.model_dump() for rd in verdict.revision_directives]
+        rewrite_targets = [
+            {
+                "block_id": rd.get("location", ""),
+                "reason": rd.get("problem", ""),
+                "instruction": rd.get("fix", ""),
+            }
+            for rd in raw_directives
+        ]
+
         report = self.reviews.create(
             ReviewReport(
                 generation_id=generation.id,
-                similarity_score=self._score(scores, "similarity", _RISK_SCORE_DEFAULT),
-                factual_risk_score=self._score(scores, "factual_risk", _RISK_SCORE_DEFAULT),
-                policy_risk_score=self._score(scores, "policy_risk", _RISK_SCORE_DEFAULT),
+                similarity_score=_risk("similarity"),
+                factual_risk_score=_risk("factual_risk"),
+                policy_risk_score=_risk("policy_risk"),
                 readability_score=self._score(scores, "readability", _QUALITY_SCORE_DEFAULT),
                 title_score=self._score(scores, "title", _QUALITY_SCORE_DEFAULT),
                 novelty_score=self._score(scores, "novelty", _QUALITY_SCORE_DEFAULT),
@@ -199,7 +219,12 @@ class EditorialBoardService:
                     "rationale": verdict.rationale,
                     "dissent_summary": verdict.dissent_summary,
                 },
-                suggestions={"revision_directives": [rd.model_dump() for rd in verdict.revision_directives]},
+                suggestions={
+                    # Fix 2: primary key expected by extract_review_metadata.
+                    "rewrite_targets": rewrite_targets,
+                    # Keep raw directives for traceability (location/problem/fix vocabulary).
+                    "revision_directives": raw_directives,
+                },
                 final_decision=verdict.decision,
             )
         )
