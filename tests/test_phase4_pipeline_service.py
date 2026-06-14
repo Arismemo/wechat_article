@@ -221,7 +221,8 @@ class Phase4PipelineServiceTests(unittest.TestCase):
         self.assertIn("上一版审稿结论：revise", write_prompt)
         self.assertIn("编造了不存在的型号 X-9000", write_prompt)
         self.assertIn("删除虚构型号", write_prompt)
-        self.assertIn("根据审稿建议完成一次实质性修订", write_prompt)
+        self.assertIn("逐条对照修复，不得保留", write_prompt)
+        self.assertIn("实质性修订", write_prompt)
         # An audit trail links prior -> new generation.
         from app.models.audit_log import AuditLog
 
