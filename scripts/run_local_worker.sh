@@ -35,9 +35,13 @@ case "${SERVICE_NAME}" in
   topic_fetch|topic_fetch_worker)
     TARGET_SCRIPT="${PROJECT_DIR}/scripts/run_topic_fetch_worker.py"
     ;;
+  editorial|editorial_worker)
+    # 编委会 worker 必须单实例(并发≤3 仅在单进程内保证)——只装一个 @editorial_worker 实例。
+    TARGET_SCRIPT="${PROJECT_DIR}/scripts/run_editorial_worker.py"
+    ;;
   *)
     echo "[run_local_worker] unsupported worker: ${SERVICE_NAME}" >&2
-    echo "[run_local_worker] expected one of: phase2_worker phase3_worker phase4_worker feedback_worker topic_fetch_worker" >&2
+    echo "[run_local_worker] expected one of: phase2_worker phase3_worker phase4_worker feedback_worker topic_fetch_worker editorial_worker" >&2
     exit 1
     ;;
 esac

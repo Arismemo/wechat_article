@@ -1,0 +1,31 @@
+name: Deploy to server
+
+# 安全:仅 workflow_dispatch(手动按钮)与 push main(仅协作者)触发。
+# 不在 pull_request 触发 —— public repo + self-hosted runner 下,fork PR 不能碰 runner。
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+
+# 同一时间只跑一个部署,新触发排队(不取消进行中的部署)。
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    # self-hosted runner 装在生产服务器上(Tailscale 私网,GitHub 云 runner 进不来)。
+    runs-on: [self-hosted, wechat-prod]
+    timeout-minutes: 20
+    steps:
+      - name: Checkout (拿最新部署脚本)
+        uses: actions/checkout@v4
+
+      - name: Deploy(原地 fetch/reset/迁移/重启)
+        env:
+          APP_DIR: /home/liukun/j/code/wechat_artical
+          DEPLOY_BRANCH: main
+        run: bash "${GITHUB_WORKSPACE}/scripts/deploy_on_server.sh"
