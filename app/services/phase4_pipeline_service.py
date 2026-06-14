@@ -126,6 +126,23 @@ class Phase4PipelineService:
             self._fail_task(task, TaskStatus.REVIEW_FAILED, "phase4_review_failed", str(exc))
             raise
 
+        # ── Editorial board hook ────────────────────────────────────────────
+        # When editorial_enabled is True, we defer the authoritative push/
+        # decision to the board worker. Phase4 only runs the quick-screen
+        # review (above), then hands off.
+        if self.settings.editorial_enabled:
+            self._set_task_status(task, TaskStatus.PENDING_EDITORIAL)
+            self._log_action(
+                task.id,
+                "phase4.editorial.enqueued",
+                {"generation_id": generation.id},
+            )
+            self.session.commit()
+            from app.services.editorial_queue_service import EditorialQueueService  # lazy import avoids cycle
+            EditorialQueueService().enqueue(task.id)
+            return self._editorial_pending_result(task, generation, review)
+        # ── end editorial board hook ────────────────────────────────────────
+
         decision = self._normalize_decision(review.final_decision)
         humanize_applied = False
         if decision != "reject" and self._should_run_humanize(review):
@@ -655,6 +672,26 @@ class Phase4PipelineService:
             review_report_id=review.id,
             decision=review.final_decision,
             auto_revised=auto_revised,
+        )
+
+    def _editorial_pending_result(
+        self,
+        task: Task,
+        generation: Generation,
+        review: ReviewReport,
+    ) -> Phase4PipelineResult:
+        """Return a result indicating Phase4 deferred to the editorial board.
+
+        Mirrors the field-set of the other _mark_* helpers but does NOT
+        trigger any push — the board worker holds the authoritative decision.
+        """
+        return Phase4PipelineResult(
+            task_id=task.id,
+            status=TaskStatus.PENDING_EDITORIAL.value,
+            generation_id=generation.id,
+            review_report_id=review.id,
+            decision=review.final_decision,
+            auto_revised=False,
         )
 
     def _build_generation_payload(
