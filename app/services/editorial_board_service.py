@@ -51,6 +51,30 @@ _RISK_SCORE_DEFAULT = 0.0
 _QUALITY_SCORE_DEFAULT = 60.0
 
 
+_ENVELOPE_KEYS = ("answer", "result", "output", "data", "response", "json", "content")
+_PARSE_FAILED = "[PARSE_FAILED]"
+
+
+def _unwrap_envelope(raw: Any, *expected: str) -> dict:
+    """容忍 LLM 把结构化对象包在信封里(如 {"answer": {...}})。
+
+    raw 顶层缺少所有 expected 字段,但某嵌套 dict(常见信封键或唯一 dict 值)
+    含有 expected 字段时,返回该嵌套 dict;否则原样返回。空/非 dict 返回 {}。
+    """
+    if not isinstance(raw, dict):
+        return {}
+    if any(k in raw for k in expected):
+        return raw
+    for key in _ENVELOPE_KEYS:
+        inner = raw.get(key)
+        if isinstance(inner, dict) and any(k in inner for k in expected):
+            return inner
+    dict_values = [v for v in raw.values() if isinstance(v, dict)]
+    if len(dict_values) == 1 and any(k in dict_values[0] for k in expected):
+        return dict_values[0]
+    return raw
+
+
 class EditorialBoardService:
     def __init__(self, session: Session, llm_client) -> None:
         self.session = session
@@ -122,18 +146,32 @@ class EditorialBoardService:
             return []
 
         def call(role: RoleSpec) -> RoleOpinion:
-            raw = self.llm.complete_json(
-                system_prompt=role.system_prompt,
-                user_prompt=self._opinion_prompt(role, context, prior),
-            )
-            if not isinstance(raw, dict):
-                raw = {}
-            raw.setdefault("role_key", role.key)
-            return RoleOpinion.model_validate(raw)
+            # 单岗输出异常不该拖垮整场评审(16 岗合议,缺一票可接受);
+            # 但系统性失败(下方多数岗失败)会在外层抛出交由 worker 重试/DLQ。
+            try:
+                raw = self.llm.complete_json(
+                    system_prompt=role.system_prompt,
+                    user_prompt=self._opinion_prompt(role, context, prior),
+                )
+                raw = _unwrap_envelope(raw, "stance", "role_key")
+                raw.setdefault("role_key", role.key)
+                return RoleOpinion.model_validate(raw)
+            except Exception as exc:  # noqa: BLE001
+                return RoleOpinion(
+                    role_key=role.key,
+                    stance="revise",
+                    issues=[f"{_PARSE_FAILED} {role.name}: {type(exc).__name__}"],
+                    key_argument=f"{_PARSE_FAILED} 本岗本轮意见解析失败,计为待改。",
+                )
 
         max_workers = max(1, self.settings.editorial_llm_max_concurrency)
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            return list(executor.map(call, roles))
+            opinions = list(executor.map(call, roles))
+
+        failed = sum(1 for o in opinions if o.key_argument.startswith(_PARSE_FAILED))
+        if roles and failed > len(roles) // 2:
+            raise RuntimeError(f"editorial: {failed}/{len(roles)} 岗输出失败(疑似渠道/配置故障)")
+        return opinions
 
     # ------------------------------------------------------------------ 收敛判定
     def _judge_convergence(self, opinions: list[RoleOpinion], context: str) -> ConvergenceJudgement:
@@ -149,9 +187,12 @@ class EditorialBoardService:
             '  - summary: string —— 一句话说明收敛/分歧现状\n'
         )
         raw = self.llm.complete_json(system_prompt=role.system_prompt, user_prompt=user_prompt)
-        if not isinstance(raw, dict):
-            raw = {}
-        return ConvergenceJudgement.model_validate(raw)
+        raw = _unwrap_envelope(raw, "new_substantive_objection")
+        try:
+            return ConvergenceJudgement.model_validate(raw)
+        except Exception:  # noqa: BLE001
+            # 解析失败按"已收敛"处理,安全终止辩论
+            return ConvergenceJudgement(new_substantive_objection=False, summary="收敛判定解析失败,按收敛处理")
 
     # ------------------------------------------------------------------ 终裁
     def _chief_verdict(self, opinions: list[RoleOpinion], context: str) -> EditorialVerdict:
@@ -170,9 +211,12 @@ class EditorialBoardService:
             "  - dissent_summary: string —— 保留异议摘要(无则空串)\n"
         )
         raw = self.llm.complete_json(system_prompt=role.system_prompt, user_prompt=user_prompt)
-        if not isinstance(raw, dict):
-            raw = {}
-        return EditorialVerdict.model_validate(raw)
+        raw = _unwrap_envelope(raw, "decision", "final_scores")
+        try:
+            return EditorialVerdict.model_validate(raw)
+        except Exception:  # noqa: BLE001
+            # 终裁解析失败:保守判 revise(下游转人工),不丢稿
+            return EditorialVerdict(decision="revise", rationale="终裁输出解析失败,转人工审核。")
 
     # ------------------------------------------------------------------ 映射 ReviewReport
     def _persist_review_report(
