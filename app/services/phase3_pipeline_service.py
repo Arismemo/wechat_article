@@ -86,14 +86,25 @@ class Phase3PipelineService:
             self._log_action(task.id, "phase3.search.started", {"queries": queries})
             self.session.commit()
 
-            raw_results = self.search.search_many(queries, count_per_query=self.settings.phase3_search_per_query)
-            ranked_results = self.search.rank_results(
-                source_url=source_article.url,
-                source_title=source_article.title or "",
-                analysis_theme=analysis.theme or "",
-                query_texts=queries,
-                results=raw_results,
-            )
+            try:
+                raw_results = self.search.search_many(queries, count_per_query=self.settings.phase3_search_per_query)
+                ranked_results = self.search.rank_results(
+                    source_url=source_article.url,
+                    source_title=source_article.title or "",
+                    analysis_theme=analysis.theme or "",
+                    query_texts=queries,
+                    results=raw_results,
+                )
+            except Exception as exc:  # noqa: BLE001
+                # 同题搜索是辅助步骤(限流/上游故障不应毙稿)——降级为空,
+                # brief 仅基于原文分析构建。复用下方"无结果降级"路径。
+                self._log_action(
+                    task.id,
+                    "phase3.search.degraded",
+                    {"reason": "search_error", "error": str(exc)[:300]},
+                )
+                self.session.commit()
+                ranked_results = []
             self.related_articles.delete_by_task_id(task.id)
             if not ranked_results:
                 fetched_related = []
