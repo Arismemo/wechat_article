@@ -26,6 +26,7 @@ class TaskStatus(str, Enum):
     NEEDS_MANUAL_SOURCE = "needs_manual_source"
     NEEDS_MANUAL_REVIEW = "needs_manual_review"
     NEEDS_REGENERATE = "needs_regenerate"
+    PENDING_EDITORIAL = "pending_editorial"
 
 
 class TopicSourceType(str, Enum):
@@ -83,4 +84,5 @@ ACTIVE_TASK_STATUSES = {
     TaskStatus.NEEDS_MANUAL_SOURCE,
     TaskStatus.NEEDS_MANUAL_REVIEW,
     TaskStatus.NEEDS_REGENERATE,
+    TaskStatus.PENDING_EDITORIAL,
 }

@@ -5,6 +5,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.admin import router as admin_router
 from app.api.admin_console import router as admin_console_router
+from app.api.admin_editorial import router as admin_editorial_router
 from app.api.admin_factors_page import router as admin_factors_page_router
 from app.api.admin_topics import router as admin_topics_router
 from app.api.internal import router as internal_router
@@ -31,6 +32,7 @@ def create_app() -> FastAPI:
     app.include_router(topic_internal_router, prefix="/internal/v1", tags=["internal-topics"])
     app.include_router(admin_router)
     app.include_router(admin_console_router)
+    app.include_router(admin_editorial_router)
     app.include_router(admin_factors_page_router)
     app.include_router(admin_topics_router)
     # 静态资源（前端去字符串化所需的本地 vendored 资产，如 htmx）。后台需可离线运行，

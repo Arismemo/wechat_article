@@ -53,6 +53,12 @@ PAGE_META = {
         "icon": "factors",
         "context": "提取、管理和注入写作因子。",
     },
+    "editorial": {
+        "label": "编委会评审",
+        "group": "高级",
+        "icon": "check-circle",
+        "context": "查看文章编委会辩论过程与终裁结果。",
+    },
 }
 
 NAV_ITEMS = [

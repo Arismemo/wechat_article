@@ -38,6 +38,54 @@ from app.services.worker_failure import is_retriable
 from app.settings import get_settings
 
 
+def overall_review_score(review: ReviewReport) -> float:
+    """Weighted overall score for a ReviewReport (0-100).
+
+    Module-level so both Phase4PipelineService and the editorial verdict
+    executor compute the SAME number. Risk columns are 0-1 (higher = worse);
+    quality columns are 0-100.
+    """
+    similarity = float(review.similarity_score or 0)
+    policy_risk = float(review.policy_risk_score or 0)
+    factual_risk = float(review.factual_risk_score or 0)
+    readability = float(review.readability_score or 0)
+    title_score = float(review.title_score or 0)
+    novelty = float(review.novelty_score or 0)
+    return (
+        title_score * 0.2
+        + readability * 0.25
+        + novelty * 0.25
+        + (100.0 - similarity * 100.0) * 0.15
+        + (100.0 - policy_risk * 100.0) * 0.1
+        + (100.0 - factual_risk * 100.0) * 0.05
+    )
+
+
+def passes_review_thresholds(review: ReviewReport, system_settings: SystemSettingService) -> bool:
+    """Shared phase4 gate: True iff the report clears every configured threshold.
+
+    Single source of truth for the overall/similarity/policy/factual/ai_trace
+    comparisons. Phase4 and the editorial verdict executor both call this so the
+    board's authoritative ReviewReport is judged by the exact same rules phase4
+    uses (DRY — change the gate in one place).
+    """
+    overall = overall_review_score(review)
+    similarity = float(review.similarity_score or 0)
+    policy_risk = float(review.policy_risk_score or 0)
+    factual_risk = float(review.factual_risk_score or 0)
+    metadata = extract_review_metadata(review.issues, review.suggestions)
+    return (
+        overall >= system_settings.phase4_review_pass_score()
+        and similarity <= system_settings.phase4_similarity_max()
+        and policy_risk <= system_settings.phase4_policy_risk_max()
+        and factual_risk <= system_settings.phase4_factual_risk_max()
+        and (
+            metadata.ai_trace_score is None
+            or metadata.ai_trace_score <= system_settings.phase4_ai_trace_rewrite_threshold()
+        )
+    )
+
+
 @dataclass
 class Phase4PipelineResult:
     task_id: str
@@ -125,6 +173,23 @@ class Phase4PipelineService:
         except Exception as exc:
             self._fail_task(task, TaskStatus.REVIEW_FAILED, "phase4_review_failed", str(exc))
             raise
+
+        # ── Editorial board hook ────────────────────────────────────────────
+        # When editorial_enabled is True, we defer the authoritative push/
+        # decision to the board worker. Phase4 only runs the quick-screen
+        # review (above), then hands off.
+        if self.settings.editorial_enabled:
+            self._set_task_status(task, TaskStatus.PENDING_EDITORIAL)
+            self._log_action(
+                task.id,
+                "phase4.editorial.enqueued",
+                {"generation_id": generation.id},
+            )
+            self.session.commit()
+            from app.services.editorial_queue_service import EditorialQueueService  # lazy import avoids cycle
+            EditorialQueueService().enqueue(task.id)
+            return self._editorial_pending_result(task, generation, review)
+        # ── end editorial board hook ────────────────────────────────────────
 
         decision = self._normalize_decision(review.final_decision)
         humanize_applied = False
@@ -657,6 +722,26 @@ class Phase4PipelineService:
             auto_revised=auto_revised,
         )
 
+    def _editorial_pending_result(
+        self,
+        task: Task,
+        generation: Generation,
+        review: ReviewReport,
+    ) -> Phase4PipelineResult:
+        """Return a result indicating Phase4 deferred to the editorial board.
+
+        Mirrors the field-set of the other _mark_* helpers but does NOT
+        trigger any push — the board worker holds the authoritative decision.
+        """
+        return Phase4PipelineResult(
+            task_id=task.id,
+            status=TaskStatus.PENDING_EDITORIAL.value,
+            generation_id=generation.id,
+            review_report_id=review.id,
+            decision=review.final_decision,
+            auto_revised=False,
+        )
+
     def _build_generation_payload(
         self,
         *,
@@ -1085,34 +1170,12 @@ class Phase4PipelineService:
         generation.score_overall = round(overall, 4)
 
     def _passes_thresholds(self, review: ReviewReport) -> bool:
-        overall = self._overall_score(review)
-        similarity = float(review.similarity_score or 0)
-        policy_risk = float(review.policy_risk_score or 0)
-        factual_risk = float(review.factual_risk_score or 0)
-        metadata = extract_review_metadata(review.issues, review.suggestions)
-        return (
-            overall >= self.system_settings.phase4_review_pass_score()
-            and similarity <= self.system_settings.phase4_similarity_max()
-            and policy_risk <= self.system_settings.phase4_policy_risk_max()
-            and factual_risk <= self.system_settings.phase4_factual_risk_max()
-            and (metadata.ai_trace_score is None or metadata.ai_trace_score <= self.system_settings.phase4_ai_trace_rewrite_threshold())
-        )
+        # Delegates to the shared module-level gate so phase4 and the editorial
+        # verdict executor judge a ReviewReport by the exact same rules.
+        return passes_review_thresholds(review, self.system_settings)
 
     def _overall_score(self, review: ReviewReport) -> float:
-        similarity = float(review.similarity_score or 0)
-        policy_risk = float(review.policy_risk_score or 0)
-        factual_risk = float(review.factual_risk_score or 0)
-        readability = float(review.readability_score or 0)
-        title_score = float(review.title_score or 0)
-        novelty = float(review.novelty_score or 0)
-        return (
-            title_score * 0.2
-            + readability * 0.25
-            + novelty * 0.25
-            + (100.0 - similarity * 100.0) * 0.15
-            + (100.0 - policy_risk * 100.0) * 0.1
-            + (100.0 - factual_risk * 100.0) * 0.05
-        )
+        return overall_review_score(review)
 
     def _should_run_humanize(self, review: ReviewReport) -> bool:
         metadata = extract_review_metadata(review.issues, review.suggestions)

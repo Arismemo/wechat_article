@@ -1,4 +1,5 @@
 from app.models.article_analysis import ArticleAnalysis
+from app.models.editorial_review import EditorialReview
 from app.models.audit_log import AuditLog
 from app.models.content_brief import ContentBrief
 from app.models.factor import Factor
@@ -25,6 +26,7 @@ from app.models.wechat_draft import WechatDraft
 
 __all__ = [
     "ArticleAnalysis",
+    "EditorialReview",
     "AuditLog",
     "ContentBrief",
     "Factor",

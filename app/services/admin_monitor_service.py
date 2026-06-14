@@ -20,6 +20,7 @@ from app.schemas.admin_monitor import (
     QueueWorkerStatusResponse,
 )
 from app.schemas.tasks import PublicationMetricSummary, TaskSummaryResponse, TaskWorkspaceResponse
+from app.services.editorial_queue_service import EditorialQueueService
 from app.services.feedback_queue_service import FeedbackQueueService
 from app.services.phase2_queue_service import Phase2QueueService
 from app.services.phase3_queue_service import Phase3QueueService
@@ -198,6 +199,9 @@ class AdminMonitorService:
                 FeedbackQueueService(redis_client).runtime_snapshot(),
                 TopicFetchQueueService(redis_client).runtime_snapshot(),
             ]
+            # 编委会队列仅在启用时纳入监控(未启用时不跑该 worker,避免误报 stale/offline)
+            if get_settings().editorial_enabled:
+                workers.append(EditorialQueueService(redis_client).runtime_snapshot())
             return AdminMonitorOperationsResponse(
                 available=True,
                 workers=[
