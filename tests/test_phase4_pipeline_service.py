@@ -138,9 +138,18 @@ class Phase4PipelineServiceTests(unittest.TestCase):
         self.assertIn("先在心里产出 5 个标题候选", write_prompt)
         self.assertIn("前 50 字内必须出现【悬念/数据/故事】", write_prompt)
         self.assertIn("主动语态 ≥60%", write_prompt)
+        # OPT-1: anti-fabrication grounding lives in the WRITE prompt, integrated
+        # with the "具体案例/数字" directive — the writer must not invent specifics.
+        self.assertIn("事实接地", write_prompt)
+        self.assertIn("严禁编造原文没有的具体参数", write_prompt)
+        self.assertIn("据传/推测/可能", write_prompt)
         review_prompt = service.llm.complete_json.call_args_list[1].kwargs["user_prompt"]
         self.assertIn("句长方差过小", review_prompt)
         self.assertIn("反标题党校验", review_prompt)
+        # OPT-1: the REVIEW prompt heavily penalises any specific claim/number not
+        # supported by the source as high factual risk.
+        self.assertIn("factual_risk_score", review_prompt)
+        self.assertIn("原文未提供", review_prompt)
         self.assertEqual(service.llm.complete_json.call_args_list[0].kwargs["timeout_seconds"], 180)
         self.assertEqual(service.llm.complete_json.call_args_list[1].kwargs["timeout_seconds"], 90)
         session.close()
