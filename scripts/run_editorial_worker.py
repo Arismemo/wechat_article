@@ -21,6 +21,7 @@ from app.db.session import get_session_factory
 from app.services.editorial_board_service import EditorialBoardService
 from app.services.editorial_llm_client import EditorialLLMClient
 from app.services.editorial_queue_service import EditorialQueueService
+from app.services.editorial_verdict_executor import EditorialVerdictExecutor
 from app.services.worker_failure import handle_worker_failure
 from app.services.worker_heartbeat import heartbeat_refresh_interval, keep_worker_heartbeat
 from app.settings import get_settings
@@ -69,8 +70,13 @@ def main() -> None:
                 interval_seconds=heartbeat_interval,
                 logger=logger,
             ):
-                EditorialBoardService(session, client).review(task_id)
-            logger.info("editorial task %s completed", task_id)
+                review = EditorialBoardService(session, client).review(task_id)
+                # Act on the verdict: transition the task and, on a clean pass,
+                # push the WeChat draft. Kept inside the same try/except so a
+                # push/transition failure flows through handle_worker_failure
+                # (retry / DLQ) just like a debate failure.
+                verdict_outcome = EditorialVerdictExecutor(session).execute(review)
+            logger.info("editorial task %s completed (verdict=%s)", task_id, verdict_outcome)
         except Exception as exc:  # noqa: BLE001
             outcome = handle_worker_failure(
                 queue,
