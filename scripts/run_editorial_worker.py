@@ -34,6 +34,15 @@ logger = logging.getLogger("editorial-worker")
 def main() -> None:
     settings = get_settings()
 
+    # Fail fast on misconfiguration (editorial is opt-in, so the api_key stays
+    # Optional in Settings; we validate it here only when the worker is actually
+    # meant to run — avoids forcing the key on every deployment / test).
+    if not settings.editorial_enabled:
+        logger.warning("EDITORIAL_ENABLED is false; editorial worker has nothing to do, exiting.")
+        return
+    if not settings.editorial_llm_api_key:
+        raise SystemExit("EDITORIAL_LLM_API_KEY is required when EDITORIAL_ENABLED=true.")
+
     # Build the LLM client ONCE before the loop — the BoundedSemaphore lives
     # in this object for the lifetime of the process.
     client = EditorialLLMClient(
