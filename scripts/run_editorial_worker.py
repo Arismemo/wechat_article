@@ -22,6 +22,7 @@ from app.services.editorial_board_service import EditorialBoardService
 from app.services.editorial_llm_client import EditorialLLMClient
 from app.services.editorial_queue_service import EditorialQueueService
 from app.services.editorial_verdict_executor import EditorialVerdictExecutor
+from app.services.phase4_pipeline_service import Phase4PipelineService
 from app.services.worker_failure import handle_worker_failure
 from app.services.worker_heartbeat import heartbeat_refresh_interval, keep_worker_heartbeat
 from app.settings import get_settings
@@ -29,6 +30,35 @@ from app.settings import get_settings
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("editorial-worker")
+
+
+def run_editorial_revise_loop(session, client, *, max_iter: int, task_id: str) -> str:
+    """Bounded editorial revise loop (OPT-2).
+
+    review → act; if the verdict is not a clean pushable pass, feed the board's
+    revision directives back to the writer (``regenerate_from_editorial``),
+    regenerate an improved draft and re-submit — until pass+thresholds (push) or
+    ``max_iter`` iterations are spent (then a single terminal NEEDS_MANUAL_REVIEW
+    via ``finalize_manual``).
+
+    Returns the final outcome string: "pushed" / "push_blocked" /
+    "manual_exhausted" (or "needs_revision" only if the loop body never runs,
+    i.e. max_iter < 0 — not expected). Any exception propagates to the caller's
+    failure handler (retry / DLQ).
+    """
+    outcome = "needs_revision"
+    for iteration in range(max_iter + 1):
+        review = EditorialBoardService(session, client).review(task_id)
+        outcome = EditorialVerdictExecutor(session).execute(review)
+        if outcome in ("pushed", "push_blocked"):
+            break
+        if iteration >= max_iter:
+            EditorialVerdictExecutor(session).finalize_manual(review, reason="revise_exhausted")
+            outcome = "manual_exhausted"
+            break
+        # Improve the draft for the next board review.
+        Phase4PipelineService(session).regenerate_from_editorial(task_id)
+    return outcome
 
 
 def main() -> None:
@@ -79,13 +109,19 @@ def main() -> None:
                 interval_seconds=heartbeat_interval,
                 logger=logger,
             ):
-                review = EditorialBoardService(session, client).review(task_id)
-                # Act on the verdict: transition the task and, on a clean pass,
-                # push the WeChat draft. Kept inside the same try/except so a
-                # push/transition failure flows through handle_worker_failure
-                # (retry / DLQ) just like a debate failure.
-                verdict_outcome = EditorialVerdictExecutor(session).execute(review)
-            logger.info("editorial task %s completed (verdict=%s)", task_id, verdict_outcome)
+                # Bounded editorial revise loop (OPT-2). Kept inside the same
+                # try/except so any failure (debate / push / regenerate) flows
+                # through handle_worker_failure (retry / DLQ).
+                max_iter = queue.settings.editorial_max_revise_iterations
+                verdict_outcome = run_editorial_revise_loop(
+                    session, client, max_iter=max_iter, task_id=task_id
+                )
+            logger.info(
+                "editorial task %s final outcome=%s (iterations<=%s)",
+                task_id,
+                verdict_outcome,
+                max_iter,
+            )
         except Exception as exc:  # noqa: BLE001
             outcome = handle_worker_failure(
                 queue,

@@ -230,6 +230,40 @@ class Phase4PipelineService:
             return self._auto_revise_once(task, source, analysis, brief, related, generation, review)
         return self._mark_needs_manual_review(task, generation, review, auto_revised=False)
 
+    def regenerate_from_editorial(self, task_id: str) -> Generation:
+        """Produce an improved draft from the editorial board's verdict.
+
+        Drives the editorial revise loop (OPT-2): takes the latest generation and
+        the board's authoritative ReviewReport (its issues + rewrite_targets) and
+        re-runs ``_generate_generation`` with them as prior context. That is the
+        SAME mechanism ``_auto_revise_once`` uses — the board's directives ride
+        into the write prompt via ``prior_review``. Unlike ``run``/
+        ``_auto_revise_once`` this does NOT re-review (the board worker re-submits
+        the new draft on its next loop turn) and leaves task status untouched.
+        """
+        task = self._require_task(task_id)
+        source, analysis, brief, related = self._ensure_phase3_inputs(task)
+        prior_generation = self.generations.get_latest_by_task_id(task_id)
+        if prior_generation is None:
+            raise ValueError("regenerate_from_editorial: no prior generation")
+        prior_review = self.reviews.get_latest_by_generation_id(prior_generation.id)
+        new_gen = self._generate_generation(
+            task=task,
+            source=source,
+            analysis=analysis,
+            brief=brief,
+            related=related,
+            prior_generation=prior_generation,
+            prior_review=prior_review,
+        )
+        self._log_action(
+            task.id,
+            "editorial.regenerate",
+            {"prior_generation_id": prior_generation.id, "new_generation_id": new_gen.id},
+        )
+        self.session.commit()
+        return new_gen
+
     def _ensure_phase3_inputs(
         self,
         task: Task,

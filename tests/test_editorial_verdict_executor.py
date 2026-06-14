@@ -3,12 +3,15 @@
 The board produces an EditorialReview (+ authoritative ReviewReport) but does
 NOT act on it. The executor transitions the task and pushes on pass.
 
-Covered branches:
-  1. reject                        -> NEEDS_REGENERATE, push NOT called.
-  2. pass + thresholds fail        -> NEEDS_MANUAL_REVIEW, push NOT called.
+Covered branches (OPT-2: non-pass verdicts NO LONGER set a terminal status —
+they return "needs_revision" so the worker loop can re-revise; only the pass
+path and finalize_manual write a terminal status):
+  1. reject                        -> "needs_revision", status UNCHANGED, push NOT called.
+  2. pass + thresholds fail        -> "needs_revision", status UNCHANGED, push NOT called.
   3. pass + thresholds pass + push -> "pushed" (push mocked).
   4. pass + thresholds pass + blk  -> NEEDS_MANUAL_REVIEW (WechatPushBlockedError).
-  5. revise                        -> NEEDS_MANUAL_REVIEW.
+  5. revise                        -> "needs_revision", status UNCHANGED.
+  6. finalize_manual               -> NEEDS_MANUAL_REVIEW (worker exhausted iterations).
 Plus a shared-helper test (passes_review_thresholds parity with phase4).
 """
 
@@ -18,7 +21,7 @@ import os
 import unittest
 from unittest.mock import patch
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import sessionmaker
@@ -148,8 +151,8 @@ class EditorialVerdictExecutorTests(unittest.TestCase):
         session.expire_all()
         return session.get(Task, task_id).status
 
-    # ── 1. reject ────────────────────────────────────────────────────────────
-    def test_reject_sets_needs_regenerate(self) -> None:
+    # ── 1. reject -> needs_revision (no terminal status) ─────────────────────
+    def test_reject_returns_needs_revision_without_terminal_status(self) -> None:
         session = self.Session()
         task, _gen, review, _report = self._seed(session, decision="reject")
 
@@ -158,16 +161,27 @@ class EditorialVerdictExecutorTests(unittest.TestCase):
         ) as mock_publish_cls:
             outcome = EditorialVerdictExecutor(session).execute(review)
 
-        self.assertEqual(outcome, "reject")
+        self.assertEqual(outcome, "needs_revision")
+        # OPT-2: reject now means "needs_revision" — status is left untouched so
+        # the worker loop can feed directives back and re-revise.
         self.assertEqual(
-            self._refresh_status(session, task.id), TaskStatus.NEEDS_REGENERATE.value
+            self._refresh_status(session, task.id), TaskStatus.PENDING_EDITORIAL.value
         )
-        # No push attempted on reject.
         mock_publish_cls.assert_not_called()
+        # A needs_revision audit event is logged.
+        from app.models.audit_log import AuditLog
+
+        events = [
+            log.action
+            for log in session.scalars(
+                select(AuditLog).where(AuditLog.task_id == task.id)
+            )
+        ]
+        self.assertIn("editorial.verdict.needs_revision", events)
         session.close()
 
-    # ── 2. pass + thresholds fail ────────────────────────────────────────────
-    def test_pass_thresholds_fail_sets_needs_manual_review_no_push(self) -> None:
+    # ── 2. pass + thresholds fail -> needs_revision (no terminal status) ─────
+    def test_pass_thresholds_fail_returns_needs_revision_no_push(self) -> None:
         session = self.Session()
         # similarity 0.9 blows past phase4_similarity_max (default 0.45-ish) ->
         # thresholds fail even though decision is pass.
@@ -181,10 +195,10 @@ class EditorialVerdictExecutorTests(unittest.TestCase):
         ) as mock_publish_cls:
             outcome = EditorialVerdictExecutor(session).execute(review)
 
-        self.assertEqual(outcome, "manual_review")
+        self.assertEqual(outcome, "needs_revision")
         self.assertEqual(
             self._refresh_status(session, task.id),
-            TaskStatus.NEEDS_MANUAL_REVIEW.value,
+            TaskStatus.PENDING_EDITORIAL.value,
         )
         # Thresholds failed -> push must NOT be attempted.
         mock_publish_cls.assert_not_called()
@@ -251,8 +265,8 @@ class EditorialVerdictExecutorTests(unittest.TestCase):
         )
         session.close()
 
-    # ── 5. revise ────────────────────────────────────────────────────────────
-    def test_revise_sets_needs_manual_review(self) -> None:
+    # ── 5. revise -> needs_revision (no terminal status) ─────────────────────
+    def test_revise_returns_needs_revision_without_terminal_status(self) -> None:
         session = self.Session()
         task, _gen, review, _report = self._seed(session, decision="revise")
 
@@ -261,12 +275,40 @@ class EditorialVerdictExecutorTests(unittest.TestCase):
         ) as mock_publish_cls:
             outcome = EditorialVerdictExecutor(session).execute(review)
 
+        self.assertEqual(outcome, "needs_revision")
+        self.assertEqual(
+            self._refresh_status(session, task.id),
+            TaskStatus.PENDING_EDITORIAL.value,
+        )
+        mock_publish_cls.assert_not_called()
+        session.close()
+
+    # ── 6. finalize_manual -> NEEDS_MANUAL_REVIEW (iterations exhausted) ─────
+    def test_finalize_manual_sets_needs_manual_review(self) -> None:
+        session = self.Session()
+        task, _gen, review, _report = self._seed(session, decision="revise")
+
+        outcome = EditorialVerdictExecutor(session).finalize_manual(
+            review, reason="revise_exhausted"
+        )
+
         self.assertEqual(outcome, "manual_review")
         self.assertEqual(
             self._refresh_status(session, task.id),
             TaskStatus.NEEDS_MANUAL_REVIEW.value,
         )
-        mock_publish_cls.assert_not_called()
+        from app.models.audit_log import AuditLog
+
+        manual_logs = list(
+            session.scalars(
+                select(AuditLog).where(
+                    AuditLog.task_id == task.id,
+                    AuditLog.action == "editorial.verdict.manual_required",
+                )
+            )
+        )
+        self.assertEqual(len(manual_logs), 1)
+        self.assertEqual(manual_logs[0].payload["reason"], "revise_exhausted")
         session.close()
 
     # ── fallback: review_report_id missing -> latest by generation ───────────
@@ -283,9 +325,9 @@ class EditorialVerdictExecutorTests(unittest.TestCase):
         ):
             outcome = EditorialVerdictExecutor(session).execute(review)
 
-        self.assertEqual(outcome, "reject")
+        self.assertEqual(outcome, "needs_revision")
         self.assertEqual(
-            self._refresh_status(session, task.id), TaskStatus.NEEDS_REGENERATE.value
+            self._refresh_status(session, task.id), TaskStatus.PENDING_EDITORIAL.value
         )
         session.close()
 
