@@ -230,6 +230,40 @@ class Phase4PipelineService:
             return self._auto_revise_once(task, source, analysis, brief, related, generation, review)
         return self._mark_needs_manual_review(task, generation, review, auto_revised=False)
 
+    def regenerate_from_editorial(self, task_id: str) -> Generation:
+        """Produce an improved draft from the editorial board's verdict.
+
+        Drives the editorial revise loop (OPT-2): takes the latest generation and
+        the board's authoritative ReviewReport (its issues + rewrite_targets) and
+        re-runs ``_generate_generation`` with them as prior context. That is the
+        SAME mechanism ``_auto_revise_once`` uses — the board's directives ride
+        into the write prompt via ``prior_review``. Unlike ``run``/
+        ``_auto_revise_once`` this does NOT re-review (the board worker re-submits
+        the new draft on its next loop turn) and leaves task status untouched.
+        """
+        task = self._require_task(task_id)
+        source, analysis, brief, related = self._ensure_phase3_inputs(task)
+        prior_generation = self.generations.get_latest_by_task_id(task_id)
+        if prior_generation is None:
+            raise ValueError("regenerate_from_editorial: no prior generation")
+        prior_review = self.reviews.get_latest_by_generation_id(prior_generation.id)
+        new_gen = self._generate_generation(
+            task=task,
+            source=source,
+            analysis=analysis,
+            brief=brief,
+            related=related,
+            prior_generation=prior_generation,
+            prior_review=prior_review,
+        )
+        self._log_action(
+            task.id,
+            "editorial.regenerate",
+            {"prior_generation_id": prior_generation.id, "new_generation_id": new_gen.id},
+        )
+        self.session.commit()
+        return new_gen
+
     def _ensure_phase3_inputs(
         self,
         task: Task,
@@ -791,12 +825,19 @@ class Phase4PipelineService:
             "- 句子开头多样化：交替用状语/介词短语/口语词（你看/说真的）起头，禁全部主语开头；用破折号、省略号在句中打断节奏。一句话只表达一个意思，超 25 字从句拆两句。\n"
             "## 去 AI 味·内容级\n"
             "- 每个小节插 1-2 个带专有名词+数字的具体案例/个人观察；转折处植入自我纠正句（等等，我说反了…/其实刚才那句不太准确），用“起初以为 X，后来发现 Y”的认知翻转结构。\n"
+            "- **事实接地（硬约束）**：只能使用原文已提供的事实/数据/专名/型号/数值/日期。"
+            "**严禁编造原文没有的具体参数**（如型号、精确数值、日期、价格、色号、温度、分析师爆料等）。"
+            "需要具体性时：① 优先取自原文；② 若是行业常识或合理推断，必须显式标注为推测"
+            "（『据传/推测/可能/业内一般认为』），不得写成既成事实；③ 宁可少写一个具体数字，也绝不虚构。"
+            "前面要求的“具体案例/数字”必须服从本条 —— 接地的具体，不是编造的具体。\n"
+            "- **不得拔高确定性**：传闻/爆料/渲染图/机模一律用推测语气，严禁写成“实锤/已确认/官宣/已证实/板上钉钉/基本确定”。\n"
+            "- **不得编造配图**：`![配图说明](url)` 的图片 url 只能用原文已有的真实图片；没有合适图片就不要插图，严禁编造图片链接或用与内容无关的通用图库图（如 unsplash）冒充“爆料图/机模图”。\n"
             "- 全文锁定人设：用第一人称，明确表态（我不太同意…/这让我很震撼/说实话我有点怀疑），保持同一情绪基调；段落逻辑非线性（由果推因/先案例再收口/先反常识结论再回溯），禁全程“总-分-总”。\n"
             "- 情绪先具名（挫败/兴奋/焦虑）再接住，抽象形容词换可感知的视觉/触觉/听觉细节。\n"
-            "## 结尾 CTA\n"
+            "## 结尾 CTA（必须微信合规）\n"
             "- 结尾四选一收口（总结+再强调/金句升华/抛话题引讨论/下期预告），收口后紧接单一关注引导，绝不戛然而止。\n"
-            "- CTA 只放一个动作 + 第一人称（我要每周收到…/把模板发给我）+ 强动词 + 即时福利钩子 + 紧迫词，参考：“关注后回复【关键词】领〈贴本篇的具体资料〉，本周有效”。\n"
-            "- 关注引导前配一句推荐语（我是谁/解决什么问题/什么调性/给谁看/有何背书）；补一句低门槛互动话题 + 一句裂变引导（转给同样在…的朋友）。把核心结论/冲突句用 **加粗** 显现化。\n\n"
+            "- **合规红线（硬约束）**：严禁任何利益诱导式关注/分享 —— 禁止“关注后回复领资料/转发领取/点赞抽奖/集赞/分享到群”等微信明令禁止的诱导话术（会被限流封号）。CTA 只能给“理由”，不给“物质对价/福利钩子”。\n"
+            "- 合规写法：用一句真诚的价值邀请引导关注或在看（例：“如果这篇帮你避了坑，点个在看；想看每周新机拆解就关注我”），第一人称、单一动作、不带福利诱饵；关注引导前配一句推荐语（我是谁/解决什么问题/什么调性/给谁看）。可补一句低门槛互动话题（评论区聊聊），但不得用“转给朋友领…”式裂变诱导。把核心结论/冲突句用 **加粗** 显现化。\n\n"
             f"原文标题：{source.title or '未知'}\n"
             f"原文摘要：{source.summary or '无'}\n"
             f"原文分析主题：{analysis.theme or '未知'}\n"
@@ -833,12 +874,14 @@ class Phase4PipelineService:
                     user_prompt += f"> 「{f['name']}」示例：{f['example_text']}\n\n"
         if prior_generation is not None and prior_review is not None:
             user_prompt += (
-                f"\n上一版标题：{prior_generation.title or '无'}\n"
-                f"上一版摘要：{prior_generation.digest or '无'}\n"
+                f"\n【上一版被审稿否决，必须逐条修复后重写】\n"
+                f"上一版标题：{prior_generation.title or '无'}\n"
                 f"上一版审稿结论：{prior_review.final_decision or 'revise'}\n"
-                f"审稿问题：{self._json_items(prior_review.issues)}\n"
-                f"审稿建议：{self._json_items(prior_review.suggestions)}\n"
-                "请保留核心新角度，但根据审稿建议完成一次实质性修订。\n"
+                f"必须解决的问题（逐条对照修复，不得保留）：{self._json_items(prior_review.issues)}\n"
+                f"改写建议：{self._json_items(prior_review.suggestions)}\n"
+                "硬性要求：① 上面每条问题都要在新稿中真正消除，尤其是【事实不实/编造参数/编造配图/把传闻写成实锤】"
+                "和【诱导关注或分享等微信合规红线】这两类——若再犯，本稿必再被否。"
+                "② 保留核心新角度与已达成的去AI味改进，只做实质性修订，不要推倒重来。\n"
             )
         write_model = self.llm_runtime.write_model()
         try:
@@ -916,6 +959,9 @@ class Phase4PipelineService:
             "被动语态占比 >20%；句子多数以主语开头（句式同质化）；缺少疑问句或感叹句；绝对表述多而模糊/语气词少。命中越多 ai_trace_score 越高，并把具体命中项写进 ai_trace_patterns。\n"
             "- 具体细节密度低（小节缺少带专有名词+数字的案例）、没有自我纠正/认知翻转句、通篇中立无人格（非第一人称且无明确立场）"
             "→ 同时拉高 ai_trace_score 并压低 novelty_score。\n"
+            "- factual_risk_score（0-1，越高越危险）须重罚“编造的具体”：任何原文未提供、又未标注为推测"
+            "（据传/推测/可能/业内一般认为）的具体型号/精确数值/日期/价格/温度/爆料/统计——一律视为高事实风险，"
+            "命中即把 factual_risk_score 拉高到接近上限，并把虚构项逐条写进 issues。具体而不接地，比模糊更危险。\n"
             "- title_score（0-100）须评估：字数是否 ≤28 且钩子在前 15 字内（否则大幅扣分）；是否含 ≥1 具体数字；"
             "是否命中公式槽位 ≥3；是否含人群/场景标签；是否优先损失厌恶框架；以及反标题党校验——标题制造的每个缺口正文是否真正闭合，未闭合视为标题党，倾向判 revise/reject。\n"
             "- 传播力与 CTA 折算进 novelty_score / readability_score 与 suggestions：目标情绪是否高唤起且非悲伤主导；"

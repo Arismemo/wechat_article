@@ -138,11 +138,117 @@ class Phase4PipelineServiceTests(unittest.TestCase):
         self.assertIn("先在心里产出 5 个标题候选", write_prompt)
         self.assertIn("前 50 字内必须出现【悬念/数据/故事】", write_prompt)
         self.assertIn("主动语态 ≥60%", write_prompt)
+        # OPT-1: anti-fabrication grounding lives in the WRITE prompt, integrated
+        # with the "具体案例/数字" directive — the writer must not invent specifics.
+        self.assertIn("事实接地", write_prompt)
+        self.assertIn("严禁编造原文没有的具体参数", write_prompt)
+        self.assertIn("据传/推测/可能", write_prompt)
         review_prompt = service.llm.complete_json.call_args_list[1].kwargs["user_prompt"]
         self.assertIn("句长方差过小", review_prompt)
         self.assertIn("反标题党校验", review_prompt)
+        # OPT-1: the REVIEW prompt heavily penalises any specific claim/number not
+        # supported by the source as high factual risk.
+        self.assertIn("factual_risk_score", review_prompt)
+        self.assertIn("原文未提供", review_prompt)
         self.assertEqual(service.llm.complete_json.call_args_list[0].kwargs["timeout_seconds"], 180)
         self.assertEqual(service.llm.complete_json.call_args_list[1].kwargs["timeout_seconds"], 90)
+        session.close()
+
+    def test_regenerate_from_editorial_feeds_board_directives_to_writer(self) -> None:
+        # OPT-2(b): regenerate_from_editorial pulls the latest generation + the
+        # board's latest ReviewReport and re-runs _generate_generation with them
+        # as prior context — so the board's issues/suggestions ride into the new
+        # write prompt (the revision mechanism). It must NOT call review itself.
+        session = self.Session()
+        task = self._seed_phase4_ready_task(session, "tsk_editorial_regen")
+        self._set_task_status(session, task, TaskStatus.PENDING_EDITORIAL)
+
+        prior_gen = Generation(
+            task_id=task.id,
+            brief_id=self._brief_id(session, task.id),
+            version_no=1,
+            prompt_type="phase4_write",
+            prompt_version=CURRENT_PHASE4_PROMPT_VERSION,
+            model_name="glm-5.2",
+            title="上一版标题",
+            subtitle="上一版副标题",
+            digest="上一版摘要",
+            markdown_content="# 上一版标题\n\n上一版正文。",
+            status="generated",
+        )
+        session.add(prior_gen)
+        session.flush()
+        prior_review = ReviewReport(
+            generation_id=prior_gen.id,
+            final_decision="revise",
+            similarity_score=0.3,
+            factual_risk_score=0.6,
+            policy_risk_score=0.1,
+            readability_score=70,
+            title_score=70,
+            novelty_score=72,
+            issues={"items": ["编委会指出: 第二段编造了不存在的型号 X-9000。"]},
+            suggestions={"items": ["删除虚构型号，改用原文已有事实。"]},
+        )
+        session.add(prior_review)
+        session.flush()
+        session.commit()
+
+        service = Phase4PipelineService(session)
+        service.llm = MagicMock()
+        service.llm.complete_json.return_value = {
+            "title": "改稿后的标题",
+            "subtitle": "改稿后的副标题",
+            "digest": "改稿后的摘要。",
+            "markdown_content": (
+                "# 改稿后的标题\n\n"
+                "> 改稿后的副标题\n\n"
+                "## 第一节\n这一版去掉了虚构型号。\n\n"
+                "## 第二节\n只用原文已有事实。\n\n"
+                "## 第三节\n收口给一个判断框架。\n"
+            ),
+        }
+
+        new_gen = service.regenerate_from_editorial(task.id)
+
+        # A brand-new generation, distinct from the prior one.
+        self.assertNotEqual(new_gen.id, prior_gen.id)
+        self.assertEqual(new_gen.task_id, task.id)
+        # Only the write call happened — regenerate does NOT re-review.
+        self.assertEqual(service.llm.complete_json.call_count, 1)
+        # The board's directives rode into the write prompt as prior context.
+        write_prompt = service.llm.complete_json.call_args_list[0].kwargs["user_prompt"]
+        self.assertIn("上一版审稿结论：revise", write_prompt)
+        self.assertIn("编造了不存在的型号 X-9000", write_prompt)
+        self.assertIn("删除虚构型号", write_prompt)
+        self.assertIn("逐条对照修复，不得保留", write_prompt)
+        self.assertIn("实质性修订", write_prompt)
+        # An audit trail links prior -> new generation.
+        from app.models.audit_log import AuditLog
+
+        regen_logs = list(
+            session.scalars(
+                select(AuditLog).where(
+                    AuditLog.task_id == task.id,
+                    AuditLog.action == "editorial.regenerate",
+                )
+            )
+        )
+        self.assertEqual(len(regen_logs), 1)
+        self.assertEqual(regen_logs[0].payload["prior_generation_id"], prior_gen.id)
+        self.assertEqual(regen_logs[0].payload["new_generation_id"], new_gen.id)
+        session.close()
+
+    def test_regenerate_from_editorial_without_prior_generation_raises(self) -> None:
+        session = self.Session()
+        task = self._seed_phase4_ready_task(session, "tsk_editorial_regen_empty")
+        self._set_task_status(session, task, TaskStatus.PENDING_EDITORIAL)
+        service = Phase4PipelineService(session)
+        service.llm = MagicMock()
+        with self.assertRaises(ValueError):
+            service.regenerate_from_editorial(task.id)
+        # No write attempted when there is nothing to revise from.
+        service.llm.complete_json.assert_not_called()
         session.close()
 
     def test_phase4_pipeline_runs_targeted_humanize_pass_for_high_ai_trace(self) -> None:
@@ -1005,6 +1111,16 @@ class Phase4PipelineServiceTests(unittest.TestCase):
     def _set_ai_trace_rewrite_threshold(self, session, value: float) -> None:
         session.add(SystemSetting(key="phase4.ai_trace_rewrite_threshold", value=value))
         session.commit()
+
+    def _set_task_status(self, session, task: Task, status: TaskStatus) -> None:
+        task.status = status.value
+        session.add(task)
+        session.commit()
+
+    def _brief_id(self, session, task_id: str) -> str:
+        return session.scalars(
+            select(ContentBrief).where(ContentBrief.task_id == task_id)
+        ).first().id
 
     def _seed_style_assets(self, session, task_id: str) -> None:
         session.add(

@@ -114,6 +114,7 @@ class Settings(BaseSettings):
     editorial_llm_max_concurrency: int = Field(default=3, alias="EDITORIAL_LLM_MAX_CONCURRENCY")
     editorial_llm_timeout_seconds: int = Field(default=120, alias="EDITORIAL_LLM_TIMEOUT_SECONDS")
     editorial_max_debate_rounds: int = Field(default=4, alias="EDITORIAL_MAX_DEBATE_ROUNDS")
+    editorial_max_revise_iterations: int = Field(default=2, alias="EDITORIAL_MAX_REVISE_ITERATIONS")
     editorial_role_disabled: str = Field(default="", alias="EDITORIAL_ROLE_DISABLED")
     editorial_queue_key: str = Field(default="editorial:queue", alias="EDITORIAL_QUEUE_KEY")
     editorial_processing_key: str = Field(default="editorial:processing", alias="EDITORIAL_PROCESSING_KEY")

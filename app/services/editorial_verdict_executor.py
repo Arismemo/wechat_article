@@ -1,19 +1,24 @@
 """EditorialVerdictExecutor — act on the editorial board's verdict.
 
 EditorialBoardService.review() produces an EditorialReview (+ an authoritative
-ReviewReport) but does NOTHING with the verdict, leaving the task stuck at
-PENDING_EDITORIAL. This executor closes that loop: it transitions the task and,
-on a clean pass, pushes the WeChat draft.
+ReviewReport) but does NOTHING with the verdict. This executor closes that loop:
+on a clean pushable pass it pushes the WeChat draft; otherwise it reports
+"needs_revision" so the worker's bounded revise loop (OPT-2) can feed the board's
+directives back to the writer and re-submit an improved draft.
 
-Verdict → outcome (and task status):
-  reject  → NEEDS_REGENERATE              ("reject")
-  pass    → re-run the SAME phase4 threshold gate on the board's ReviewReport:
-              thresholds pass → push draft:
-                 success                  → DRAFT_SAVED (set by push svc) ("pushed")
-                 WechatPushBlockedError   → NEEDS_MANUAL_REVIEW ("push_blocked")
-                 other push error         → PUSH_FAILED + re-raise (T3a retries)
-              thresholds fail → NEEDS_MANUAL_REVIEW ("manual_review")
-  revise / anything else → NEEDS_MANUAL_REVIEW ("manual_review")
+execute(review) → outcome:
+  pass + thresholds pass → push draft:
+       success                  → DRAFT_SAVED (set by push svc)   ("pushed")
+       WechatPushBlockedError   → NEEDS_MANUAL_REVIEW             ("push_blocked")
+       other push error         → PUSH_FAILED + re-raise (T3a retries)
+  everything else (reject / revise / pass-but-thresholds-fail)
+                              → log editorial.verdict.needs_revision,
+                                leave status as-is                 ("needs_revision")
+
+The executor NO LONGER terminally rejects/manual-reviews non-pass verdicts: the
+worker loop owns iteration. When iterations are exhausted the worker calls
+finalize_manual(review, reason=...) for the single terminal NEEDS_MANUAL_REVIEW
+write.
 
 This service owns its commits (mirrors WechatDraftPublishService) so status
 writes are durable even when the caller's try/except converts a push failure
@@ -61,31 +66,47 @@ class EditorialVerdictExecutor:
 
         decision = (editorial_review.decision or "").strip().lower()
 
-        if decision == "reject":
-            return self._reject(task, generation, editorial_review)
         if decision == "pass":
             return self._pass(task, generation, editorial_review, report)
-        # "revise" or anything unexpected → human takes over. The revision
-        # directives are already persisted on the EditorialReview and on
-        # ReviewReport.rewrite_targets, surfaced in the admin debate page.
-        # TODO(editorial): auto-revise loop deferred — bounded re-enqueue to phase4
-        return self._manual_review(task, generation, editorial_review, reason="revise")
+        # reject / revise / anything unexpected → NOT a clean push. Report
+        # "needs_revision" WITHOUT a terminal status write so the worker's bounded
+        # revise loop (OPT-2) can feed the board's directives (persisted on the
+        # EditorialReview + ReviewReport.rewrite_targets) back to the writer and
+        # re-submit. The worker calls finalize_manual() when iterations run out.
+        return self._needs_revision(task, generation, editorial_review, reason=decision or "unknown")
+
+    def finalize_manual(self, editorial_review: EditorialReview, *, reason: str) -> str:
+        """Terminal NEEDS_MANUAL_REVIEW write — called by the worker when the
+        bounded revise loop is exhausted. Mirrors the old non-pass terminal path,
+        but now happens exactly once, after all revise iterations are spent."""
+        task = self.tasks.get_by_id(editorial_review.task_id)
+        if task is None:
+            raise ValueError("editorial verdict: task not found")
+        generation = self.generations.get_latest_by_task_id(editorial_review.task_id)
+        if generation is None:
+            raise ValueError("editorial verdict: generation not found")
+        return self._manual_review(task, generation, editorial_review, reason=reason)
 
     # ── decision branches ────────────────────────────────────────────────────
-    def _reject(self, task: Task, generation: Generation, review: EditorialReview) -> str:
-        # Mirror phase4._mark_needs_regenerate's status write.
-        self._set_task_status(task, TaskStatus.NEEDS_REGENERATE)
+    def _needs_revision(
+        self, task: Task, generation: Generation, review: EditorialReview, *, reason: str
+    ) -> str:
+        # NO terminal status write — the task stays as-is (PENDING_EDITORIAL)
+        # while the worker loop feeds the board's directives back to the writer
+        # and re-submits. Just log the audit event so the loop is observable.
         self._log(
             task.id,
-            "editorial.verdict.rejected",
+            "editorial.verdict.needs_revision",
             {
                 "generation_id": generation.id,
                 "editorial_review_id": review.id,
                 "review_report_id": review.review_report_id,
+                "decision": review.decision,
+                "reason": reason,
             },
         )
         self.session.commit()
-        return "reject"
+        return "needs_revision"
 
     def _pass(
         self,
@@ -95,7 +116,10 @@ class EditorialVerdictExecutor:
         report: Optional[ReviewReport],
     ) -> str:
         if report is None or not passes_review_thresholds(report, self.system_settings):
-            return self._manual_review(task, generation, review, reason="thresholds_failed")
+            # A "pass" verdict whose scores still miss a phase4 threshold is not
+            # pushable → treat as needs_revision (no terminal write) so the loop
+            # can try to improve the draft.
+            return self._needs_revision(task, generation, review, reason="thresholds_failed")
 
         # Thresholds clear → attempt the authoritative push. The publish service
         # internally honours WECHAT_ENABLE_DRAFT_PUSH + the per-task push policy
