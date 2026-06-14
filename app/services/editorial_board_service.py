@@ -51,6 +51,29 @@ _RISK_SCORE_DEFAULT = 0.0
 _QUALITY_SCORE_DEFAULT = 60.0
 
 
+_ENVELOPE_KEYS = ("answer", "result", "output", "data", "response", "json", "content")
+
+
+def _unwrap_envelope(raw: Any, *expected: str) -> dict:
+    """容忍 LLM 把结构化对象包在信封里(如 {"answer": {...}})。
+
+    raw 顶层缺少所有 expected 字段,但某嵌套 dict(常见信封键或唯一 dict 值)
+    含有 expected 字段时,返回该嵌套 dict;否则原样返回。空/非 dict 返回 {}。
+    """
+    if not isinstance(raw, dict):
+        return {}
+    if any(k in raw for k in expected):
+        return raw
+    for key in _ENVELOPE_KEYS:
+        inner = raw.get(key)
+        if isinstance(inner, dict) and any(k in inner for k in expected):
+            return inner
+    dict_values = [v for v in raw.values() if isinstance(v, dict)]
+    if len(dict_values) == 1 and any(k in dict_values[0] for k in expected):
+        return dict_values[0]
+    return raw
+
+
 class EditorialBoardService:
     def __init__(self, session: Session, llm_client) -> None:
         self.session = session
@@ -126,8 +149,7 @@ class EditorialBoardService:
                 system_prompt=role.system_prompt,
                 user_prompt=self._opinion_prompt(role, context, prior),
             )
-            if not isinstance(raw, dict):
-                raw = {}
+            raw = _unwrap_envelope(raw, "stance", "role_key")
             raw.setdefault("role_key", role.key)
             return RoleOpinion.model_validate(raw)
 
@@ -149,8 +171,7 @@ class EditorialBoardService:
             '  - summary: string —— 一句话说明收敛/分歧现状\n'
         )
         raw = self.llm.complete_json(system_prompt=role.system_prompt, user_prompt=user_prompt)
-        if not isinstance(raw, dict):
-            raw = {}
+        raw = _unwrap_envelope(raw, "new_substantive_objection")
         return ConvergenceJudgement.model_validate(raw)
 
     # ------------------------------------------------------------------ 终裁
@@ -170,8 +191,7 @@ class EditorialBoardService:
             "  - dissent_summary: string —— 保留异议摘要(无则空串)\n"
         )
         raw = self.llm.complete_json(system_prompt=role.system_prompt, user_prompt=user_prompt)
-        if not isinstance(raw, dict):
-            raw = {}
+        raw = _unwrap_envelope(raw, "decision", "final_scores")
         return EditorialVerdict.model_validate(raw)
 
     # ------------------------------------------------------------------ 映射 ReviewReport
